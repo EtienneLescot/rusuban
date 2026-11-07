@@ -16,16 +16,29 @@ import {
 	readRun,
 	requestCoordinator,
 	requestRun,
+	stopRun,
 } from "./agents.mjs";
 import { mergePr, poll } from "./github.mjs";
-import { homePath, journal, loadConfig, read, readJournal, readJsonl, write } from "./home.mjs";
+import {
+	append,
+	homePath,
+	journal,
+	loadConfig,
+	read,
+	readJournal,
+	readJsonl,
+	write,
+} from "./home.mjs";
 import {
 	buildModel,
+	checkAnswer,
 	flatten,
 	gatesOf,
+	inboxOf,
 	isEligible,
 	keyOf,
 	mergeOrdersOf,
+	parseItem,
 	todoOf,
 } from "./model.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
@@ -513,7 +526,7 @@ function startLoop(ctx, p) {
 			for (const { slug } of p.repos) journalRules(p.id, slug, before[slug], rules[slug]);
 			ctx.errors.delete(p.id);
 			try {
-				await runCycle(ctx, p, live, rules);
+				await runCycle(ctx, p, live, rules, depsOf(ctx));
 			} catch (e) {
 				ctx.say(`${p.id}: cycle failed: ${firstLine(e)}`);
 			}
@@ -537,8 +550,143 @@ function send(res, status, type, body) {
 const json = (res, status, v) =>
 	send(res, status, "application/json; charset=utf-8", JSON.stringify(v));
 
+// ── Cards, requests and runs (T037, T101) ─────────────────────────────────────────────────────
+// The inbox: every project's cards waiting for their person, and what the server flagged for the
+// owner in the last 7 days (merges and pushes it did not make, rules changes, refusals).
+export function inboxState(ctx) {
+	const week = Date.now() - 7 * 86400e3;
+	const projects = ctx.config.projects.map((p) => {
+		const dir = `projects/${p.id}`;
+		return {
+			id: p.id,
+			title: p.title,
+			live: flatten(read(`${dir}/live.json`, {})),
+			judgment: read(`${dir}/judgment.json`, { items: {} }),
+			answers: readJsonl(`${dir}/answers.jsonl`),
+		};
+	});
+	const flags = ctx.config.projects
+		.flatMap((p) =>
+			readJsonl(`projects/${p.id}/journal.jsonl`)
+				.filter((e) => e.notify && Date.parse(e.at) > week)
+				.map((e) => ({ project: p.id, ...e })),
+		)
+		.sort((a, b) => String(b.at).localeCompare(String(a.at)))
+		.slice(0, 50);
+	return { cards: inboxOf(projects), flags };
+}
+
+// Runs, at work first: running, queued, waiting for a usage limit, then the ended ones, newest first.
+const RANK = { running: 0, queued: 1, limited: 2 };
+export const runsOf = (project = null) =>
+	listRuns(project)
+		.sort((a, b) => (RANK[a.state] ?? 3) - (RANK[b.state] ?? 3))
+		.slice(0, 100)
+		.map((r) => ({
+			id: r.id,
+			project: r.project,
+			kind: r.kind,
+			title: r.title ?? null,
+			items: r.items ?? [],
+			state: r.state,
+			step: r.step ?? null,
+			trigger: r.trigger ?? null,
+			createdAt: r.createdAt ?? null,
+			startedAt: r.startedAt ?? null,
+			endedAt: r.endedAt ?? null,
+			retryAt: r.retryAt ?? null,
+			summary: r.summary ?? null,
+			conversation: r.session ?? null,
+		}));
+
+// The agents' starters, which tests replace through `startServer({ deps })`.
+const depsOf = (ctx) => ctx.deps ?? DEPS;
+
+// The coordinator starts at once on an answer or a request (FR-043), unless the daemon is dry.
+const startCoordinator = (ctx, project, trigger) =>
+	ctx.dry ? "dry" : (depsOf(ctx).requestCoordinator(project, trigger)?.state ?? "queued");
+
+const itemOf = (p, ref) => {
+	try {
+		return parseItem(
+			ref,
+			p.repos.map((r) => r.slug),
+		);
+	} catch (e) {
+		throw Object.assign(e, { status: 400 });
+	}
+};
+
+function answer(ctx, body, res) {
+	const p = ctx.config.projects.find((x) => x.id === body.project);
+	if (!p) return json(res, 404, { error: "unknown project" });
+	const dir = `projects/${p.id}`;
+	const item = itemOf(p, body.item);
+	const judgment = read(`${dir}/judgment.json`, { items: {} });
+	const answers = readJsonl(`${dir}/answers.jsonl`);
+	const { card, option, note } = body;
+	const checked = checkAnswer({ judgment, answers, item, card, option, note });
+	if (checked.error) return json(res, checked.status, { error: checked.error });
+	const by = ctx.config.owner.login;
+	append(`${dir}/answers.jsonl`, {
+		at: new Date().toISOString(),
+		item,
+		card: body.card,
+		option: checked.chosen ? body.option : "other",
+		note: checked.note,
+		by,
+	});
+	journal(p.id, {
+		kind: "answer",
+		item,
+		text: `Answered: ${(checked.chosen?.label ?? checked.note).slice(0, 200)}`,
+		by,
+	});
+	// A merge order is the server's: the next read carries it out.
+	if (checked.chosen?.merge && !ctx.dry) ctx.loops.get(p.id)?.refresh();
+	const coordinator = startCoordinator(ctx, p.id, "answer");
+	ctx.broadcast(true);
+	return json(res, 200, { ok: true, coordinator });
+}
+
+function ask(ctx, body, res) {
+	const p = ctx.config.projects.find((x) => x.id === body.project);
+	if (!p) return json(res, 404, { error: "unknown project" });
+	const text = typeof body.text === "string" ? body.text.trim() : "";
+	if (!text) return json(res, 400, { error: "the request is empty" });
+	if (text.length > 4000) return json(res, 400, { error: "the request is over 4000 characters" });
+	const item = body.item ? itemOf(p, body.item) : null;
+	const by = ctx.config.owner.login;
+	append(`projects/${p.id}/asks.jsonl`, { at: new Date().toISOString(), text, item, by });
+	journal(p.id, { kind: "ask", item, text: `Asked: ${text.slice(0, 200)}`, by });
+	const coordinator = startCoordinator(ctx, p.id, "ask");
+	ctx.broadcast(true);
+	return json(res, 200, { ok: true, coordinator });
+}
+
+function stop(ctx, id, res) {
+	const run = /^[\w.-]+$/.test(id) ? readRun(id) : null;
+	if (!run) return json(res, 404, { error: "no such run" });
+	if (!["queued", "running"].includes(run.state))
+		return json(res, 409, { error: `the run is already ${run.state}` });
+	const by = ctx.config.owner.login;
+	const stopped = stopRun(id, `Stopped by @${by} from the dashboard.`);
+	journal(run.project, {
+		kind: "stop",
+		item: run.items?.[0] ?? null,
+		text: `Stopped the ${run.kind} run${run.title ? ` ${run.title}` : ""}`,
+		by,
+	});
+	ctx.broadcast(true);
+	return json(res, 200, { state: stopped.state });
+}
+
 async function post(ctx, path, body, res) {
 	const by = ctx.config.owner.login;
+	if (path === "/api/answer") return answer(ctx, body, res);
+	if (path === "/api/ask") return ask(ctx, body, res);
+	const stopping = /^\/api\/runs\/([^/]+)\/stop$/.exec(path);
+	if (stopping) return stop(ctx, decodeURIComponent(stopping[1]), res);
 	if (path === "/api/automerge") {
 		if (typeof body.armed !== "boolean")
 			return json(res, 400, { error: "armed must be true or false" });
@@ -574,13 +722,17 @@ async function handle(ctx, req, res) {
 		}
 		if (req.method === "GET" && url.pathname === "/api/state")
 			return json(res, 200, stateOf(ctx, url.searchParams.get("project")));
+		if (req.method === "GET" && url.pathname === "/api/inbox")
+			return json(res, 200, inboxState(ctx));
+		if (req.method === "GET" && url.pathname === "/api/runs")
+			return json(res, 200, { runs: runsOf(url.searchParams.get("project")) });
 		if (req.method === "GET" && url.pathname === "/api/events") {
 			res.writeHead(200, {
 				"content-type": "text/event-stream",
 				"cache-control": "no-store",
 				connection: "keep-alive",
 			});
-			const client = { res, project: url.searchParams.get("project"), sent: "" };
+			const client = { res, project: url.searchParams.get("project"), sent: "", sentInbox: "" };
 			ctx.clients.add(client);
 			ctx.push(client, true);
 			req.on("close", () => ctx.clients.delete(client));
@@ -598,18 +750,21 @@ async function handle(ctx, req, res) {
 }
 
 // Starts the daemon. `polling: false` serves without reading GitHub (tests); `port` overrides the
-// config's (0 picks a free one); `tailnet` sets the tailnet name instead of asking Tailscale.
+// config's (0 picks a free one); `tailnet` sets the tailnet name instead of asking Tailscale; `deps`
+// replaces what merges and starts agents (tests).
 export async function startServer({
 	dry = false,
 	port,
 	polling = true,
 	quiet = false,
 	tailnet,
+	deps,
 } = {}) {
 	const config = loadConfig();
 	const ctx = {
 		config,
 		dry,
+		deps,
 		port: port ?? config.port,
 		owner: config.owner,
 		tailnet: tailnet === undefined ? await tailnetName() : tailnet,
@@ -620,15 +775,30 @@ export async function startServer({
 		say: (...a) =>
 			quiet || console.log(new Date().toLocaleTimeString("en-GB", { hour12: false }), ...a),
 	};
+	// Each client gets the state of its project and the inbox of all projects, each when it changes.
 	ctx.push = (client, force = false) => {
-		const body = JSON.stringify(stateOf(ctx, client.project));
-		const h = hash(body);
-		if (h === client.sent && !force) return;
-		client.sent = h;
-		client.res.write(`event: state\ndata: ${body}\n\n`);
+		const send = (event, value, key) => {
+			const body = JSON.stringify(value);
+			const h = hash(body);
+			if (h === client[key] && !force) return;
+			client[key] = h;
+			client.res.write(`event: ${event}\ndata: ${body}\n\n`);
+		};
+		send("state", stateOf(ctx, client.project), "sent");
+		send("inbox", inboxState(ctx), "sentInbox");
 	};
+	// A state file the model cannot read (cut short, from an older version) costs the page one update,
+	// never the daemon nor a write that already happened: said once per distinct error.
+	let lastError = null;
 	ctx.broadcast = (force = false) => {
-		for (const c of ctx.clients) ctx.push(c, force);
+		for (const c of ctx.clients)
+			try {
+				ctx.push(c, force);
+			} catch (e) {
+				if (firstLine(e) === lastError) continue;
+				lastError = firstLine(e);
+				ctx.say(`page update failed: ${lastError}`);
+			}
 	};
 	const server = http.createServer((req, res) => handle(ctx, req, res));
 	await new Promise((resolve, reject) => {
