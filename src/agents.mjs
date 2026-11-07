@@ -150,8 +150,14 @@ export function pendingOf(project) {
 }
 
 const list = (items, line) => (items.length ? items.map(line) : ["None."]);
+const STARTED = {
+	schedule: "at its time",
+	button: "by the owner, from the dashboard",
+	manual: "by the owner, from the command line",
+	retry: "again, its last run having been cut short",
+};
 
-function contextOf({ p, kind, run, config, pending }) {
+function contextOf({ p, kind, run, config, pending, task }) {
 	const dir = `projects/${p.id}`;
 	const live = read(`${dir}/live.json`, { repos: {} });
 	const rules = read(`${dir}/rules.json`, {});
@@ -173,7 +179,7 @@ function contextOf({ p, kind, run, config, pending }) {
 			return `- Repo ${slug}: default branch \`${live.repos?.[slug]?.defaultBranch ?? "unknown"}\`, ${own}, ${locks}.`;
 		}),
 		`- Machines: ${config.machines?.length ? config.machines.map((m) => m.name).join(", ") : "none registered"}.`,
-		`- This run: \`${run}\`, a ${kind} run. The agent CLI is \`rusuban\` (also \`node "${BIN}"\`).`,
+		`- This run: \`${run}\`, a ${kind} run${task ? ` of the task \`${task.id}\` (“${task.title}”), started ${STARTED[task.trigger] ?? task.trigger}` : ""}. The agent CLI is \`rusuban\` (also \`node "${BIN}"\`).`,
 		"",
 		"## Open cards",
 		"",
@@ -212,7 +218,15 @@ function contextOf({ p, kind, run, config, pending }) {
 
 // A run's prompt: the product prompt of its kind, the safety frame, the project's rules verbatim with
 // their source, the context, then the run's own mission or task.
-export function assemblePrompt({ kind, project, mission = "", config, run, pending = null }) {
+export function assemblePrompt({
+	kind,
+	project,
+	mission = "",
+	config,
+	run,
+	pending = null,
+	task = null,
+}) {
 	const p = config.projects.find((x) => x.id === project);
 	if (!p) throw new Error(`unknown project "${project}"`);
 	const rules = read(`projects/${project}/rules.json`, {});
@@ -229,7 +243,7 @@ export function assemblePrompt({ kind, project, mission = "", config, run, pendi
 		parts.push(
 			"# Project rules\n\nNo repo of this project has rules yet: do nothing autonomous. Only the owner's own requests and answers in the context are yours to carry out.",
 		);
-	parts.push(contextOf({ p, kind, run, config, pending }));
+	parts.push(contextOf({ p, kind, run, config, pending, task }));
 	if (mission.trim())
 		parts.push(`# Your ${kind === "task" ? "task" : "mission"}\n\n${mission.trim()}`);
 	return `${parts.join("\n\n---\n\n")}\n`;
@@ -691,6 +705,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 				config,
 				run: id,
 				pending,
+				task: s.task ? { id: s.task, title: s.title, trigger: s.trigger } : null,
 			});
 			fs.writeFileSync(homePath(`runs/${id}/prompt.md`), prompt);
 		} catch (e) {
