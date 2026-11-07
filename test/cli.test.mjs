@@ -127,8 +127,10 @@ test("the agent commands read and write a project's files", () => {
 		fs.writeFileSync(path.join(home, name), JSON.stringify(value));
 	};
 	put("config.json", {
+		version: 1,
 		owner: { login: "alice" },
 		permissions: { mode: "allowlist" },
+		limits: { maxWorkers: 3, maxRunMinutes: 150 },
 		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 	});
 	put("projects/demo/live.json", {

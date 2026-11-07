@@ -20,10 +20,30 @@ beforeEach(() => {
 });
 
 const config = (over = {}) => ({
+	version: 1,
 	owner: { login: "alice" },
 	permissions: { mode: "allowlist" },
+	limits: { maxWorkers: 3, maxRunMinutes: 150 },
 	projects: [{ id: "demo", repos: [{ slug: "alice/demo" }] }],
 	...over,
+});
+
+test("the config states its version, and a newer one is refused", () => {
+	assert.throws(() => validateConfig(config({ version: undefined })), /version must be 1/);
+	assert.throws(() => validateConfig(config({ version: 2 })), /newer rusuban/);
+	assert.equal(validateConfig(config()).version, 1);
+});
+
+test("the limits are stated in the config, not defaulted", () => {
+	assert.throws(
+		() => validateConfig(config({ limits: undefined })),
+		/limits.maxWorkers.*\n.*limits.maxRunMinutes/,
+	);
+	assert.throws(
+		() => validateConfig(config({ limits: { maxWorkers: 0, maxRunMinutes: 150 } })),
+		/limits.maxWorkers/,
+	);
+	assert.deepEqual(validateConfig(config()).limits, { maxWorkers: 3, maxRunMinutes: 150 });
 });
 
 test("write replaces a file whole and leaves no temp file behind", () => {

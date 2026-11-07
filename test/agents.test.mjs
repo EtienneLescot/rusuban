@@ -77,9 +77,11 @@ test("path rules are POSIX, a Windows drive written /c", () => {
 });
 
 const config = {
+	version: 1,
 	owner: { login: "alice" },
 	port: 0,
 	permissions: { mode: "bypass", allow: [], deny: [] },
+	limits: { maxWorkers: 3, maxRunMinutes: 150 },
 	projects: [],
 	machines: [],
 	channels: [],
