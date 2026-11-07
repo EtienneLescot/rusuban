@@ -7,6 +7,7 @@ import {
 	globToRegExp,
 	H,
 	isEligible,
+	mergeOrdersOf,
 	settledOf,
 	todoOf,
 	W,
@@ -425,4 +426,71 @@ test("agents at work light the items they touch: a run's items, then the items i
 	const m = buildModel({ live, judgment: { items: {} }, runs });
 	const at = Object.fromEntries(m.nodes.map((n) => [n.id, n.activity?.name ?? null]));
 	assert.deepEqual(at, { "o/r#1": "judge", "o/r#10": "fix-10", "o/r#11": null });
+});
+
+test("ignoredChecks never block CI green, but never count for it alone", () => {
+	const rules = (ignoredChecks, requiredChecks = []) => ({
+		...RULES,
+		locks: { ...LOCKS, ignoredChecks, requiredChecks },
+	});
+	const c = (name, workflow, state) => ({ name, workflow, state });
+	const ci = (checks, r, over = {}) => by(gates(pr(1, { checks, ...over }), fix(1), r), "CI");
+	const green = c("test", "CI", "success");
+	assert.equal(ci([green, c("nix build", "Nix", "failure")], rules(["nix build"])).state, "ok");
+	assert.equal(ci([green, c("nix build", "Nix", "pending")], rules(["Nix"])).state, "ok");
+	const notify = { state: "action_required", runId: 9, runIds: [9], waiting: ["Discord"] };
+	assert.equal(ci([green], rules(["Discord"]), { ci: notify }).state, "ok");
+	assert.equal(ci([green], rules([]), { ci: notify }).state, "wait");
+	// A fork's waiting workflows without a name cannot be told apart: they still block.
+	const unnamed = { ...notify, waiting: [] };
+	assert.equal(ci([green], rules(["Discord"]), { ci: unnamed }).state, "wait");
+	const only = ci([c("nix build", "Nix", "success")], rules(["nix build"]));
+	assert.deepEqual([only.state, only.detail], ["todo", "Only ignored checks on the head"]);
+});
+
+test("a merge order lifts the project's locks and the judgment for its head, never CI, threads, conflicts or a new commit", () => {
+	const head = "sha1";
+	const card = {
+		id: "o/r#1@1",
+		head,
+		q: "Merge it?",
+		createdAt: "2026-11-07T10:00:00Z",
+		resolvedAt: null,
+		options: [
+			{ id: "merge", label: "Merge it", effect: "The server merges it.", merge: true },
+			{ id: "keep", label: "Leave it", effect: "I leave it." },
+		],
+	};
+	const judgment = (decision = card) => ({
+		items: { "o/r#1": { ...fix(1, { owner: "alice", pr: { head, auto: false } }), decision } },
+	});
+	const answer = (option = "merge") => [
+		{ item: "o/r#1", card: card.id, option, at: "2026-11-07T11:00:00Z", by: "alice" },
+	];
+	const orders = (p, j = judgment(), a = answer()) =>
+		mergeOrdersOf({
+			live: { prs: [p], issues: [] },
+			judgment: j,
+			answers: a,
+			rules: { [REPO]: RULES },
+		});
+	// A locked path and a judgment that said no: lifted by the person's order.
+	const locked = pr(1, { files: [file(".github/workflows/ci.yml")] });
+	const [o] = orders(locked);
+	assert.deepEqual([o.item, o.card, o.by, o.eligible], ["o/r#1", card.id, "alice", true]);
+	assert.deepEqual(orders(locked, judgment(), answer("keep")), []);
+	assert.deepEqual(orders(locked, judgment(), []), []);
+	const stopped = (p) =>
+		orders(p)[0]
+			.gates.filter((g) => g.state !== "ok")
+			.map((g) => g.name);
+	assert.deepEqual(stopped(pr(1, { head: "sha2" })), ["Head"]);
+	assert.deepEqual(stopped(pr(1, { threadsOpen: 1 })), ["Threads"]);
+	assert.deepEqual(stopped(pr(1, { mergeable: "CONFLICTING" })), ["Mergeable"]);
+	assert.deepEqual(
+		stopped(pr(1, { checks: [{ name: "test", workflow: "CI", state: "failure" }] })),
+		["CI"],
+	);
+	const closed = judgment({ ...card, resolvedAt: "2026-11-07T12:00:00Z" });
+	assert.deepEqual(orders(locked, closed), []);
 });

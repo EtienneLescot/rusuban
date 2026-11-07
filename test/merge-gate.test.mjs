@@ -1,6 +1,7 @@
 // One breaking test per hard lock (FR-021, FR-022): from a PR that would merge, each case breaks one
 // lock, and the PR must lose its eligibility to exactly the gate that guards that lock.
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { test } from "node:test";
 import { gatesOf, isEligible } from "../src/model.mjs";
 
@@ -121,4 +122,27 @@ for (const [lock, gate, breakIt] of CASES)
 		breakIt(c);
 		assert.ok(!isEligible(gatesOf(c.pr, c.j, c.opts)));
 		assert.deepEqual(stoppedBy(c), [gate]);
+	});
+
+// A head whose only checks are ignored is not green (T114): ignoredChecks can never empty CI.
+test("one broken lock stops the merge: only ignored checks on the head", () => {
+	const c = mergeable();
+	c.opts.rules.locks.ignoredChecks = ["test", "CodeRabbit"];
+	c.opts.rules.locks.requiredChecks = [];
+	assert.ok(!isEligible(gatesOf(c.pr, c.j, c.opts)));
+	assert.deepEqual(stoppedBy(c), ["CI"]);
+	c.opts.rules.locks.ignoredChecks = ["CodeRabbit"];
+	assert.ok(isEligible(gatesOf(c.pr, c.j, c.opts)), "one counting check left: green");
+});
+
+// Adversarial PRs (T032, SC-005): none is eligible, each stopped by the gate its fixture names.
+const FIXTURES = new URL("./fixtures/prs/", import.meta.url);
+for (const name of fs.readdirSync(FIXTURES).filter((f) => f.endsWith(".json")))
+	test(`an adversarial PR is never merged: ${name}`, () => {
+		const f = JSON.parse(fs.readFileSync(new URL(name, FIXTURES), "utf8"));
+		const c = mergeable();
+		Object.assign(c.pr, { body: f.body }, f.set);
+		if (f.judged === "manual") c.j.pr.auto = false;
+		assert.ok(!isEligible(gatesOf(c.pr, c.j, c.opts)), f.why);
+		assert.deepEqual(stoppedBy(c), [f.stoppedBy], f.why);
 	});

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { loadRules, validateLocks } from "../src/rules.mjs";
+import { lineDiff, loadRules, rulesChange, validateLocks } from "../src/rules.mjs";
 
 const b64 = (s) => Buffer.from(s, "utf8").toString("base64");
 
@@ -99,4 +99,51 @@ test("an unchanged tree sha reuses the cache", async () => {
 	assert.deepEqual(again.files, first.files);
 	const moved = fakeRepo({ ".rusuban/rules/a.md": "y" }, { sha: "tree2" });
 	assert.equal((await loadRules("o/r", "main", first, moved.get)).files[0].text, "y");
+});
+
+test("ignoredChecks are a list of names, never also required", () => {
+	assert.deepEqual(validateLocks('{"ignoredChecks":["nix build"]}').locks, {
+		ignoredChecks: ["nix build"],
+	});
+	assert.match(validateLocks('{"ignoredChecks":"nix"}').errors[0], /ignoredChecks must be a list/);
+	assert.match(
+		validateLocks('{"requiredChecks":["CI"],"ignoredChecks":["CI"]}').errors[0],
+		/CI both required and ignored/,
+	);
+});
+
+test("a rules change names its files and gives a line diff; the first read and the same tree give none", () => {
+	const rules = (treeSha, files, extra = {}) => ({
+		treeSha,
+		files,
+		locks: null,
+		errors: [],
+		...extra,
+	});
+	const v1 = rules("t1", [
+		{ name: "01-merge.md", text: "# Merging\nBug fixes merge alone.\nWait 2 days." },
+		{ name: "02-old.md", text: "Gone soon." },
+	]);
+	const v2 = rules(
+		"t2",
+		[
+			{ name: "01-merge.md", text: "# Merging\nBug fixes and docs merge alone.\nWait 2 days." },
+			{ name: "03-new.md", text: "New rule." },
+		],
+		{ errors: ["locks.json is not valid JSON: x"] },
+	);
+	assert.equal(rulesChange(undefined, v1), null);
+	assert.equal(rulesChange(v1, { ...v1 }), null);
+	const change = rulesChange(v1, v2);
+	assert.deepEqual(change.files, [
+		"rules/01-merge.md edited",
+		"rules/02-old.md removed",
+		"rules/03-new.md added",
+		"locks.json invalid",
+	]);
+	assert.match(
+		change.diff,
+		/--- rules\/01-merge.md\n- Bug fixes merge alone.\n\+ Bug fixes and docs merge alone./,
+	);
+	assert.deepEqual(lineDiff("a\nb\nc", "a\nc\nd"), ["- b", "+ d"]);
 });

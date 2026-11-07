@@ -98,8 +98,12 @@ export function sizeOf(pr, locks = {}) {
 // CI green, as FR-021 defines it: at least one check on the head; every check run and status on it
 // succeeded, or was neutral or skipped; none pending, failed, cancelled, timed out or waiting for an
 // approval; and every name in requiredChecks (a check, or a whole workflow) has a success on it.
-function ciGate(pr, required) {
-	const checks = pr.checks ?? [];
+// The checks the locks name in ignoredChecks do not count, but never all of them: a head whose only
+// checks are ignored is not green.
+function ciGate(pr, required, ignored = []) {
+	const counts = (name) => !ignored.includes(name);
+	const all = pr.checks ?? [];
+	const checks = all.filter((c) => counts(c.name) && (!c.workflow || counts(c.workflow)));
 	const named = (state) => [...new Set(checks.filter((c) => c.state === state).map((c) => c.name))];
 	const runsOf = (name) => checks.filter((c) => c.name === name || c.workflow === name);
 	const failed = named("failure");
@@ -110,10 +114,13 @@ function ciGate(pr, required) {
 		return runs.length && runs.every((c) => c.state === "skipped");
 	});
 	if (skipped.length) return gate("fail", `Required but skipped: ${skipped.join(", ")}`);
-	const approval = [...(pr.ci?.waiting ?? []), ...named("waiting")];
-	if (pr.ci?.state === "action_required" || approval.length)
+	// A fork's workflows awaiting approval, unless every one of them is ignored by name.
+	const waiting = pr.ci?.waiting ?? [];
+	const approval = [...waiting.filter(counts), ...named("waiting")];
+	if (approval.length || (pr.ci?.state === "action_required" && !waiting.length))
 		return gate("wait", `Awaiting approval: ${few([...new Set(approval)]) || "fork workflows"}`);
-	if (!checks.length) return gate("todo", "No check on the head");
+	if (!checks.length)
+		return gate("todo", all.length ? "Only ignored checks on the head" : "No check on the head");
 	const pending = named("pending");
 	if (pending.length) return gate("wait", `CI running: ${few(pending)}`);
 	const missing = required.filter((name) => !runsOf(name).length);
@@ -204,7 +211,7 @@ function evidenceGate(pr, j, locks) {
 export function gatesOf(pr, j, { rules = {}, armed = false, shadow = false } = {}) {
 	const locks = rules.locks ?? {};
 	return [
-		ciGate(pr, locks.requiredChecks ?? []),
+		ciGate(pr, locks.requiredChecks ?? [], locks.ignoredChecks ?? []),
 		reviewsGate(pr, locks.requiredReviewers ?? []),
 		pr.threadsOpen > 0
 			? gate("fail", `${pr.threadsOpen} open thread${pr.threadsOpen > 1 ? "s" : ""}`)
@@ -354,9 +361,15 @@ export function applyJudgment(
 		if (!input.pr || input.pr.head !== pr.head)
 			fail(`${key}: pr.head must be the live head ${pr.head}`);
 		if (typeof input.pr.auto !== "boolean") fail(`${key}: pr.auto must be true or false`);
-		// A proof follows the head: it does not survive a new commit.
-		const evidence =
-			input.pr.evidence ?? (prev.pr?.evidence?.head === pr.head ? prev.pr.evidence : null);
+		// A judgment may ask for a proof, never record one: a worker other than the judging run does,
+		// with `rusuban evidence` (FR-022). A proof follows the head: it does not survive a new commit.
+		const asked = input.pr.evidence;
+		if (asked != null && ((asked.state ?? "todo") !== "todo" || asked.needed !== true))
+			fail(
+				`${key}: a judgment only asks for a proof, pr.evidence { "needed": true }; a worker records it with \`rusuban evidence\``,
+			);
+		const kept = prev.pr?.evidence?.head === pr.head ? prev.pr.evidence : null;
+		const evidence = kept ?? (asked ? { needed: true, state: "todo", head: pr.head } : null);
 		next.pr = { head: pr.head, auto: input.pr.auto, why: input.pr.why ?? "", evidence };
 	} else delete next.pr;
 	if (input.decision) {
@@ -373,18 +386,30 @@ export function applyJudgment(
 			);
 		if (!["now", "digest"].includes(d.urgency))
 			fail(`${key}: decision.urgency is "now" or "digest", from the rules`);
-		for (const o of d.options)
+		for (const o of d.options) {
 			if (!o.id || !o.label || !o.effect) fail(`${key}: every option has id, label and effect`);
+			// A merge order (FR-044): the server merges the PR on the head this card was written on.
+			if (o.merge !== undefined && (o.merge !== true || type !== "pr"))
+				fail(`${key}: option "${o.id}": merge is true, on a PR's card only`);
+		}
 		if (new Set(d.options.map((o) => o.id)).size !== d.options.length)
 			fail(`${key}: option ids must be unique`);
 		if (d.rec && !d.options.some((o) => o.id === d.rec))
 			fail(`${key}: decision.rec must be the id of an option`);
-		const same = prev.decision && !prev.decision.resolvedAt && prev.decision.q === d.q;
+		const head = pr?.head ?? null;
+		// The same question on the same head is the same card; a new head makes a new one, so an answer
+		// never orders a merge of a commit its person did not see.
+		const same =
+			prev.decision &&
+			!prev.decision.resolvedAt &&
+			prev.decision.q === d.q &&
+			(prev.decision.head ?? null) === head;
 		next.decision = {
 			...d,
 			id: same
 				? prev.decision.id
 				: `${key}@${Date.parse(now)}-${Math.random().toString(36).slice(2, 6)}`,
+			head,
 			to: next.owner,
 			createdAt: same ? prev.decision.createdAt : now,
 			resolvedAt: null,
@@ -408,20 +433,24 @@ export function applyJudgment(
 	return next;
 }
 
+// A proof for the live head, from a worker run other than the one that judged the item (FR-022,
+// T095), with the run and its conversation attached.
 export function applyEvidence(
 	judgment,
 	live,
 	key,
 	state,
-	href = null,
-	now = new Date().toISOString(),
+	{ href = null, run = null, conversation = null, now = new Date().toISOString() } = {},
 ) {
 	if (!EVIDENCE_STATES.includes(state)) fail(`state is one of ${EVIDENCE_STATES.join(", ")}`);
 	const pr = live.prs.find((p) => keyOf(p) === key);
 	if (!pr) fail(`${key} is not an open PR`);
 	const it = judgment.items[key];
 	if (!it?.pr) fail(`${key} is not judged yet`);
-	it.pr.evidence = { needed: true, state, head: pr.head, href, at: now };
+	if (!run) fail("a proof is recorded by a worker run");
+	if (it.judgedBy === `agent:${run}`)
+		fail(`${key}: the run that judged it cannot record its proof`);
+	it.pr.evidence = { needed: true, state, head: pr.head, href, run, conversation, at: now };
 	return it.pr.evidence;
 }
 
@@ -460,6 +489,40 @@ export function pendingAnswers(judgment, answers) {
 				q: d.q,
 				chosen: d.options.find((o) => o.id === a.option) ?? null,
 			});
+	}
+	return out;
+}
+
+// A person's merge orders (FR-044): an answered card whose chosen option says `merge: true`. The
+// server still requires CI green, no open thread, no conflict and the head the card was written on;
+// the project's own locks, the judgment's `auto` and the rules-folder lock (a person decided) are
+// lifted for that head only.
+export function mergeOrdersOf({ live, judgment, answers = [], rules = {} }) {
+	const out = [];
+	for (const a of pendingAnswers(judgment, answers)) {
+		if (a.chosen?.merge !== true) continue;
+		const pr = live.prs.find((p) => keyOf(p) === a.item);
+		if (!pr) continue;
+		const d = judgment.items[a.item].decision;
+		const locks = rules[pr.repo]?.locks ?? {};
+		const gates = [
+			ciGate(pr, locks.requiredChecks ?? [], locks.ignoredChecks ?? []),
+			pr.threadsOpen > 0
+				? gate("fail", `${pr.threadsOpen} open thread(s)`)
+				: gate("ok", "No thread"),
+			mergeableGate(pr, locks.mergeMethod),
+			d.head === pr.head
+				? gate("ok", "The head the card was written on")
+				: gate("fail", "New commit since the card"),
+		].map((g, i) => ({ name: ["CI", "Threads", "Mergeable", "Head"][i], ...g }));
+		out.push({
+			item: a.item,
+			pr,
+			card: d.id,
+			by: a.by ?? null,
+			gates,
+			eligible: isEligible(gates),
+		});
 	}
 	return out;
 }

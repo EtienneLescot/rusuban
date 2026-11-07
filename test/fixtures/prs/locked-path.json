@@ -1,0 +1,16 @@
+{
+	"why": "It changes a release workflow, a locked path",
+	"body": "Bumps the release action.",
+	"judged": "auto",
+	"set": {
+		"files": [
+			{
+				"path": ".github/workflows/release.yml",
+				"additions": 2,
+				"deletions": 2,
+				"change": "MODIFIED"
+			}
+		]
+	},
+	"stoppedBy": "Locks"
+}

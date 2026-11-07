@@ -3,7 +3,7 @@
 // they are the only writers of a project's judgment file and agent log, and each validates against the
 // live state and takes a short lock before writing (specs/001-autopilot/contracts/cli.md).
 import fs from "node:fs";
-import { executeRun } from "../src/agents.mjs";
+import { executeRun, readRun } from "../src/agents.mjs";
 import { agentLog, homePath, loadConfig, read, readJsonl, write } from "../src/home.mjs";
 import {
 	applyEvidence,
@@ -16,6 +16,7 @@ import {
 	pendingAnswers,
 	todoOf,
 } from "../src/model.mjs";
+import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
 
 const { version } = JSON.parse(
 	fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -32,8 +33,10 @@ Agent commands, inside a run (an item is owner/repo#n, or #n when the project ha
   judge <file.json>             writes judgments: one object or a list
   resolve <item> <text>         closes an item's open card, saying what happened
   evidence <item> <todo|running|ok|fail> [url]
+                                records a proof for the live head; a worker run only
   log <kind> <item|-> <text> [url]
-  answers | asks                answers and requests not handled yet`;
+  answers | asks                answers and requests not handled yet
+  worker start <name> <item> <mission.md> | worker stop <name> | worker list`;
 
 function project() {
 	const config = loadConfig();
@@ -119,15 +122,40 @@ const commands = {
 			console.log(`card of ${key} closed: ${d.state}`);
 		});
 	},
+	// ponytail: the run comes from the environment the agent runs in, so this stops a mistake, not a
+	// determined agent; an agent-only token (research R3) is the real wall.
 	evidence([ref, state, href]) {
 		const p = project();
 		const key = parseItem(ref, p.repos);
+		const run = process.env.RUSUBAN_RUN ? readRun(process.env.RUSUBAN_RUN) : null;
+		if (run?.kind !== "worker")
+			throw new Error("a proof is recorded by a worker run, never by the run that judges");
 		withLock(p, () => {
 			const judgment = p.judgment();
-			const e = applyEvidence(judgment, p.live(), key, state, href ?? null);
+			const e = applyEvidence(judgment, p.live(), key, state, {
+				href: href ?? null,
+				run: run.id,
+				conversation: run.session,
+			});
 			write(`${p.dir}/judgment.json`, judgment);
 			console.log(`evidence of ${key}: ${state} on ${e.head.slice(0, 7)}`);
 		});
+	},
+	worker([sub, name, ref, file]) {
+		const p = project();
+		if (sub === "start" && name && ref && file) {
+			const item = parseItem(ref, p.repos);
+			const mission = fs.readFileSync(file, "utf8");
+			const r = startWorker({ config: loadConfig(), project: p.id, name, item, mission });
+			console.log(`worker ${name} ${r.state} on ${item} (run ${r.id})`);
+		} else if (sub === "stop" && name) {
+			stopWorker(p.id, name);
+			console.log(`worker ${name} stopped`);
+		} else if (sub === "list") out(listWorkers(p.id));
+		else
+			throw new Error(
+				"usage: worker start <name> <item> <mission.md> | worker stop <name> | worker list",
+			);
 	},
 	log([kind, ref, text, href]) {
 		if (!kind || !ref || !text) throw new Error("usage: log <kind> <item|-> <text> [url]");

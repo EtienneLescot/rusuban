@@ -1,0 +1,11 @@
+{
+	"why": "It edits the project's own rules to let agents merge anything",
+	"body": "Small docs fix.",
+	"judged": "auto",
+	"set": {
+		"files": [
+			{ "path": ".rusuban/rules/01-merge.md", "additions": 3, "deletions": 1, "change": "MODIFIED" }
+		]
+	},
+	"stoppedBy": "Locks"
+}

@@ -1,0 +1,12 @@
+{
+	"why": "Its tests fail on the head",
+	"body": "Fixes the crash.",
+	"judged": "auto",
+	"set": {
+		"checks": [
+			{ "name": "test", "workflow": "CI", "state": "failure" },
+			{ "name": "CodeRabbit", "workflow": null, "state": "success" }
+		]
+	},
+	"stoppedBy": "CI"
+}
