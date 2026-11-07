@@ -1,5 +1,10 @@
 <!--
-Sync Impact Report
+Sync Impact Report, 1.1.0 (2026-11-07, after the spec analysis)
+- Principle III extended: without rules nothing is autonomous but the owner's explicit requests run;
+  a rules change applies at once and is journaled; silent rules mean a card, never a default
+- Principle IV: the server also carries out merges a person orders; "no conflict" joins the gates
+
+Sync Impact Report, 1.0.0
 - Version: none → 1.0.0 (first ratification of Rusuban's own constitution)
 - Derived from: the OpenScreen pilot's constitution 1.0.0 (ratified 2026-10-24), translated from
   French and generalized from one project to any project
@@ -42,17 +47,21 @@ own instance, on their own machine.
 
 - A project's text rules decide what its agents do: what they do alone and how far, who decides what,
   how long a third party is waited for, how messages are written.
-- The product ships no default autonomy. A project without rules is only observed: no agent acts and
-  nothing is written on GitHub.
-- Rules are read from the project repo's default branch, never from a PR head.
+- The product ships no default autonomy. A project without rules does nothing autonomous: no agent acts
+  on its own and nothing is written on GitHub on its own. The owner's explicit requests, answers and
+  tasks still start agents.
+- Rules are read from the project repo's default branch, never from a PR head. A rules change applies
+  at once; it is journaled with its diff and the owner is told.
+- Where the rules are silent, the agent asks the owner on a card; it never fills the gap with a default.
 - Text never lifts a hard lock (principle IV). A judgment that would break one becomes a card.
 - No item stays with the agents without work in progress. A block becomes a card for a person or a
   named wait on a third party, never a silent state.
 
 ### IV. Mechanical guardrails, no blind trust
 
-- Only the server merges, through gates computed on live state, never from memory: CI green on the
-  exact head, no open review thread, head unchanged since judgment.
+- Only the server merges, a merge a person orders on a card included, through gates computed on live
+  state, never from memory: CI green on the exact head, no open review thread, head unchanged since
+  judgment, no conflict.
 - A judgment is tied to the commit it read. A new commit invalidates it.
 - Built-in locks hold in every project and no configuration lifts them: the rules folder never changes
   without a person, no direct push to the default branch, one switch pauses every merge. A project may
@@ -104,4 +113,4 @@ own instance, on their own machine.
 - Every plan checks its compliance with the six principles before implementation; a justified
   exception goes in its Complexity Tracking table.
 
-**Version**: 1.0.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-07
+**Version**: 1.1.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-07

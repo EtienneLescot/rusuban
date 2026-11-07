@@ -43,23 +43,23 @@ thousands of transcripts
 
 ## Constitution Check
 
-*Checked against the OpenScreen pilot's constitution, the only one that exists. M0 ratifies the
-product's own constitution, generalized from it.*
+*Re-run on 2026-11-07 against Rusuban's own constitution 1.1.0 (finding D4 of the analysis; the first
+check used the OpenScreen pilot's).*
 
 | Principle | Status |
 |---|---|
-| I. One source, one writer per datum | Pass: kept, in the instance home. |
-| II. Real time, freshness visible | Pass: kept, plus probe age for machines and index age for the hub. |
-| III. Autonomy by default | **Changed, justified**: autonomy is now whatever each project's text rules say (spec clarification: no product defaults). Built-in locks stay. |
-| IV. Mechanical guardrails | Pass, stronger: server-only merge, deny rules on every run (verified under bypass), the rules folder locked, merges the server did not do are flagged. |
-| V. Readable at a glance | Pass: every card and node still answers what, who, next, blocked. |
-| VI. Simplicity | Pass: no build, one dependency (justified below), Claude Code as the only engine. |
-| Constraint: French interface | **Changed, justified**: English only (spec clarification). |
-| Constraint: 127.0.0.1 only | Pass: Tailscale Serve proxies to loopback. |
-| Constraint: no window on Etienne's desktop | Generalized: no use of a person's desktop without that person's card (FR-063). |
+| I. One source, one writer per datum | Pass after the analysis: the journal is split (daemon, agent CLI), card resolution is derived, leases are a lock primitive (Complexity Tracking). |
+| II. Real time, freshness visible | Pass: staleness thresholds defined (FR-072), hub and probe ages shown. |
+| III. Autonomy from each project's rules | Pass: no default autonomy; without rules nothing autonomous runs (FR-024); silent rules mean a card (FR-026); rules apply at once and are journaled (FR-027). |
+| IV. Mechanical guardrails | Pass after the analysis: CI green defined (FR-021), merge switch built (T086), direct pushes and foreign merges flagged (T031, T092), merge orders carried out by the server (FR-044), one breaking test per lock (T032, T091). |
+| V. Readable at a glance | Pass: cards, nodes and conversations answer what, who, next, blocked; mockups before every new view. |
+| VI. Simplicity | Pass: no build, one dependency (`nodemailer`, justified below), Claude Code only. |
+| Constraint: loopback, Tailscale with identity | Pass after the analysis: `Host` check and Tailscale login (T089). |
+| Constraint: a person's desktop | Pass: lease by card (FR-063) and the alias denied without a lease (T110). |
+| Constraint: nothing project-specific in the product | Pass: checked by SC-002 (T052). |
 
-**After design**: no new violation. The deny rules (research R3) and the identity check (R7) are the
-two places where security depends on an outside tool behaving as verified; both are covered by tests.
+**After design**: no open violation. Security still relies on two outside behaviors verified on
+2026-11-07 (deny rules under bypass, Tailscale Serve identity headers); both have breaking tests.
 
 ## Project Structure
 
@@ -120,6 +120,9 @@ Decided on 2026-11-07: parity first (M1 before M2); the repo lives under Etienne
 (`EtienneLescot/rusuban`) and is public since M0: made public on 2026-11-07 so that CI runs free on the
 three OSes.
 
+Decided in the analysis of 2026-11-07: a mockup validated by Etienne before every interface phase;
+the machine runner (reflection P4) comes first after v1; amendments to the foundation run as Phase 2b.
+
 ## Complexity Tracking
 
 | Choice | Why needed | Simpler option rejected because |
@@ -127,3 +130,5 @@ three OSes.
 | `nodemailer` | e-mail is one of the five channels asked for | SMTP by hand is hundreds of lines |
 | Three service installers | the pilot must start on its own (FR-002) | there is no autostart mechanism common to the three OSes |
 | Parsing an internal format | the hub must see Desktop and terminal sessions (FR-050) | no public API lists Claude Code sessions; parsing is defensive and degrades to a plain list |
+| Leases as a lock primitive used by the agent CLI and the daemon | an atomic `mkdir` on the machine is the only safe arbiter between processes, and later between instances | one writer process would need a lock service on every machine |
+| Two journal files shown as one | principle I: the daemon and the agent CLI each own one file | one shared file would have two writers |

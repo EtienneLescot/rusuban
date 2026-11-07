@@ -13,12 +13,14 @@ file has **one writer**. `rusuban` is the product name.
 | `projects/<p>/judgment.json` | agent CLI only | `{ items: { "<owner/repo#n>": Judgment } }` |
 | `projects/<p>/answers.jsonl` | daemon | `{ at, item, card, option, note, by }` |
 | `projects/<p>/asks.jsonl` | daemon | `{ at, text, item?, by }` |
-| `projects/<p>/journal.jsonl` | daemon and agent CLI, through one append function | `{ at, kind, item?, text, href?, by }` |
+| `projects/<p>/journal.jsonl` | daemon | `{ at, kind, item?, text, href?, by }` |
+| `projects/<p>/agent-log.jsonl` | agent CLI, under the judgment lock | same shape; the dashboard shows both files as one journal |
+| `automerge.json` | daemon | the merge switch: `{ armed, at, by }`; `init` asks whether to arm it |
 | `runs/<run>/status.json` | the run's launcher | Run |
 | `runs/<run>/<ts>.log` | the run's launcher | readable live steps |
 | `hub/index.json` | daemon | `{ sessions: { "<id>": Conversation }, files: { "<path>": { size, offset, mtime } } }` |
-| `leases/<machine>.json` | lease CLI | Lease |
-| `leases/<machine>.queue.json` | lease CLI | `[runId]`, FIFO |
+| `<workspace>/.lease/` on each machine | lease module (agent CLI and daemon, same code) | Lease, created by an atomic `mkdir` over SSH: the machine arbitrates |
+| `leases/queue.json` | lease module, under a host lock | `{ "<machine>": [runId] }`, FIFO |
 | `tasks/<id>.md` | the user | Task |
 | `worktrees/<p>/<run>/` | worker launcher | git worktree of a worker |
 
@@ -30,8 +32,10 @@ file has **one writer**. `rusuban` is the product name.
 
 ```json
 {
-  "owner": { "login": "EtienneLescot" },
+  "version": 1,
+  "owner": { "login": "EtienneLescot", "tailscaleLogin": "etienne@example.com" },
   "port": 8788,
+  "limits": { "maxWorkers": 3, "maxRunMinutes": 150 },
   "permissions": { "mode": "bypass", "allow": [], "deny": [] },
   "projects": [Project],
   "machines": [Machine],
@@ -41,10 +45,18 @@ file has **one writer**. `rusuban` is the product name.
 
 - `permissions.mode`: `bypass` or `allowlist`, asked at init, no default. `deny` adds to the built-in
   deny rules (research R3), it never removes them.
+- `version`: checked on load; an update migrates older files (FR-074).
+- `owner.tailscaleLogin`: written by `remote enable` from `tailscale status --json`; it may differ from
+  the GitHub login (research R7).
+- `limits`: written explicitly by `init`; `maxWorkers` caps concurrent workers, `maxRunMinutes` stops a
+  run that hangs.
 
 ### Project
 
-`{ id, title, repos: [{ slug: "owner/repo", checkout: "<path>" }], folders: ["<path>"], refreshSec: 90 }`
+`{ id, title, mode: "live" | "shadow", repos: [{ slug: "owner/repo", checkout: "<path>" }], folders: ["<path>"], refreshSec: 90 }`
+
+- `mode`: `shadow` lets agents judge and propose while every GitHub write is denied and nothing is merged
+  (FR-028).
 
 - `folders`: extra folders whose conversations belong to the project (a website checkout, a scratch dir).
   Each checkout's worktrees are included automatically.
@@ -86,7 +98,7 @@ file has **one writer**. `rusuban` is the product name.
 | `next`, `block` | the next step; what blocks, or null |
 | `priority`, `area` | `P0`…`P3`; free text defined by the project's rules |
 | `links` | `{ issues[], before[], duplicateOf }` |
-| `pr` | `{ head, auto, why, evidence: { needed, state, head, href } }` |
+| `pr` | `{ head, auto, why, evidence: { needed, state, head, href, run, conversation } }`; evidence is accepted only from a worker run other than the one that judged |
 | `decision` | Decision card or null |
 | `revisitAt` | ISO date, required when `owner` is `agent` or `third`: when the item comes back to the agents. Set from the rules, so no delay is built into the product. |
 | `judgedAt` | ISO date |
@@ -98,6 +110,9 @@ message? }], createdAt, resolvedAt, outcome }`
 
 - Transitions: `open → resolved` by an answer (option or free note); `open → replaced` by a newer
   judgment, which refuses late answers.
+- Resolution is derived, so no file has two writers: a card is resolved when `answers.jsonl` (daemon)
+  holds an answer for its id, replaced when the agent CLI's `resolve` marks it in `judgment.json`.
+- In v1 every card is delivered to the owner; `to` still names its intended login.
 
 ### Run
 
@@ -108,13 +123,14 @@ leases[], trigger, state, startedAt, endedAt, exitCode, step, summary }`
 
 ### Conversation
 
-`{ id, project, cwd, title, origin: "pilot" | "claude-desktop" | "cli" | "sdk", run?, firstAt, lastAt,
-live, branch, prs[], items[], parseError? }`
+`{ id, project, cwd, title, origin: "rusuban" | "claude-desktop" | "cli" | "sdk-cli", run?, forkOf?,
+firstAt, lastAt, live, branch, prs[], items[], parseError? }`
 
 ### Machine and lease
 
 - **Machine**: `{ name, os: "windows" | "macos" | "linux", ssh: "<alias>" | null, caps: ["display",
-  "gpu", "webcam"], checkout, owner?: "<login>", maxLeaseMin: 60 }`. `ssh: null` is the host itself.
+  "gpu", "webcam"], workspace, agentUser: "rusuban", owner?: "<login>", maxLeaseMin: 60 }`. `ssh: null`
+  is the host itself. The workspace holds `<project>/mirror.git` and one worktree per run.
 - **Probe state** (in memory, pushed to the page): `online | offline | unknown`, `checkedAt`.
 - **Lease**: `{ machine, run, pid, since, expires, reason }`. Transitions: `free → held → released |
   expired`; a person's desktop goes `requested → held` only through an accepted card.

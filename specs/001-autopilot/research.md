@@ -30,6 +30,11 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
   answers: the server flags any merge it did not perform (a merged PR absent from its journal), and the
   owner chooses the host profile (allowlist or full bypass) at init.
 - **Later**: an agent-only GitHub token without admin rights, plus a repository ruleset.
+- **Pushes**: the server also flags any commit on a default branch that none of its merges produced.
+- **Desktops**: a person's desktop alias is added to the deny rules of every run that does not hold its
+  lease.
+- **Shadow projects**: every GitHub write (`gh` comment, review, close, edit, `gh api` with a method,
+  `git push`) is added to the deny rules.
 
 ## R4. Reading the rules
 
@@ -73,6 +78,11 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
   match the owner's login; a loopback request without it is the local user. Writes accept the `ts.net`
   origin. Funnel (public) is never used.
 - **Rationale**: Serve strips spoofed identity headers; binding to loopback stops direct access.
+- **Host check** (added by the analysis): every request's `Host` must be `127.0.0.1:<port>`,
+  `localhost:<port>` or the instance's tailnet name, which stops DNS rebinding. A request on the tailnet
+  name must carry `Tailscale-User-Login` equal to `owner.tailscaleLogin`, read by `remote enable` from
+  `tailscale status --json`; it may differ from the GitHub login. GET requests are checked too: the
+  transcripts are private.
 - **Alternatives**: own login system (rejected for v1); binding to the LAN (rejected: unauthenticated).
 
 ## R8. Ping channels
@@ -97,12 +107,26 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
 - **Enrollment**: `rusuban machine add <alias>` checks SSH, git and the checkout folder, then writes the
   entry.
 
+- **Decided on 2026-11-07** (reflection P1 to P3), replacing the host-side lease file above: the lease
+  is a directory `<workspace>/.lease` created by an atomic `mkdir` over SSH on the machine itself,
+  holding the run, the instance, the pid and the expiry; renewed while the run lives, never past
+  `maxLeaseMin`. The workspace holds a bare mirror fetched at lease time and one worktree per run,
+  removed at release. Agents log in as a dedicated `rusuban` account. Because the machine holds its own
+  lease, two instances can share it later with no server.
+
 ## R10. One daemon, supervised by the OS
 
 - **Decision**: the server also schedules tasks (it replaces the Windows task that ran `run-due` every
   10 min). The OS restarts it: a Task Scheduler entry at logon with restart on failure (Windows), a
   launchd agent with `KeepAlive` (macOS), a `systemd --user` unit with `Restart=on-failure` (Linux).
   A missed slot runs once at the next start, as `lastSlot` already does.
+
+## R6b. Hub details (added by the analysis)
+
+- **Answering**: a session Rusuban started resumes in place unless its run is alive; any other session
+  is answered with `--fork-session`, recorded as `forkOf` and listed under the original.
+- **Branch numbers**: `fix/1475-keyframes` links to #1475 as well as to the PR whose head it is.
+- **Cadence**: a rescan every 30 s, cheap because only new bytes are read.
 
 ## R11. Worker worktrees
 
@@ -113,6 +137,12 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
 
 - **Decision**: the current vanilla page (graph, kanban, drawer), ported to English, with SSE and no
   build. New views: inbox, conversations, runs, machines, tasks. The layout works on a phone.
+
+## R14. Claude usage limits
+
+- **Decision**: a run whose result reports a usage limit becomes `limited`, with the reset time when the
+  message gives one, else retried after 5, 15, then 60 minutes. The queue holds and the dashboard says
+  why; requests are never lost.
 
 ## R13. Packaging
 
