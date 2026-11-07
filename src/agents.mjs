@@ -439,6 +439,7 @@ export function requestRun({
 	cwd = null,
 	attempt = 1,
 	retryOf = null,
+	task = null,
 }) {
 	if (!PARTS[kind]) throw new Error(`a run is ${Object.keys(PARTS).join(", ")}`);
 	if (![project, lock].every((s) => SAFE.test(s ?? "")))
@@ -461,6 +462,7 @@ export function requestRun({
 		lock,
 		attempt,
 		retryOf,
+		task,
 		state: "queued",
 		createdAt: new Date().toISOString(),
 		startedAt: null,
@@ -563,6 +565,7 @@ export function kickQueues(now = Date.now()) {
 			cwd: r.kind === "worker" ? null : r.cwd,
 			attempt: (r.attempt ?? 1) + 1,
 			retryOf: r.id,
+			task: r.task ?? null,
 		});
 		write(statusName(r.id), { ...r, retriedBy: again.id });
 	}

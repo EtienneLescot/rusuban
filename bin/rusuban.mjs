@@ -16,6 +16,7 @@ import {
 	pendingAnswers,
 	todoOf,
 } from "../src/model.mjs";
+import { busyRun, readTask, startTask, tasksState } from "../src/tasks.mjs";
 import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
 
 const { version } = JSON.parse(
@@ -26,6 +27,8 @@ const out = (v) => console.log(JSON.stringify(v, null, 1));
 const USAGE = `rusuban ${version}
 
   start [--dry]                 runs the daemon and its dashboard in the foreground
+  task list | task run <id>     the recurring tasks (tasks/<id>.md in the instance home), or one
+                                started now
 
 Agent commands, inside a run (an item is owner/repo#n, or #n when the project has one repo):
   todo                          what the agents must do, each with its reason
@@ -171,6 +174,19 @@ const commands = {
 	asks() {
 		const p = project();
 		out(readJsonl(`${p.dir}/asks.jsonl`).slice(read(`${p.dir}/consumed.json`, {}).asks ?? 0));
+	},
+	// The owner's: the daemon journals how the run ended, as for a task started at its time.
+	task([sub, id]) {
+		const config = loadConfig();
+		if (sub === "list") return out(tasksState(config));
+		if (sub !== "run" || !id) throw new Error("usage: task list | task run <id>");
+		const t = readTask(id, config);
+		if (!t) throw new Error(`no task "${id}": write ${homePath(`tasks/${id}.md`)}`);
+		if (t.error) throw new Error(`task ${id}: ${t.error}`);
+		const busy = busyRun(id);
+		if (busy) throw new Error(`task ${id} already waits or works (run ${busy.id}, ${busy.state})`);
+		const r = startTask(t, "manual");
+		console.log(`task ${id} ${r.state} (run ${r.id})`);
 	},
 	async start(args) {
 		const { startServer } = await import("../src/server.mjs");

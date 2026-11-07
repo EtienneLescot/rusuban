@@ -16,7 +16,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `machine add <alias> [--os] [--caps a,b] [--workspace <path>] [--owner <login>]` | Checks SSH, the `rusuban` account, git and the workspace, creates the bare mirror, then registers the machine. `--owner` marks a person's desktop. |
 | `machine list` / `machine probe [<machine>]` / `machine doctor <machine>` | `doctor` rechecks SSH, the account, the workspace and the project's toolchain. |
 | `channel add <ntfy\|slack\|discord\|teams\|email> <target>` / `channel test <id>` / `channel list` | |
-| `task list` / `task run <id>` | |
+| `task list` / `task run <id>` | The catalog with each task's slots, state and last runs; starts a task now, refused while one of its runs waits or works. |
 | `remote enable` / `remote disable` | Runs `tailscale serve` for the dashboard, or stops it. |
 | `service install` / `service uninstall` | Autostart with restart on failure (Task Scheduler, launchd, systemd user). |
 

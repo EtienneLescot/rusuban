@@ -147,12 +147,17 @@ starts the coordinator, which applies the answer.
 **Independent test**: a daily task runs at its time, once after a skipped slot, and its summary and log
 show in the journal.
 
-- [ ] T040 [US6] Task catalog in `src/tasks.mjs`: `tasks/<id>.md` with front matter `title`, `project`, `schedule` (`daily HH:MM,…`), `lock`, `cwd`, then the prompt (port of `engine/tasks.mjs`)
-- [ ] T041 [US6] Scheduler inside the daemon in `src/server.mjs`: a missed slot runs once (`lastSlot`), lock groups run one after the other
-- [ ] T042 [P] [US6] Scheduler tests (missed slot, shared lock) in `test/tasks.test.mjs`
+- [x] T040 [US6] Task catalog in `src/tasks.mjs`: `tasks/<id>.md` with front matter `title`, `project`, `schedule` (`daily HH:MM,…`), `lock`, `cwd`, then the prompt (port of `engine/tasks.mjs`)
+  - A task with a mistake is listed with its error and never started: an unknown field, a line that is not `field: value`, a file name that is not lowercase letters, digits and dashes. Without `lock` a task is its own group (`<project>.task.<id>`); without `cwd` it works in its project's scratch folder; without `schedule` it runs on a click only.
+- [x] T041 [US6] Scheduler inside the daemon in `src/server.mjs`: a missed slot runs once (`lastSlot`), lock groups run one after the other
+  - Every 30 s, and once at start. The last slot looks back 24 hours, so a slot missed overnight still counts; a task never started waits for its first slot after its file was written. A task whose run waits, works or will be retried is not started again. Starts and ends go to the journal; an end other than `done` is flagged for the owner.
+- [x] T042 [P] [US6] Scheduler tests (missed slot, shared lock) in `test/tasks.test.mjs`
+  - The shared lock is proved with the real runner and a fake `claude`.
 - [ ] T102 [US6] Mockup of the tasks view, validated by Etienne before T043
 - [ ] T043 [US6] `/api/tasks` and `/api/tasks/<id>/run` in `src/server.mjs`, tasks view in `web/app.js`
-- [ ] T103 [US6] `task list|run` in `bin/rusuban.mjs`
+  - Back end done: `GET /api/tasks` gives each task with its slots, state and last five runs with their conversation; `POST /api/tasks/<id>/run` starts one and answers 409 while a run of it waits or works. The view waits for T102.
+- [x] T103 [US6] `task list|run` in `bin/rusuban.mjs`
+  - `task list` prints the catalog as JSON. `task run <id>` starts a task as the button does, and refuses a busy or broken one.
 
 ---
 
