@@ -186,10 +186,10 @@ test("two due tasks sharing a lock run one after the other, and each end is jour
 	// The first one's end hands the group to the second.
 	assert.equal(launched.at(-1), b.id);
 	assert.equal((await executeRun(b.id, { config, command: FAKE })).state, "done");
-	assert.match(
-		fs.readFileSync(homePath(`runs/${b.id}/prompt.md`), "utf8"),
-		/# Your task\n\nWrite the digest\./,
-	);
+	// The run knows which task it is and what started it (found missing in the live check).
+	const prompt = fs.readFileSync(homePath(`runs/${b.id}/prompt.md`), "utf8");
+	assert.match(prompt, /a task run of the task `b-triage` \(“Triage”\), started at its time\./);
+	assert.match(prompt, /# Your task\n\nWrite the digest\./);
 
 	// Both started for this slot: none again; each end goes to the journal once.
 	assert.deepEqual(runSchedule(ctx), []);
