@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A decision card beside the graph</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0a0b0d}
+a{color:#60a5fa}a:hover{color:#93c5fd}
+button{font:inherit}
+textarea{font:inherit}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #0a0b0d; color: #e4e4e7; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px">
+
+<div style="position: absolute; left: 32px; top: 128px; width: 640px; height: 196px; box-sizing: border-box; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; background: rgba(255,255,255,0.02); opacity: 0.4"></div>
+<div style="position: absolute; left: 32px; top: 356px; width: 640px; height: 196px; box-sizing: border-box; border: 1px dashed rgba(255,255,255,0.12); border-radius: 14px; background: rgba(255,255,255,0.02); opacity: 0.4"></div>
+
+<svg width="95" height="8" viewBox="0 0 95 8" preserveAspectRatio="none" style="position: absolute; left: 296px; top: 210px; width: 95px; height: 8px; overflow: visible; fill: none; stroke: #8b8b94; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round"><defs><marker id="dc-arrow-head-filled-1" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#8b8b94" stroke="none" style="stroke: none; fill: #8b8b94; fill: context-stroke"></path></marker></defs><path d="M 0 4 L 91 4" marker-end="url(#dc-arrow-head-filled-1)"></path></svg>
+<svg width="119" height="8" viewBox="0 0 119 8" preserveAspectRatio="none" style="position: absolute; left: 624px; top: 438px; width: 119px; height: 8px; overflow: visible; fill: none; stroke: #34b27b; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 6 6; opacity: 0.4"><defs><marker id="dc-arrow-head-filled-2" orient="auto" markerWidth="5" markerHeight="5" refX="2" refY="2" overflow="visible"><path d="M0 0 L4 2 L0 4 Z" fill="#34b27b" stroke="none" style="stroke: none; fill: #34b27b; fill: context-stroke"></path></marker></defs><path d="M 0 4 L 115 4" marker-end="url(#dc-arrow-head-filled-2)"></path></svg>
+
+<div style="position: absolute; left: 64px; top: 176px; width: 232px; height: 76px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; background: #101216; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; font-size: 13px; line-height: 18px"><span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">#1278</span> <span style="color: #93c5fd">Issue</span><br><b style="color: #ffffff">Floating camera</b><br><span style="color: #a1a1aa">waiting on @stym06</span></span></div>
+
+<div style="position: absolute; left: 392px; top: 176px; width: 232px; height: 76px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; background: #15171c; border: 2px solid #f59e0b; border-radius: 10px; box-shadow: 0 0 0 6px rgba(245,158,11,0.15); font-size: 13px; line-height: 18px"><span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">PR #1321</span> <span style="color: #93c5fd">Feature</span><br><b style="color: #ffffff">Green-screen mode</b><br><span style="color: #fbbf24">for you</span> <span style="display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: #34b27b; margin-left: 6px"></span><span style="display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: #34b27b; margin-left: 3px"></span><span style="display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: #34b27b; margin-left: 3px"></span><span style="display: inline-block; width: 7px; height: 7px; border-radius: 4px; background: #f59e0b; margin-left: 3px"></span></span></div>
+
+<div style="position: absolute; left: 64px; top: 404px; width: 232px; height: 76px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; background: #101216; border: 1px solid rgba(245,158,11,0.55); border-radius: 10px; font-size: 13px; line-height: 18px; opacity: 0.4"><span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">#1409</span> <span style="color: #fca5a5">Rules silent</span><br><b style="color: #ffffff">Ratio crop: cursor</b><br><span style="color: #fbbf24">for you</span></span></div>
+
+<div style="position: absolute; left: 392px; top: 404px; width: 232px; height: 76px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; background: #101216; border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; font-size: 13px; line-height: 18px; opacity: 0.4"><span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">PR #1450</span> <span style="color: #86efac">Bug</span><br><b style="color: #ffffff">Blurry MP4 on Linux</b><br><span style="color: #93c5fd">agent · measuring</span></span></div>
+
+<div style="position: absolute; left: 744px; top: 404px; width: 152px; height: 76px; box-sizing: border-box; padding: 8px 12px; display: flex; align-items: center; justify-content: center; text-align: center; background: rgba(52,178,123,0.13); border: 1px solid #34b27b; border-radius: 10px; font-size: 13px; line-height: 18px; opacity: 0.4"><span><b style="color: #ffffff; font-size: 15px">main</b><br><span style="color: #86efac">auto-merge on</span></span></div>
+
+<div style="position: absolute; left: 304px; top: 186px; width: 80px; text-align: center; font-size: 13px; line-height: 16px; color: #a1a1aa">addresses</div>
+
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 56px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 20px; background: #07080a; border-bottom: 1px solid rgba(255,255,255,0.075)">
+<strong style="font-size: 16px; color: #ffffff">Rusuban</strong>
+<button type="button" style="display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer">openscreen
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.075); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer"><span style="width: 8px; height: 8px; border-radius: 4px; background: #34b27b"></span><b>GitHub</b><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">40 s</span></button>
+<div style="flex-grow: 1"></div>
+<span id="auto-label-2" style="color: #d9e2ee">Auto-merge</span>
+<button type="button" role="switch" aria-checked="true" aria-labelledby="auto-label-2" style="width: 40px; height: 24px; border-radius: 12px; border: none; background: #34b27b; position: relative; padding: 0; cursor: pointer"><span style="position: absolute; top: 3px; left: 19px; width: 18px; height: 18px; border-radius: 9px; background: #ffffff"></span></button>
+</header>
+
+<nav aria-label="Views" style="position: absolute; left: 20px; top: 72px; display: flex; gap: 6px">
+<button type="button" aria-pressed="true" style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.075); color: #ffffff; font-weight: 600; cursor: pointer">Graph</button>
+<button type="button" aria-pressed="false" style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #a1a1aa; cursor: pointer">Kanban</button>
+<button type="button" aria-pressed="false" style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #a1a1aa; cursor: pointer">Conversations</button>
+</nav>
+
+<article aria-label="Decision card" style="position: absolute; left: 920px; top: 56px; width: 520px; height: 844px; box-sizing: border-box; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; background: #101216; border-left: 1px solid rgba(255,255,255,0.12); box-shadow: -18px 0 42px rgba(0,0,0,0.48)">
+
+<div style="display: flex; align-items: center; gap: 8px">
+<button type="button" style="display: flex; align-items: center; gap: 4px; height: 36px; padding: 0 10px 0 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: transparent; color: #e4e4e7; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>Inbox</button>
+<div style="flex-grow: 1"></div>
+<a href="https://github.com/getopenscreen/openscreen/pull/1321">GitHub ↗</a>
+<a href="#conversations">2 conversations</a>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px">
+<span style="color: #d9e2ee">openscreen</span>
+<span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">PR #1321</span>
+<span style="padding: 1px 7px; border-radius: 6px; background: rgba(96,165,250,0.14); color: #93c5fd">Feature</span>
+<span style="padding: 1px 7px; border-radius: 6px; background: rgba(245,158,11,0.14); color: #fbbf24">for you · now</span>
+<span style="color: #a1a1aa">by @alokc83</span>
+</div>
+
+<h2 style="margin: 0; font-size: 21px; line-height: 1.3; color: #ffffff">Merge the webcam green-screen mode as it is?</h2>
+
+<p style="margin: 0; line-height: 1.5; color: #d9e2ee">A chroma-key mode for the webcam layer: colour picker and tolerance slider. 412 lines in 9 files; CI green on the three OSes, review done. <span style="color: #fbbf24">Missing: a Linux check and a keyboard step; the author is silent for 2 days.</span></p>
+
+<section style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.045)">
+<h3 style="margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: #a1a1aa">What I did</h3>
+<ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; line-height: 1.45">
+<li>Rebased it on main. <a href="#worker-rebase-1321">Conversation</a></li>
+<li>Mac export pixel-identical with the mode off. <a href="#evidence-1321">Proof</a></li>
+<li>Asked the author for the Linux check. <a href="https://github.com/getopenscreen/openscreen/pull/1321">Comment</a></li>
+</ul>
+</section>
+
+<button type="button" style="display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid #34b27b; background: rgba(52,178,123,0.13); color: #e4e4e7; cursor: pointer">
+<span style="display: flex; align-items: center; gap: 8px"><b style="font-size: 15px; color: #ffffff">Finish it and merge</b><span style="padding: 1px 7px; border-radius: 6px; background: #34b27b; color: #07080a; font-size: 11px; font-weight: 700">Recommended</span></span>
+<span style="color: #d9e2ee; font-size: 13px; line-height: 1.4">A worker adds the missing parts on the author's branch; the server merges once green. The author keeps the credit.</span>
+</button>
+
+<button type="button" style="display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer">
+<b style="font-size: 15px; color: #ffffff">Merge it as it is</b>
+<span style="color: #a1a1aa; font-size: 13px">The server merges now if CI, threads and head are still green.</span>
+</button>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<button type="button" style="display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer"><b style="color: #ffffff">Wait again</b><span style="color: #a1a1aa; font-size: 12px">Reminder, back in 2 days</span></button>
+<button type="button" style="display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer"><b style="color: #ffffff">Close it</b><span style="color: #a1a1aa; font-size: 12px">With thanks and the reason</span></button>
+</div>
+
+<label for="desk-free-answer" style="color: #d9e2ee">Or answer in your own words</label>
+<div style="display: flex; gap: 10px; align-items: flex-end">
+<textarea id="desk-free-answer" rows="2" placeholder="Merge it, but only after the Linux check" style="flex: 1 1 auto; min-height: 48px; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); background: #0a0b0d; color: #e4e4e7; resize: none"></textarea>
+<button type="button" style="height: 48px; padding: 0 18px; border-radius: 10px; border: none; background: #e4e4e7; color: #07080a; font-weight: 700; cursor: pointer">Send</button>
+</div>
+</article>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
