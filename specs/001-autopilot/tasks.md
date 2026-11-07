@@ -127,15 +127,17 @@ adversarial PRs are not, each with the gate that stopped it.
 **Independent test**: a rule routes features to the owner; a feature PR produces a card; answering it
 starts the coordinator, which applies the answer.
 
-- [ ] T100 [US2] Mockups of the inbox and the cards, desktop and phone, validated by Etienne before T038
+- [x] T100 [US2] Mockups of the inbox and the cards, desktop and phone, validated by Etienne before T038
+  - Validated on 2026-11-07: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, source in `mockups/inbox/`, the built page beside it in `mockups/inbox/built/`.
 - [x] T036 [US2] Cards in `src/model.mjs`: `{ id, to, urgency: "now" | "digest", q, ctx, rec, why, options[{ id, label, effect, message? }], createdAt, resolvedAt, outcome }`, transitions `open → resolved | replaced`
   - A card's state is derived (`cardState`): replaced when the agent CLI says so, resolved once `answers.jsonl` holds its answer. A card belongs to one head (Phase 3).
 - [x] T037 [US2] `/api/answer` and `/api/ask` in `src/server.mjs`: a replaced card refuses late answers; an answer starts the coordinator at once
   - A card takes one answer: a second one is refused like a late one. An answer that orders a merge also starts a GitHub read, so the server carries it out at once.
-- [ ] T038 [US2] Inbox in `web/app.js`: open cards of every project, newest first, answer by option or free note
+- [x] T038 [US2] Inbox in `web/app.js`: open cards of every project, newest first, answer by option or free note
+  - The graph stays the main view; the inbox is the column beside it and a card opens in its place (`#card/<id>`, so a ping links to it). A phone gets the inbox first, a tab bar, and answers a card in three taps: open, option, Send.
 - [x] T039 [P] [US2] Card tests (replaced card refused, answer recorded once) in `test/cards.test.mjs`
-- [ ] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
-  - Back end done: `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The view waits for the mockup (T100).
+- [x] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
+  - `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The runs view is the Agents drawer: runs at work first with a two-tap Stop, the last 30 with their conversation, the one a card points at lit.
 
 ---
 

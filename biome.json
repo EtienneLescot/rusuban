@@ -1,7 +1,7 @@
 {
 	"$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
 	"vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-	"files": { "includes": ["**", "!.specify", "!.claude"] },
+	"files": { "includes": ["**", "!.specify", "!.claude", "!specs/**/mockups"] },
 	"formatter": { "indentStyle": "tab", "lineWidth": 100 },
 	"javascript": { "formatter": { "quoteStyle": "double" } },
 	"markdown": { "formatter": { "enabled": false } }

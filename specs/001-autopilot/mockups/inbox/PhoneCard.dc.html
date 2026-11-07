@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>A decision card on a phone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0a0b0d}
+a{color:#60a5fa}a:hover{color:#93c5fd}
+button{font:inherit}
+textarea{font:inherit}
+summary{cursor:pointer}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; overflow: hidden; background: #0a0b0d; color: #e4e4e7; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px; display: flex; flex-direction: column">
+
+<header style="display: flex; align-items: center; gap: 4px; padding: 8px 8px; background: #07080a; border-bottom: 1px solid rgba(255,255,255,0.075)">
+<a href="PhoneInbox.dc.html" style="display: flex; align-items: center; gap: 4px; height: 44px; padding: 0 8px; color: #e4e4e7; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>Inbox
+</a>
+<div style="flex-grow: 1"></div>
+<a href="https://github.com/getopenscreen/openscreen/pull/1321" style="display: flex; align-items: center; height: 44px; padding: 0 10px">GitHub ↗</a>
+</header>
+
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 16px">
+
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px">
+<span style="color: #d9e2ee">openscreen</span>
+<span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">PR #1321</span>
+<span style="padding: 1px 7px; border-radius: 6px; background: rgba(96,165,250,0.14); color: #93c5fd">Feature</span>
+<span style="padding: 1px 7px; border-radius: 6px; background: rgba(245,158,11,0.14); color: #fbbf24">for you · now</span>
+</div>
+
+<h1 style="margin: 0; font-size: 21px; line-height: 1.3; color: #ffffff">Merge the webcam green-screen mode as it is?</h1>
+
+<p style="margin: 0; color: #d9e2ee; line-height: 1.5">Chroma-key mode for the webcam. CI green, review done. Missing: a Linux check and a keyboard step. The author is silent for 2 days.</p>
+
+<details style="border-radius: 10px; background: rgba(255,255,255,0.045); padding: 10px 12px">
+<summary style="color: #d9e2ee; min-height: 24px">What I did · 2 conversations</summary>
+<ul style="margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; color: #a1a1aa; line-height: 1.45">
+<li>Rebased it on main. <a href="#worker-rebase-1321">Conversation</a></li>
+<li>Mac export pixel-identical with the mode off. <a href="#evidence-1321">Proof</a></li>
+</ul>
+</details>
+
+<button type="button" style="display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; min-height: 64px; border-radius: 12px; border: 1px solid #34b27b; background: rgba(52,178,123,0.13); color: #e4e4e7; cursor: pointer">
+<span style="display: flex; align-items: center; gap: 8px"><b style="font-size: 16px; color: #ffffff">Finish it and merge</b><span style="padding: 1px 7px; border-radius: 6px; background: #34b27b; color: #07080a; font-size: 11px; font-weight: 700">Recommended</span></span>
+<span style="color: #d9e2ee; font-size: 13px; line-height: 1.4">A worker adds the missing parts; the server merges once green.</span>
+</button>
+
+<button type="button" style="display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 14px; min-height: 56px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer">
+<b style="font-size: 16px; color: #ffffff">Merge it as it is</b>
+<span style="color: #a1a1aa; font-size: 13px">The server merges now if still green.</span>
+</button>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<button type="button" style="min-height: 48px; padding: 0 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; font-weight: 600; cursor: pointer">Wait again</button>
+<button type="button" style="min-height: 48px; padding: 0 10px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; font-weight: 600; cursor: pointer">Close it</button>
+</div>
+
+<label for="phone-free-answer" style="color: #d9e2ee">Or in your own words</label>
+<div style="display: flex; gap: 8px; align-items: flex-end">
+<textarea id="phone-free-answer" rows="2" placeholder="Merge it after the Linux check" style="flex: 1 1 auto; min-height: 48px; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: #101216; color: #e4e4e7; resize: none"></textarea>
+<button type="button" aria-label="Send" style="width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; border: none; border-radius: 12px; background: #e4e4e7; color: #07080a; cursor: pointer">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+</button>
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>
