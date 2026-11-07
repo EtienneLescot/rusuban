@@ -34,24 +34,24 @@ by priority (see Implementation Strategy).
 
 ## Phase 2: Foundational (blocks every story)
 
-- [ ] T006 Instance home and atomic store in `src/home.mjs`: `~/.rusuban/` (override `RUSUBAN_HOME`), `read`, `write` (temp file + rename), `readJsonl`, `append`, journal helper; `config.json` created with mode 600
-- [ ] T007 [P] Store tests (atomic write, append, missing files) in `test/home.test.mjs`
-- [ ] T008 Instance config in `src/home.mjs`: `owner.login`, `port`, `permissions { mode: "bypass" | "allowlist", allow[], deny[] }` with **no default mode**, `projects[]`, `machines[]`, `channels[]`; validated on load
-- [ ] T009 Port the GitHub reader to `src/github.mjs`: repo as a parameter; PR fields `repo, n, title, url, author, draft, head, headRef, base, additions, deletions, files[], refs[], closes[], mergeable, canBeRebased, ci { state, runId }, reviews { "<login>": state }, threadsOpen` (replaces the CodeRabbit-only state); items keyed `owner/repo#n`
-- [ ] T010 [P] Polling per project in `src/github.mjs`: every `refreshSec` (default 90), slower when the rate-limit budget is under 20 %
-- [ ] T011 Rules loader in `src/rules.mjs`: `.rusuban/rules/*.md` in file-name order and `.rusuban/locks.json`, from the default branch through `gh api …/contents?ref=<default>`, cached by tree sha in `projects/<p>/rules.json`; no folder → the project is observe-only
-- [ ] T012 [P] Rules loader tests (order, missing folder, invalid `locks.json` reported, PR head never read) in `test/rules.test.mjs`
-- [ ] T013 Port the pure model to `src/model.mjs`: built-in gates (CI green on the exact head, no open thread, head unchanged since judgment, rebaseable, `.rusuban/` untouched, merge switch) plus project locks (`lockedPaths`, `maxLines`, `maxFiles`, `sizeExempt`, `requiredChecks`, `requiredReviewers`, `evidence`); kinds `bug | feature | maintenance | docs | translation | question | other`
-- [ ] T014 Todo reasons in `src/model.mjs`: `unjudged`, `new-commit`, `ci-approval`, `missing-card`, `revisit-due` (fires at the judgment's `revisitAt`); no delay built in
-- [ ] T015 [P] Model tests in `test/model.test.mjs`: gates, eligibility, every todo reason including `revisit-due`, multi-repo keys
-- [ ] T016 Agent launcher in `src/agents.mjs` (port of `engine/claude-run.mjs`): `claude -p <prompt> --output-format stream-json --verbose`, session id from `system/init`, readable log, final summary; permission flags from the instance profile; the built-in `--disallowedTools` (merge commands, `gh api` merge calls, pushes to a default branch, edits under the instance home) always added
-- [ ] T017 [P] Test that the built-in deny rules are present under both profiles in `test/agents.test.mjs`
-- [ ] T018 Runs in `src/agents.mjs`: `runs/<run>/status.json` with `{ id, kind, project, items[], session, cwd, worktree, leases[], trigger, state, startedAt, endedAt, exitCode, step, summary }`, lock groups and FIFO queue (port of `engine/tasks.mjs`)
-- [ ] T019 Agent commands in `bin/rusuban.mjs`: `todo`, `show`, `judge` (refuses a missing `revisitAt` when `owner` is `agent` or `third`, and a PR judged on a head that is not live), `resolve`, `log`, `evidence`, `answers`, `asks`; reads `RUSUBAN_RUN` and `RUSUBAN_PROJECT`
-- [ ] T020 [P] Port the CLI tests to `test/cli.test.mjs`
-- [ ] T021 Server skeleton in `src/server.mjs`: listens on 127.0.0.1 only; static `web/`; `/api/state?project=`; `/api/events` (SSE); POST guard (local or `ts.net` origin, `x-rusuban: 1`, body under 8 KB); identity check (`Tailscale-User-Login` must be the owner's login, loopback without it is the local user)
-- [ ] T022 [P] Guard tests (wrong login, wrong origin, missing header, oversized body) in `test/server.test.mjs`
-- [ ] T023 Port the dashboard to English in `web/index.html`, `web/app.js`, `web/app.css`: project switcher, graph, kanban, drawer; all strings in one table
+- [x] T006 Instance home and atomic store in `src/home.mjs`: `~/.rusuban/` (override `RUSUBAN_HOME`), `read`, `write` (temp file + rename), `readJsonl`, `append`, journal helper; `config.json` created with mode 600
+- [x] T007 [P] Store tests (atomic write, append, missing files) in `test/home.test.mjs`
+- [x] T008 Instance config in `src/home.mjs`: `owner.login`, `port`, `permissions { mode: "bypass" | "allowlist", allow[], deny[] }` with **no default mode**, `projects[]`, `machines[]`, `channels[]`; validated on load
+- [x] T009 Port the GitHub reader to `src/github.mjs`: repo as a parameter; PR fields `repo, n, title, url, author, draft, head, headRef, base, additions, deletions, files[], refs[], closes[], mergeable, canBeRebased, ci { state, runId }, reviews { "<login>": state }, threadsOpen` (replaces the CodeRabbit-only state); items keyed `owner/repo#n`
+- [x] T010 [P] Polling per project in `src/github.mjs`: every `refreshSec` (default 90), slower when the rate-limit budget is under 20 %
+- [x] T011 Rules loader in `src/rules.mjs`: `.rusuban/rules/*.md` in file-name order and `.rusuban/locks.json`, from the default branch through `gh api …/contents?ref=<default>`, cached by tree sha in `projects/<p>/rules.json`; no folder → the project is observe-only
+- [x] T012 [P] Rules loader tests (order, missing folder, invalid `locks.json` reported, PR head never read) in `test/rules.test.mjs`
+- [x] T013 Port the pure model to `src/model.mjs`: built-in gates (CI green on the exact head, no open thread, head unchanged since judgment, rebaseable, `.rusuban/` untouched, merge switch) plus project locks (`lockedPaths`, `maxLines`, `maxFiles`, `sizeExempt`, `requiredChecks`, `requiredReviewers`, `evidence`); kinds `bug | feature | maintenance | docs | translation | question | other`
+- [x] T014 Todo reasons in `src/model.mjs`: `unjudged`, `new-commit`, `ci-approval`, `missing-card`, `revisit-due` (fires at the judgment's `revisitAt`); no delay built in
+- [x] T015 [P] Model tests in `test/model.test.mjs`: gates, eligibility, every todo reason including `revisit-due`, multi-repo keys
+- [x] T016 Agent launcher in `src/agents.mjs` (port of `engine/claude-run.mjs`): `claude -p <prompt> --output-format stream-json --verbose`, session id from `system/init`, readable log, final summary; permission flags from the instance profile; the built-in `--disallowedTools` (merge commands, `gh api` merge calls, pushes to a default branch, edits under the instance home) always added
+- [x] T017 [P] Test that the built-in deny rules are present under both profiles in `test/agents.test.mjs`
+- [x] T018 Runs in `src/agents.mjs`: `runs/<run>/status.json` with `{ id, kind, project, items[], session, cwd, worktree, leases[], trigger, state, startedAt, endedAt, exitCode, step, summary }`, lock groups and FIFO queue (port of `engine/tasks.mjs`)
+- [x] T019 Agent commands in `bin/rusuban.mjs`: `todo`, `show`, `judge` (refuses a missing `revisitAt` when `owner` is `agent` or `third`, and a PR judged on a head that is not live), `resolve`, `log`, `evidence`, `answers`, `asks`; reads `RUSUBAN_RUN` and `RUSUBAN_PROJECT`
+- [x] T020 [P] Port the CLI tests to `test/cli.test.mjs`
+- [x] T021 Server skeleton in `src/server.mjs`: listens on 127.0.0.1 only; static `web/`; `/api/state?project=`; `/api/events` (SSE); POST guard (local or `ts.net` origin, `x-rusuban: 1`, body under 8 KB); identity check (`Tailscale-User-Login` must be the owner's login, loopback without it is the local user)
+- [x] T022 [P] Guard tests (wrong login, wrong origin, missing header, oversized body) in `test/server.test.mjs`
+- [x] T023 Port the dashboard to English in `web/index.html`, `web/app.js`, `web/app.css`: project switcher, graph, kanban, drawer; all strings in one table
 
 **Checkpoint**: the daemon reads several repos, the model computes gates, agents can be launched.
 
