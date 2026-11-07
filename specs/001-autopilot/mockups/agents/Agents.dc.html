@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rusuban agents and tasks</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0;background:#0a0b0d}
+a{color:#60a5fa}a:hover{color:#93c5fd}
+button{font:inherit}
+</style>
+</helmet>
+<div style="position: relative; width: 1440px; height: 900px; overflow: hidden; background: #0a0b0d; color: #e4e4e7; font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; font-size: 14px">
+
+<header style="position: absolute; left: 0; top: 0; width: 1440px; height: 56px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 20px; background: #07080a; border-bottom: 1px solid rgba(255,255,255,0.075)">
+<strong style="font-size: 16px; color: #ffffff">Rusuban</strong>
+<button type="button" style="display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer">All projects
+<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.075); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer"><span style="width: 8px; height: 8px; border-radius: 4px; background: #34b27b"></span><b>GitHub</b><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">40 s</span></button>
+<button type="button" style="display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.075); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer"><span style="width: 8px; height: 8px; border-radius: 4px; background: #d97757"></span><b>Agents</b><span style="color: #d9e2ee">2 running</span></button>
+<div style="flex-grow: 1"></div>
+<span id="auto-label-a" style="color: #d9e2ee">Auto-merge</span>
+<button type="button" role="switch" aria-checked="true" aria-labelledby="auto-label-a" style="width: 40px; height: 24px; border-radius: 12px; border: none; background: #34b27b; position: relative; padding: 0; cursor: pointer"><span style="position: absolute; top: 3px; left: 19px; width: 18px; height: 18px; border-radius: 9px; background: #ffffff"></span></button>
+</header>
+
+<nav aria-label="Views" style="position: absolute; left: 20px; top: 72px; display: flex; gap: 6px">
+<button type="button" aria-pressed="false" style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #a1a1aa; cursor: pointer">Graph</button>
+<button type="button" aria-pressed="false" style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #a1a1aa; cursor: pointer">Kanban</button>
+<button type="button" aria-pressed="false" style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid transparent; background: transparent; color: #a1a1aa; cursor: pointer">Conversations</button>
+<button type="button" aria-pressed="true" style="height: 32px; padding: 0 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.075); color: #ffffff; font-weight: 600; cursor: pointer">Agents</button>
+</nav>
+
+<main style="position: absolute; left: 0; top: 116px; width: 1000px; height: 784px; box-sizing: border-box; padding: 0 20px 20px; display: flex; flex-direction: column; gap: 18px; overflow: hidden">
+
+<section aria-label="Running now" style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 15px; color: #ffffff">Running now</h2>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(217,119,87,0.45); background: #101216">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px"><span style="width: 8px; height: 8px; border-radius: 4px; background: #d97757"></span><b style="font-size: 14px; color: #ffffff">Worker fix-1450</b><span style="color: #d9e2ee">openscreen</span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">PR #1450</span><span style="flex-grow: 1"></span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">2:14</span></div>
+<span style="color: #d9e2ee; line-height: 1.4">Measuring the export timing on <b>mac</b>, lease ends in 24 min.</span>
+<div style="display: flex; gap: 12px; align-items: center"><a href="#conversation-fix-1450">Conversation</a><span style="flex-grow: 1"></span><button type="button" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(239,68,68,0.5); background: transparent; color: #fca5a5; cursor: pointer">Stop</button></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(217,119,87,0.45); background: #101216">
+<div style="display: flex; align-items: center; gap: 8px; font-size: 12px"><span style="width: 8px; height: 8px; border-radius: 4px; background: #d97757"></span><b style="font-size: 14px; color: #ffffff">Task Publications</b><span style="color: #d9e2ee">openscreen</span><span style="flex-grow: 1"></span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">0:48</span></div>
+<span style="color: #d9e2ee; line-height: 1.4">Posting today's n8n demo to X.</span>
+<div style="display: flex; gap: 12px; align-items: center"><a href="#conversation-publications">Conversation</a><span style="flex-grow: 1"></span><button type="button" style="height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(239,68,68,0.5); background: transparent; color: #fca5a5; cursor: pointer">Stop</button></div>
+</div>
+</div>
+</section>
+
+<section aria-label="Recurring tasks" style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 15px; color: #ffffff">Recurring tasks</h2>
+<div style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; padding: 0 14px; font-size: 12px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.5px">
+<span style="grid-column: span 4">Task</span><span style="grid-column: span 2">Schedule</span><span style="grid-column: span 2">Next</span><span style="grid-column: span 3">Last run</span><span style="grid-column: span 1"></span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 12px; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.12); background: #101216">
+<div style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: center">
+<span style="grid-column: span 4; display: flex; flex-direction: column"><b style="color: #ffffff">Publications (X, LinkedIn, Reddit)</b><span style="color: #a1a1aa; font-size: 12px">openscreen · lock demo-factory</span></span>
+<span style="grid-column: span 2; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #d9e2ee">daily 09:12</span>
+<span style="grid-column: span 2; color: #d9e2ee">tomorrow 09:12</span>
+<span style="grid-column: span 3; color: #d97757">running · 0:48</span>
+<span style="grid-column: span 1"></span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 12px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.5px">Prompt</span>
+<pre style="margin: 0; padding: 10px 12px; border-radius: 8px; background: #0a0b0d; color: #d9e2ee; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap">Publish the day's ready posts from the
+publication calendar: X and LinkedIn at
+their slot, Reddit only after Etienne's yes…</pre>
+<a href="#task-file-publications">Open the task file</a>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 12px; color: #a1a1aa; text-transform: uppercase; letter-spacing: 0.5px">Last runs</span>
+<div style="display: flex; gap: 8px; align-items: baseline"><span style="width: 7px; height: 7px; border-radius: 4px; background: #34b27b"></span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">yesterday</span><span style="flex-grow: 1">Posted 2 of 2; Reddit waits for your yes.</span><a href="#run-1">Conversation</a></div>
+<div style="display: flex; gap: 8px; align-items: baseline"><span style="width: 7px; height: 7px; border-radius: 4px; background: #34b27b"></span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">Nov 5</span><span style="flex-grow: 1">Posted 1; nothing else was ready.</span><a href="#run-2">Conversation</a></div>
+<div style="display: flex; gap: 8px; align-items: baseline"><span style="width: 7px; height: 7px; border-radius: 4px; background: #ef4444"></span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">Nov 4</span><span style="flex-grow: 1">Failed: the demo folder was missing.</span><a href="#run-3">Conversation</a></div>
+</div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.075); background: #101216">
+<span style="grid-column: span 4; display: flex; flex-direction: column"><b style="color: #ffffff">n8n series</b><span style="color: #a1a1aa; font-size: 12px">openscreen · lock demo-factory</span></span>
+<span style="grid-column: span 2; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #d9e2ee">daily 08:30</span>
+<span style="grid-column: span 2; color: #d9e2ee">tomorrow 08:30</span>
+<span style="grid-column: span 3; color: #86efac">done · today 08:41</span>
+<span style="grid-column: span 1; display: flex; justify-content: flex-end"><button type="button" style="height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer">Run now</button></span>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: center; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.075); background: #101216">
+<span style="grid-column: span 4; display: flex; flex-direction: column"><b style="color: #ffffff">Sandbox smoke</b><span style="color: #a1a1aa; font-size: 12px">rusuban-sandbox</span></span>
+<span style="grid-column: span 2; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #d9e2ee">daily 07:00</span>
+<span style="grid-column: span 2; color: #d9e2ee">tomorrow 07:00</span>
+<span style="grid-column: span 3; color: #fca5a5">failed · today 07:02</span>
+<span style="grid-column: span 1; display: flex; justify-content: flex-end"><button type="button" style="height: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.045); color: #e4e4e7; cursor: pointer">Run now</button></span>
+</div>
+</section>
+
+<section aria-label="Recent runs" style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-size: 15px; color: #ffffff">Recent runs</h2>
+<div style="display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; border-radius: 10px; background: rgba(255,255,255,0.03)"><span style="width: 7px; height: 7px; border-radius: 4px; background: #34b27b"></span><b style="color: #ffffff">Judge</b><span style="color: #d9e2ee">openscreen</span><span style="flex: 1 1 auto; min-width: 0; color: #d9e2ee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Judged 3 items: one new card for you, one worker started on <b>#1450</b>.</span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">20:40</span><a href="#run-judge">Conversation</a></div>
+<div style="display: flex; gap: 10px; align-items: baseline; padding: 10px 14px; border-radius: 10px; background: rgba(255,255,255,0.03)"><span style="width: 7px; height: 7px; border-radius: 4px; background: #34b27b"></span><b style="color: #ffffff">Worker rebase-1</b><span style="color: #d9e2ee">rusuban-sandbox</span><span style="flex: 1 1 auto; min-width: 0; color: #d9e2ee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">Rebased <b>PR #1</b> on main; all 7 tests pass.</span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">20:39</span><a href="#run-rebase">Conversation</a></div>
+</section>
+</main>
+
+<aside aria-label="Inbox" style="position: absolute; left: 1000px; top: 56px; width: 440px; height: 844px; box-sizing: border-box; padding: 16px; display: flex; flex-direction: column; gap: 10px; background: #0c0d10; border-left: 1px solid rgba(255,255,255,0.075)">
+<div style="display: flex; align-items: baseline; justify-content: space-between">
+<h1 style="margin: 0; font-size: 18px; color: #ffffff">Inbox</h1>
+<span style="color: #a1a1aa"><b style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #fbbf24">2</b> for you · all projects</span>
+</div>
+<button type="button" style="display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.075); background: #101216; color: #e4e4e7; cursor: pointer">
+<span style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px"><span style="width: 8px; height: 8px; border-radius: 4px; background: #f59e0b"></span><span style="color: #d9e2ee">openscreen</span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">PR #1450</span><span style="flex-grow: 1"></span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">25 min</span></span>
+<span style="font-size: 15px; font-weight: 600; color: #ffffff">Can I take your desktop for 30 minutes to measure it?</span>
+</button>
+<button type="button" style="display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.075); background: #101216; color: #e4e4e7; cursor: pointer">
+<span style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px"><span style="width: 8px; height: 8px; border-radius: 4px; background: #f59e0b"></span><span style="color: #d9e2ee">openscreen</span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">Issue #1409</span><span style="flex-grow: 1"></span><span style="font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #a1a1aa">1 d</span></span>
+<span style="font-size: 15px; font-weight: 600; color: #ffffff">Your rules don't say: is a cursor leaving a ratio crop a bug?</span>
+</button>
+</aside>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+return {};
+}
+}
+</script>
+</body>
+</html>

@@ -1766,14 +1766,6 @@ a.num:hover .ext {
 	color: var(--text-3);
 	flex: 0 0 auto;
 }
-.act header .state {
-	font-size: 11px;
-	color: var(--text-3);
-}
-.act header .state.failed,
-.act header .state.interrupted {
-	color: var(--red-text);
-}
 .act p {
 	margin: 0;
 	font-size: 12px;
@@ -1786,23 +1778,6 @@ a.num:hover .ext {
 	color: var(--amber-text);
 }
 .act p.err {
-	color: var(--red-text);
-}
-/* A run a card points at, lit in the drawer. */
-.act.lit {
-	border-color: rgba(245, 158, 11, 0.55);
-	background: rgba(245, 158, 11, 0.07);
-}
-.act .session {
-	font-size: 11px;
-	color: var(--text-4);
-	word-break: break-all;
-}
-.act header .secondary.small {
-	flex: 0 0 auto;
-}
-.secondary.armed {
-	border-color: var(--red);
 	color: var(--red-text);
 }
 .journal {
@@ -1996,6 +1971,315 @@ a.num:hover .ext {
 	height: 10px;
 }
 
+/* The graph's filters and legend mean nothing to the other views. */
+body[data-showing="agents"] .filters > :not(.views),
+body[data-showing="conversations"] .filters > :not(.views) {
+	display: none;
+}
+
+/* Agents: what runs now, the recurring tasks, the recent runs, every project's */
+.agents-view {
+	position: absolute;
+	inset: 0;
+	overflow: auto;
+	padding: 16px 20px 24px;
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	background: var(--bg);
+	font-size: 14px;
+}
+.agents-view section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.agents-view h2 {
+	margin: 0;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 15px;
+	color: var(--text-hi);
+}
+.agents-view h2 .linkish {
+	font-size: 13px;
+	font-weight: 400;
+}
+.agents-view a {
+	color: var(--blue);
+}
+.agents-view a:hover {
+	color: #93c5fd;
+}
+.agents-view code {
+	padding: 0 3px;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.06);
+	font: 0.92em var(--mono);
+}
+.ag-empty {
+	margin: 0;
+	color: var(--text-3);
+}
+/* A run's state: a clay dot at work, green done, red failed, amber waiting. */
+.sd {
+	flex: 0 0 auto;
+	align-self: center;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--grey);
+}
+.sd.running {
+	background: #d97757;
+	animation: pulse 1.4s infinite;
+}
+.sd.done {
+	background: var(--green);
+}
+.sd.failed,
+.sd.interrupted {
+	background: var(--red);
+}
+.sd.queued,
+.sd.limited {
+	background: var(--amber);
+}
+.st.running {
+	color: #d97757;
+}
+.st.done {
+	color: #86efac;
+}
+.st.failed,
+.st.interrupted {
+	color: #fca5a5;
+}
+.st.queued,
+.st.limited {
+	color: var(--amber-text);
+}
+.st.stopped {
+	color: var(--text-3);
+}
+/* Long text ends on its last whole line, never cut through one. */
+.clamp2 {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 2;
+	line-clamp: 2;
+	overflow: hidden;
+}
+.ag-running {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+.ag-run {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 14px;
+	border-radius: 12px;
+	border: 1px solid rgba(217, 119, 87, 0.45);
+	background: var(--card);
+}
+.ag-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	font-size: 12px;
+	color: var(--text-2);
+}
+/* A run's kind and name: one line, never what its summary puts in bold. */
+.ag-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-hi);
+}
+.ag-head .ag-name {
+	font-size: 14px;
+}
+.ag-head .mono {
+	flex: 0 0 auto;
+	color: var(--text-3);
+}
+.ag-step {
+	line-height: 1.4;
+	color: var(--text-2);
+}
+.ag-actions {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+.ag-stop {
+	height: 32px;
+	padding: 0 12px;
+	border-radius: 8px;
+	border: 1px solid rgba(239, 68, 68, 0.5);
+	background: transparent;
+	color: #fca5a5;
+}
+.ag-stop:hover,
+.ag-stop.armed {
+	border-color: var(--red);
+	background: rgba(239, 68, 68, 0.14);
+}
+/* A run a card points at. */
+.ag-run.lit,
+.ag-line.lit {
+	border-color: rgba(245, 158, 11, 0.55);
+	background: rgba(245, 158, 11, 0.07);
+}
+/* Recurring tasks: the heading row and every task share the same columns. */
+.ag-grid {
+	display: grid;
+	grid-template-columns:
+		minmax(0, 4fr) minmax(0, 2fr) minmax(0, 2fr) minmax(0, 3fr)
+		minmax(0, 1fr);
+	column-gap: 8px;
+	align-items: center;
+}
+.ag-cols {
+	padding: 0 15px;
+	font-size: 12px;
+	color: var(--text-3);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+.ag-task {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding: 12px 14px;
+	border-radius: 12px;
+	border: 1px solid var(--line);
+	background: var(--card);
+}
+.ag-task.open {
+	border-color: var(--line-strong);
+}
+.ag-task-head {
+	grid-column: 1 / 5;
+	display: grid;
+	grid-template-columns: subgrid;
+	align-items: center;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--text-2);
+	text-align: left;
+}
+.ag-task-name {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+.ag-task-name b {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-hi);
+}
+.ag-task-name small {
+	font-size: 12px;
+	color: var(--text-3);
+}
+.ag-task-act {
+	display: flex;
+	justify-content: flex-end;
+}
+.ag-run-now {
+	padding: 0 10px;
+	font-weight: 500;
+	white-space: nowrap;
+}
+.ag-err {
+	margin: 0;
+	font-size: 12px;
+	color: var(--red-text);
+}
+.ag-more {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 12px;
+}
+.ag-col {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+.ag-label {
+	font-size: 12px;
+	color: var(--text-3);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+.ag-prompt {
+	display: -webkit-box;
+	-webkit-box-orient: vertical;
+	-webkit-line-clamp: 4;
+	line-clamp: 4;
+	overflow: hidden;
+	margin: 0;
+	/* A border, not a padding: the clamp's hidden lines would show through a padding. */
+	border: solid var(--bg);
+	border-width: 10px 12px;
+	border-radius: 8px;
+	background: var(--bg);
+	color: var(--text-2);
+	font: 12px / 1.5 var(--mono);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.ag-mini {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+}
+.ag-mini .mono {
+	flex: 0 0 auto;
+	color: var(--text-3);
+}
+.ag-sum {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-2);
+}
+/* Recent runs, one line each */
+.ag-line {
+	display: flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: 10px 14px;
+	border-radius: 10px;
+	border: 1px solid transparent;
+	background: rgba(255, 255, 255, 0.03);
+	color: var(--text-1);
+}
+.ag-line .ag-name,
+.ag-line .ag-proj,
+.ag-line .mono,
+.ag-line > a {
+	flex: 0 0 auto;
+	white-space: nowrap;
+}
+.ag-line .ag-proj {
+	color: var(--text-2);
+}
+.ag-line .mono {
+	color: var(--text-3);
+}
+
 /* Phone: one screen at a time, picked in the tab bar; an open card covers them all. */
 @media (max-width: 720px) {
 	.top {
@@ -2179,5 +2463,83 @@ a.num:hover .ext {
 	#tab-count {
 		color: var(--amber-text);
 		font-size: 12px;
+	}
+	/* The Agents view, compact, every tap target 44 px high */
+	.agents-view {
+		padding: 16px;
+		gap: 14px;
+	}
+	.agents-view h2 {
+		font-size: 18px;
+	}
+	.agents-view h2 .linkish,
+	.ag-actions a,
+	.ag-mini a,
+	.ag-col > a {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+	}
+	.ag-running {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.ag-run {
+		gap: 6px;
+		padding: 12px;
+	}
+	.ag-stop,
+	.ag-run-now {
+		height: 44px;
+		padding: 0 14px;
+		border-radius: 10px;
+	}
+	.ag-task {
+		gap: 10px;
+		padding: 10px 12px;
+	}
+	.ag-task-row {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+	.ag-task-head {
+		flex: 1 1 auto;
+		display: flex;
+		min-width: 0;
+		min-height: 44px;
+	}
+	.ag-task-name {
+		gap: 2px;
+	}
+	.ag-more {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.ag-mini {
+		align-items: center;
+	}
+	.ag-line {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 4px;
+		padding: 10px 12px;
+		border-radius: 12px;
+	}
+	a.ag-line:hover {
+		text-decoration: none;
+	}
+	.ag-line-head {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		min-width: 0;
+		font-size: 12px;
+	}
+	.ag-line-head .ag-name {
+		flex: 0 1 auto;
+		font-size: 14px;
+	}
+	.ag-line .ag-sum {
+		white-space: normal;
+		line-height: 1.4;
 	}
 }

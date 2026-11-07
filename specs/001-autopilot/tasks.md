@@ -153,9 +153,12 @@ show in the journal.
   - Every 30 s, and once at start. The last slot looks back 24 hours, so a slot missed overnight still counts; a task never started waits for its first slot after its file was written. A task whose run waits, works or will be retried is not started again. Starts and ends go to the journal; an end other than `done` is flagged for the owner.
 - [x] T042 [P] [US6] Scheduler tests (missed slot, shared lock) in `test/tasks.test.mjs`
   - The shared lock is proved with the real runner and a fake `claude`.
-- [ ] T102 [US6] Mockup of the tasks view, validated by Etienne before T043
-- [ ] T043 [US6] `/api/tasks` and `/api/tasks/<id>/run` in `src/server.mjs`, tasks view in `web/app.js`
-  - Back end done: `GET /api/tasks` gives each task with its slots, state and last five runs with their conversation; `POST /api/tasks/<id>/run` starts one and answers 409 while a run of it waits or works. The view waits for T102.
+- [x] T102 [US6] Mockup of the tasks view, validated by Etienne before T043
+  - Validated on 2026-11-07: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Agents and tasks", source in `mockups/agents/`, the built page beside it in `mockups/agents/built/`.
+- [x] T043 [US6] `/api/tasks` and `/api/tasks/<id>/run` in `src/server.mjs`, tasks view in `web/app.js`
+  - `GET /api/tasks` gives each task with its slots, state and last five runs with their conversation; `POST /api/tasks/<id>/run` starts one and answers 409 while a run of it waits or works.
+  - The view is the Agents tab, beside Graph, Kanban and Conversations: what runs now, with Stop; the recurring tasks, with "Run now" hidden where it would start nothing; the recent runs. Every project's, pushed as an `agents` event.
+  - A Conversation link opens the run's log (`GET /api/runs/<id>/log`) until the hub shows transcripts; "Open the task file" opens it as text (`GET /api/tasks/<id>/file`). The journal and the rules keep a drawer of their own.
 - [x] T103 [US6] `task list|run` in `bin/rusuban.mjs`
   - `task list` prints the catalog as JSON. `task run <id>` starts a task as the button does, and refuses a busy or broken one.
 

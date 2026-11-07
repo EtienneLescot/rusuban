@@ -8,7 +8,7 @@ import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { executeRun, holder, queued, readRun, runner } from "../src/agents.mjs";
 import { homePath, readJsonl, saveConfig, write } from "../src/home.mjs";
-import { runSchedule, startServer } from "../src/server.mjs";
+import { agentsState, runSchedule, startServer } from "../src/server.mjs";
 import { dueTasks, lastSlot, nextSlot, parseSchedule, parseTask } from "../src/tasks.mjs";
 
 const FAKE = [
@@ -237,7 +237,12 @@ function call(port, method, urlPath, headers = {}) {
 			res.on("data", (c) => {
 				body += c;
 			});
-			res.on("end", () => resolve({ status: res.statusCode, body: JSON.parse(body) }));
+			res.on("end", () =>
+				resolve({
+					status: res.statusCode,
+					body: /json/.test(res.headers["content-type"]) ? JSON.parse(body) : body,
+				}),
+			);
 		});
 		req.on("error", reject);
 		req.end();
@@ -288,6 +293,31 @@ test("the catalog is served with each task's slots, state and runs; a task start
 		);
 		const [entry] = readJsonl("projects/sandbox/journal.jsonl");
 		assert.deepEqual([entry.text, entry.by], ["Started the task “Digest”", "alice"]);
+
+		// The page pushes every project's runs and the tasks, each with the start of its prompt.
+		const pushed = agentsState(srv.ctx);
+		assert.deepEqual(
+			[pushed.dry, pushed.runs.map((r) => r.id), pushed.tasks[1].promptStart],
+			[false, [run.id], "Write the digest."],
+		);
+		// A task's file and a run's log open as text; nothing else does.
+		const get = (p) => call(srv.port, "GET", p);
+		assert.deepEqual(Object.values(await get("/api/tasks/digest/file")), [
+			200,
+			fs.readFileSync(homePath("tasks/digest.md"), "utf8"),
+		]);
+		assert.equal((await get("/api/tasks/nope/file")).status, 404);
+		assert.equal((await get("/api/tasks/..%2Fconfig/file")).status, 404);
+		assert.equal((await get(`/api/runs/${run.id}/log`)).status, 404); // queued: no log yet
+		write(`runs/${run.id}/status.json`, { ...readRun(run.id), log: "a.log" });
+		fs.writeFileSync(homePath(`runs/${run.id}/a.log`), "09:00:01  → Bash gh pr list\n");
+		assert.deepEqual(Object.values(await get(`/api/runs/${run.id}/log`)), [
+			200,
+			"09:00:01  → Bash gh pr list\n",
+		]);
+		write(`runs/${run.id}/status.json`, { ...readRun(run.id), log: "../../config.json" });
+		assert.equal((await get(`/api/runs/${run.id}/log`)).status, 404);
+		assert.equal((await get("/api/runs/..%2Fconfig/log")).status, 404);
 	} finally {
 		await srv.close();
 	}

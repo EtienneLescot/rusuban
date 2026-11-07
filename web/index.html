@@ -11,7 +11,7 @@
 	<div class="brand"><strong data-t="brand"></strong><span id="project-name"></span><select id="project" data-t-label="project" hidden></select></div>
 	<div class="status">
 		<button type="button" class="pill" id="fresh" data-t-title="refreshNow"><span class="dot"></span><b data-t="github"></b><span class="mono" id="fresh-label">…</span></button>
-		<button type="button" class="pill" id="agents" aria-expanded="false" aria-controls="drawer"><span class="pill-crab"><svg class="crab-svg" viewBox="0 0 16 12" aria-hidden="true" shape-rendering="crispEdges"><rect x="2" y="1" width="12" height="7" fill="#d97757"/><rect x="0" y="3" width="2" height="3" fill="#d97757"/><rect x="14" y="3" width="2" height="3" fill="#d97757"/><rect x="5" y="3" width="1" height="2" fill="#1a0f0b"/><rect x="10" y="3" width="1" height="2" fill="#1a0f0b"/><rect x="3" y="8" width="1" height="3" fill="#d97757"/><rect x="5" y="8" width="1" height="3" fill="#d97757"/><rect x="10" y="8" width="1" height="3" fill="#d97757"/><rect x="12" y="8" width="1" height="3" fill="#d97757"/></svg></span><b data-t="agents"></b><span id="agents-label" class="ellipsis">…</span><span class="mono" id="agents-time"></span></button>
+		<button type="button" class="pill" id="agents"><span class="pill-crab"><svg class="crab-svg" viewBox="0 0 16 12" aria-hidden="true" shape-rendering="crispEdges"><rect x="2" y="1" width="12" height="7" fill="#d97757"/><rect x="0" y="3" width="2" height="3" fill="#d97757"/><rect x="14" y="3" width="2" height="3" fill="#d97757"/><rect x="5" y="3" width="1" height="2" fill="#1a0f0b"/><rect x="10" y="3" width="1" height="2" fill="#1a0f0b"/><rect x="3" y="8" width="1" height="3" fill="#d97757"/><rect x="5" y="8" width="1" height="3" fill="#d97757"/><rect x="10" y="8" width="1" height="3" fill="#d97757"/><rect x="12" y="8" width="1" height="3" fill="#d97757"/></svg></span><b data-t="agents"></b><span id="agents-label" class="ellipsis">…</span><span class="mono" id="agents-time"></span></button>
 		<div class="pill switch-pill">
 			<span id="auto-label" data-t="autoMerge"></span>
 			<button type="button" id="auto" role="switch" aria-checked="false" aria-labelledby="auto-label" class="switch"><span></span></button>
@@ -30,6 +30,7 @@
 		<button type="button" role="tab" data-view="graph" aria-selected="true" data-t="graph"></button>
 		<button type="button" role="tab" data-view="kanban" aria-selected="false" data-t="kanban"></button>
 		<button type="button" role="tab" data-view="conversations" aria-selected="false" data-t="conversations"></button>
+		<button type="button" role="tab" data-view="agents" aria-selected="false" data-t="agents"></button>
 	</div>
 	<div class="chips" id="own-chips"></div>
 	<div class="chips" id="kind-chips"></div>
@@ -65,7 +66,8 @@
 		</div>
 		<main class="kanban" id="kanban" hidden></main>
 		<main class="conversations" id="conversations" hidden><p data-t="conversationsSoon"></p></main>
-		<aside class="drawer" id="drawer" hidden data-t-label="agentsDrawer"></aside>
+		<main class="agents-view" id="agents-view" hidden data-t-label="agents"></main>
+		<aside class="drawer" id="drawer" hidden data-t-label="journalAndRules"></aside>
 	</div>
 	<aside class="inbox" id="inbox" data-t-label="inbox"></aside>
 </div>
