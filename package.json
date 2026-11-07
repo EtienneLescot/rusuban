@@ -1,0 +1,15 @@
+{
+	"name": "rusuban",
+	"version": "0.0.0",
+	"private": true,
+	"description": "Minds your project while you're away, follows the rules you write, keeps every Claude conversation, and calls you only when your rules say so.",
+	"license": "MIT",
+	"type": "module",
+	"bin": {
+		"rusuban": "bin/rusuban.mjs"
+	},
+	"files": ["bin", "src", "web", "examples"],
+	"engines": {
+		"node": ">=22"
+	}
+}
