@@ -625,7 +625,8 @@ button.pill:hover {
 	outline: 2px solid var(--text-hi);
 	outline-offset: 3px;
 }
-/* A card waits for the owner on this item; the card open in the inbox is fully outlined. */
+/* A card waits for the owner on this item; the card open in the inbox is fully outlined. Zoomed
+   out, where a node keeps only its number and title, both marks thicken and "for you" stays. */
 .node.for-you {
 	border: 1.5px solid rgba(245, 158, 11, 0.55);
 }
@@ -636,6 +637,22 @@ button.pill:hover {
 		inset 0 3px 0 var(--kind),
 		0 0 0 6px rgba(245, 158, 11, 0.15),
 		0 14px 30px -12px rgba(0, 0, 0, 0.7);
+}
+.compact .node.for-you {
+	border-width: 3px;
+	border-color: rgba(245, 158, 11, 0.75);
+}
+.compact .node.card-node {
+	border-width: 4px;
+	border-color: var(--amber);
+	box-shadow:
+		inset 0 3px 0 var(--kind),
+		0 0 0 12px rgba(245, 158, 11, 0.18);
+}
+.compact .node.for-you:not(.exp) .sub {
+	display: inline;
+	font-size: 17px;
+	font-weight: 600;
 }
 .world.card-open .node:not(.card-node),
 .world.card-open .frame,
@@ -1960,7 +1977,7 @@ a.num:hover .ext {
 	width: 30px;
 	height: 22px;
 }
-.node:has(.crab) {
+.node:has(.crab):not(.for-you) {
 	border-color: rgba(217, 119, 87, 0.75);
 }
 .pill-crab {
