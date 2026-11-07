@@ -347,6 +347,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			logFile: homePath(`runs/${id}/${status.log}`),
 			args,
 			command,
+			maxMinutes: config.limits?.maxRunMinutes,
 			env: { ...process.env, RUSUBAN_HOME: homeDir(), RUSUBAN_RUN: id, RUSUBAN_PROJECT: s.project },
 			onSession: (session) => {
 				status.session = session;

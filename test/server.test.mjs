@@ -55,8 +55,10 @@ let srv;
 before(async () => {
 	process.env.RUSUBAN_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-server-"));
 	saveConfig({
+		version: 1,
 		owner: OWNER,
 		permissions: { mode: "allowlist" },
+		limits: { maxWorkers: 3, maxRunMinutes: 150 },
 		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 	});
 	srv = await startServer({ port: 0, polling: false, quiet: true });

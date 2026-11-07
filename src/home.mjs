@@ -59,11 +59,21 @@ const MODES = ["bypass", "allowlist"];
 
 const isStrings = (v) => Array.isArray(v) && v.every((x) => typeof x === "string" && x.length > 0);
 
+export const CONFIG_VERSION = 1; // migrations key off it
+const isCount = (v) => Number.isInteger(v) && v > 0;
+
 // Checks config.json and fills the defaults that are not policy (port, refresh interval, empty
-// lists). The host permission mode has no default: the owner chooses it (FR-025).
+// lists). The host permission mode and the limits have no default: the owner's config states them
+// (FR-025; `init` writes the limits explicitly).
 export function validateConfig(raw) {
 	const c = raw && typeof raw === "object" ? raw : {};
 	const errors = [];
+	if (c.version !== CONFIG_VERSION)
+		errors.push(
+			c.version > CONFIG_VERSION
+				? `version ${c.version} comes from a newer rusuban than this one (${CONFIG_VERSION})`
+				: `version must be ${CONFIG_VERSION}`,
+		);
 	if (!LOGIN.test(c.owner?.login ?? "")) errors.push("owner.login must be a GitHub login");
 	if (c.owner?.tailscale !== undefined && typeof c.owner.tailscale !== "string")
 		errors.push("owner.tailscale must be a Tailscale login");
@@ -78,6 +88,8 @@ export function validateConfig(raw) {
 	for (const k of ["allow", "deny"])
 		if (perm[k] !== undefined && !isStrings(perm[k]))
 			errors.push(`permissions.${k} must be a list of tool rules`);
+	for (const k of ["maxWorkers", "maxRunMinutes"])
+		if (!isCount(c.limits?.[k])) errors.push(`limits.${k} must be a positive integer`);
 	const projects = c.projects ?? [];
 	if (!Array.isArray(projects)) errors.push("projects must be a list");
 	const ids = new Set();
@@ -105,9 +117,11 @@ export function validateConfig(raw) {
 		if (c[k] !== undefined && !Array.isArray(c[k])) errors.push(`${k} must be a list`);
 	if (errors.length) throw new Error(`invalid config.json:\n- ${errors.join("\n- ")}`);
 	return {
+		version: CONFIG_VERSION,
 		owner: { login: c.owner.login, ...(c.owner.tailscale ? { tailscale: c.owner.tailscale } : {}) },
 		port,
 		permissions: { mode: perm.mode, allow: perm.allow ?? [], deny: perm.deny ?? [] },
+		limits: { maxWorkers: c.limits.maxWorkers, maxRunMinutes: c.limits.maxRunMinutes },
 		projects: projects.map((p) => ({
 			id: p.id,
 			title: p.title || p.id,
