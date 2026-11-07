@@ -1,6 +1,7 @@
-// GitHub state, read for each repo of a project: open PRs, open issues, PRs merged in the last 7
-// days. Three GraphQL queries per repo through `gh`, already logged in. Items carry their repo, so
-// several repos live side by side, keyed `owner/repo#n`. Reading only: merging belongs to the server.
+// GitHub state, read for each repo of a project: open PRs, open issues, PRs merged and commits on the
+// default branch in the last 7 days. Four GraphQL queries per repo through `gh`, already logged in.
+// Items carry their repo, so several repos live side by side, keyed `owner/repo#n`. The one write is
+// `mergePr`, which only the server calls, after its gates.
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import { promisify } from "node:util";
@@ -63,6 +64,28 @@ const ISSUES = `query($owner:String!,$name:String!,$cursor:String){repository(ow
 
 const MERGED = `query($q:String!){search(query:$q,type:ISSUE,first:60){nodes{...on PullRequest{
  number title url mergedAt author{login} mergedBy{login}}}}}`;
+
+// The default branch's recent commits, each with the PRs it came from: one from no merged PR was
+// pushed straight to the branch (T092).
+const PUSHES = `query($owner:String!,$name:String!,$since:GitTimestamp){repository(owner:$owner,name:$name){
+ defaultBranchRef{target{...on Commit{history(first:30,since:$since){nodes{
+  oid url committedDate messageHeadline author{name user{login}}
+  associatedPullRequests(first:5){nodes{number merged}}}}}}}}}`;
+
+export const pushesOf = (commits) =>
+	commits
+		.filter((c) => !c.associatedPullRequests.nodes.some((p) => p.merged))
+		.map((c) => ({
+			oid: c.oid,
+			url: c.url,
+			at: c.committedDate,
+			headline: c.messageHeadline,
+			author: c.author?.user?.login ?? c.author?.name ?? null,
+		}));
+
+// The server's merge, and the only one (T030): exactly the head it judged, or nothing.
+export const mergePr = ({ slug, n, method, head }) =>
+	gh(["pr", "merge", String(n), "--repo", slug, `--${method}`, "--match-head-commit", head]);
 
 // ── Normalizing, pure ─────────────────────────────────────────────────────────────────────────
 const STATUS = {
@@ -209,14 +232,16 @@ async function paginate(slug, query, pick) {
 }
 
 export async function fetchRepo(slug) {
-	const since = new Date(Date.now() - 7 * 86400e3).toISOString().slice(0, 10);
-	const [prs, issues, merged] = await Promise.all([
+	const week = new Date(Date.now() - 7 * 86400e3).toISOString();
+	const [prs, issues, merged, pushes] = await Promise.all([
 		paginate(slug, PRS, (d) => d.repository.pullRequests),
 		paginate(slug, ISSUES, (d) => d.repository.issues),
-		graphql(slug, MERGED, { q: `repo:${slug} is:pr is:merged merged:>=${since}` }),
+		graphql(slug, MERGED, { q: `repo:${slug} is:pr is:merged merged:>=${week.slice(0, 10)}` }),
+		graphql(slug, PUSHES, { since: week }),
 	]);
 	return {
 		defaultBranch: prs.first.repository.defaultBranchRef?.name ?? null,
+		pushes: pushesOf(pushes.repository.defaultBranchRef?.target?.history?.nodes ?? []),
 		prs: prs.all.map((p) => normalizePr(slug, p)).sort((a, b) => b.n - a.n),
 		issues: issues.all.map((i) => normalizeIssue(slug, i)).sort((a, b) => b.n - a.n),
 		merged: merged.search.nodes

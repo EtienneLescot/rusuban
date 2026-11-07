@@ -1,17 +1,35 @@
 // The daemon. It reads every project's repos and rules on their own clock, computes the model, and
 // serves the dashboard with its live stream, on 127.0.0.1 only. Remote access goes through Tailscale
-// Serve, whose identity header must be the owner's Tailscale login (research R7). It reads GitHub and
-// never writes to it here; `dry` marks a run that must never write to GitHub nor start an agent, the
-// promise the merge gate and the judge trigger will keep once they exist.
+// Serve, whose identity header must be the owner's Tailscale login (research R7). After each read it
+// merges what is eligible, flags what it did not do, and starts agents when something waits for
+// them. `dry` reads and shows only: no merge, no agent.
 import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
-import { kickQueues, listRuns } from "./agents.mjs";
-import { poll } from "./github.mjs";
+import {
+	busy,
+	coordinatorLock,
+	kickQueues,
+	listRuns,
+	pendingOf,
+	readRun,
+	requestCoordinator,
+	requestRun,
+} from "./agents.mjs";
+import { mergePr, poll } from "./github.mjs";
 import { homePath, journal, loadConfig, read, readJournal, readJsonl, write } from "./home.mjs";
-import { buildModel, flatten, keyOf } from "./model.mjs";
-import { loadRules } from "./rules.mjs";
+import {
+	buildModel,
+	flatten,
+	gatesOf,
+	isEligible,
+	keyOf,
+	mergeOrdersOf,
+	todoOf,
+} from "./model.mjs";
+import { loadRules, rulesChange } from "./rules.mjs";
+import { cleanStale } from "./workers.mjs";
 
 const WEB = new URL("../web/", import.meta.url);
 const STATIC = {
@@ -236,6 +254,7 @@ export function stateOf(ctx, projectId) {
 				summary,
 				session,
 				createdAt,
+				retryAt,
 			}) => ({
 				id,
 				kind,
@@ -248,10 +267,211 @@ export function stateOf(ctx, projectId) {
 				summary,
 				session,
 				createdAt,
+				retryAt: retryAt ?? null,
 			}),
 		),
 		journal: journalAll.slice(-40).reverse(),
 	};
+}
+
+// ── One cycle, after each read of a project ───────────────────────────────────────────────────
+const DEPS = { merge: mergePr, requestRun, requestCoordinator };
+const since = (iso, ref) => Date.parse(iso) >= Date.parse(ref);
+
+// A rules change applies at once, journaled with its diff for the owner (FR-027); so is a locks.json
+// that does not parse, which stops every merge of its repo until it is fixed.
+export function journalRules(project, slug, prev, next) {
+	if (!next || next.error) return;
+	const change = rulesChange(prev, next);
+	const invalid = next.errors?.length
+		? `locks.json is invalid (${next.errors.join("; ")}): nothing merges in ${slug} until it is fixed.`
+		: "";
+	const href = `https://github.com/${slug}/tree/${next.ref}/.rusuban`;
+	if (change)
+		journal(project, {
+			kind: "rules",
+			item: null,
+			text: `Rules of ${slug} changed: ${change.files.join(", ")}. They apply from now on.${invalid ? ` ${invalid}` : ""}`,
+			href,
+			diff: change.diff,
+			by: "server",
+			notify: true,
+		});
+	else if (invalid && prev?.treeSha !== next.treeSha)
+		journal(project, {
+			kind: "locks-invalid",
+			item: null,
+			text: invalid,
+			href,
+			by: "server",
+			notify: true,
+		});
+}
+
+// The server's merge (T030, T093), one per cycle and never in a shadow project. A person's merge
+// order comes first; then a PR judged `auto` whose every gate passes, the switch read again just
+// before. A head GitHub refused is not tried again.
+async function mergeOne(ctx, p, { live, judgment, answers, rules }, deps) {
+	if (p.mode !== "live") return;
+	const tried = (pr) => ctx.mergeFailed.get(keyOf(pr)) === pr.head;
+	const order = mergeOrdersOf({ live, judgment, answers, rules }).find(
+		(o) => o.eligible && !tried(o.pr),
+	);
+	let pick = order && { pr: order.pr, gates: order.gates, card: order.card, by: order.by };
+	if (!pick && isArmed())
+		for (const pr of live.prs) {
+			const j = judgment.items[keyOf(pr)];
+			const gates = gatesOf(pr, j, { rules: rules[pr.repo], armed: true });
+			if (j?.pr?.auto === true && isEligible(gates) && !tried(pr)) {
+				pick = { pr, gates };
+				break;
+			}
+		}
+	if (!pick) return;
+	const { pr, gates, card } = pick;
+	const item = keyOf(pr);
+	const method = rules[pr.repo]?.locks?.mergeMethod ?? "rebase";
+	const label = judgment.items[item]?.label || pr.title;
+	const sha = pr.head.slice(0, 7);
+	try {
+		await deps.merge({ slug: pr.repo, n: pr.n, method, head: pr.head });
+		journal(p.id, {
+			kind: "merge",
+			item,
+			text: card
+				? `Merged on @${pick.by ?? ctx.config.owner.login}'s order: ${label}. ${gates.map((g) => g.name).join(", ")} green on ${sha}.`
+				: `Merged alone: ${label}. Every gate green on ${sha}.`,
+			href: pr.url,
+			by: "server",
+			head: pr.head,
+			method,
+			card: card ?? null,
+			gates: gates.map(({ name, detail }) => `${name}: ${detail}`),
+		});
+		ctx.say(`${item} merged (${method}, ${sha})`);
+		// The card of an order is closed by the coordinator, which sees it carried out.
+		if (card) deps.requestCoordinator(p.id, "merge");
+		setTimeout(() => ctx.loops.get(p.id)?.refresh(), 15000).unref();
+	} catch (e) {
+		ctx.mergeFailed.set(item, pr.head);
+		journal(p.id, {
+			kind: "merge-refused",
+			item,
+			text: `GitHub refused the merge of ${sha}: ${firstLine(e)}`,
+			href: pr.url,
+			by: "server",
+			head: pr.head,
+			notify: true,
+		});
+		ctx.say(`${item}: merge refused: ${firstLine(e)}`);
+	}
+}
+
+// Merges and pushes the server did not make (T031, T092), each flagged once in the journal for the
+// owner. Only what happened after the project was first watched: an install does not flag the past.
+function flagOutsiders(p, liveFile) {
+	const dir = `projects/${p.id}`;
+	const saved = read(`${dir}/flags.json`, null);
+	const flags = saved ?? { since: new Date().toISOString(), seen: {} };
+	const ours = new Set(
+		readJsonl(`${dir}/journal.jsonl`)
+			.filter((e) => e.kind === "merge" && e.by === "server")
+			.map((e) => e.item),
+	);
+	let changed = !saved;
+	const flag = (key, entry) => {
+		if (flags.seen[key]) return;
+		flags.seen[key] = new Date().toISOString();
+		changed = true;
+		journal(p.id, { ...entry, by: "server", notify: true });
+	};
+	for (const [slug, r] of Object.entries(liveFile.repos ?? {})) {
+		for (const m of r.merged ?? [])
+			if (since(m.mergedAt, flags.since) && !ours.has(keyOf(m)))
+				flag(`merge:${keyOf(m)}`, {
+					kind: "foreign-merge",
+					item: keyOf(m),
+					text: `Merged by @${m.mergedBy ?? "someone"}, not by Rusuban: ${m.title}`,
+					href: m.url,
+				});
+		for (const c of r.pushes ?? [])
+			if (since(c.at, flags.since))
+				flag(`push:${c.oid}`, {
+					kind: "direct-push",
+					item: null,
+					text: `Pushed straight to ${r.defaultBranch} of ${slug}${c.author ? ` by ${c.author}` : ""}, outside any PR: ${c.headline} (${c.oid.slice(0, 7)})`,
+					href: c.url,
+				});
+	}
+	// GitHub shows 7 days: what was seen more than 14 days ago cannot come back.
+	for (const [k, at] of Object.entries(flags.seen))
+		if (Date.now() - Date.parse(at) > 14 * 86400e3) {
+			delete flags.seen[k];
+			changed = true;
+		}
+	if (changed) write(`${dir}/flags.json`, flags);
+}
+
+// Agents start on change, not on a clock (T029): a judge when the project's todo changes, a
+// coordinator when answers, requests or worker reports wait. A project without rules has no todo, so
+// no judge ever starts there. The same todo starts nothing twice, unless its run failed 15 minutes
+// ago or more.
+function triggerRuns(p, { live, judgment, rules }, deps) {
+	const dir = `projects/${p.id}`;
+	const t = read(`${dir}/triggers.json`, {});
+	const fire = (kind, sig, request) => {
+		const last = t[kind];
+		const run = last?.run ? readRun(last.run) : null;
+		const failed =
+			["failed", "interrupted", "stopped"].includes(run?.state) &&
+			Date.now() - Date.parse(run.endedAt ?? last.at) > 15 * 60e3;
+		if (last?.sig === sig && !failed) return false;
+		const r = request();
+		if (!r) return false;
+		t[kind] = { sig, at: new Date().toISOString(), run: r.id };
+		return true;
+	};
+	const todo = todoOf({ live, judgment, rules });
+	const judge =
+		todo.length > 0 &&
+		!busy(p.id, "judge") &&
+		fire(
+			"judge",
+			hash(
+				todo
+					.map((x) => `${x.item}:${x.reason}:${x.head ?? ""}`)
+					.sort()
+					.join(),
+			),
+			() =>
+				deps.requestRun({
+					kind: "judge",
+					project: p.id,
+					items: [...new Set(todo.map((x) => x.item))],
+					lock: coordinatorLock(p.id),
+					trigger: "change",
+				}),
+		);
+	const pending = pendingOf(p.id);
+	const waiting = [
+		...pending.answers.map((a) => `answer:${a.card}:${a.at}`),
+		...pending.asks.map((a) => `ask:${a.at}`),
+		...pending.reports.map((r) => `report:${r.run}`),
+	];
+	const act =
+		waiting.length > 0 &&
+		fire("act", hash(waiting.join()), () => deps.requestCoordinator(p.id, "change"));
+	if (judge || act) write(`${dir}/triggers.json`, t);
+}
+
+export async function runCycle(ctx, p, liveFile, rules, deps = DEPS) {
+	const dir = `projects/${p.id}`;
+	const live = flatten(liveFile);
+	const judgment = read(`${dir}/judgment.json`, { items: {} });
+	const answers = readJsonl(`${dir}/answers.jsonl`);
+	if (!ctx.dry) await mergeOne(ctx, p, { live, judgment, answers, rules }, deps);
+	flagOutsiders(p, liveFile);
+	if (!ctx.dry) triggerRuns(p, { live, judgment, rules }, deps);
 }
 
 // ── The daemon ────────────────────────────────────────────────────────────────────────────────
@@ -269,6 +489,7 @@ function startLoop(ctx, p) {
 			// The rules follow the same clock, each from its repo's default branch. A failed read keeps
 			// the last rules read from that branch.
 			const rules = read(`${dir}/rules.json`, {});
+			const before = { ...rules };
 			for (const { slug } of p.repos) {
 				const branch = live.repos[slug]?.defaultBranch;
 				if (!branch) continue;
@@ -287,8 +508,14 @@ function startLoop(ctx, p) {
 				}
 			}
 			write(`${dir}/rules.json`, rules);
+			for (const { slug } of p.repos) journalRules(p.id, slug, before[slug], rules[slug]);
 			ctx.errors.delete(p.id);
-			kickQueues();
+			try {
+				await runCycle(ctx, p, live, rules);
+			} catch (e) {
+				ctx.say(`${p.id}: cycle failed: ${firstLine(e)}`);
+			}
+			if (!ctx.dry) kickQueues();
 			const items = Object.values(live.repos).reduce(
 				(s, r) => s + (r.prs?.length ?? 0) + (r.issues?.length ?? 0),
 				0,
@@ -384,6 +611,7 @@ export async function startServer({
 		port: port ?? config.port,
 		owner: config.owner,
 		tailnet: tailnet === undefined ? await tailnetName() : tailnet,
+		mergeFailed: new Map(), // item → the head GitHub refused to merge
 		loops: new Map(),
 		errors: new Map(),
 		clients: new Set(),
@@ -425,6 +653,11 @@ export async function startServer({
 			setInterval(async () => {
 				ctx.tailnet = (await tailnetName()) ?? ctx.tailnet;
 			}, 300_000),
+		);
+	for (const p of config.projects)
+		cleanStale(
+			p.id,
+			p.repos.map((r) => r.slug),
 		);
 	if (polling) for (const p of config.projects) startLoop(ctx, p);
 	ctx.say(

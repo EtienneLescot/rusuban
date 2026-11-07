@@ -108,6 +108,8 @@ const T = {
 	runningCount: (n, names) => `${plural(n, "run")} · ${names}`,
 	reading: "reading GitHub",
 	readAgo: (when) => `read ${when}`,
+	stale: (label) => `${label}, stale`,
+	limitedUntil: (time) => `limited until ${time}`,
 	notReadYet: "not read yet",
 	readError: (when, error) => `error ${when}: ${error}`,
 	githubError: (error) => `Last read failed: ${error}`,
@@ -118,7 +120,13 @@ const T = {
 	none: "None.",
 	journal: "Journal",
 	emptyJournal: "Empty for now.",
-	runState: { done: "done", failed: "failed", stopped: "stopped", interrupted: "interrupted" },
+	runState: {
+		done: "done",
+		failed: "failed",
+		stopped: "stopped",
+		interrupted: "interrupted",
+		limited: "usage limit",
+	},
 	rulesAndLocks: "Rules and locks",
 	rulesNotLoaded: "Rules not read yet.",
 	repoObserveOnly: "Observe only: add .rusuban/rules/*.md on the default branch to let agents act.",
@@ -703,16 +711,16 @@ function tick() {
 	const age = f.checkedAt
 		? (Date.now() - Date.parse(f.checkedAt)) / 1000
 		: Number.POSITIVE_INFINITY;
-	const every = (f.intervalMs ?? 90_000) / 1000;
+	// Stale past three refresh periods (FR-072).
+	const stale = age > ((f.intervalMs ?? 90_000) / 1000) * 3;
 	const dot = $("fresh").querySelector(".dot");
-	dot.style.background =
-		f.error || age > every * 6 ? "#ef4444" : age > every * 2 ? "#f59e0b" : "#34b27b";
+	dot.style.background = f.error ? "#ef4444" : stale ? "#f59e0b" : "#34b27b";
 	dot.classList.toggle("pulse", !!f.refreshing);
 	let label = T.notReadYet;
 	if (f.refreshing) label = T.reading;
 	else if (f.error) label = T.readError(ago(f.checkedAt), f.error);
 	else if (f.checkedAt) label = T.readAgo(ago(f.checkedAt));
-	$("fresh-label").textContent = label;
+	$("fresh-label").textContent = stale && f.checkedAt && !f.refreshing ? T.stale(label) : label;
 	const a = agentsNow();
 	$("agents-label").textContent = a.label;
 	$("agents-time").textContent = a.since ? elapsed(a.since) : "";
@@ -730,7 +738,11 @@ function rulesHtml() {
 	const parts = (S.project?.repos ?? []).map((slug) => {
 		const r = S.rules?.[slug];
 		const f = S.freshness?.repos?.[slug];
-		const header = `<header><b class="mono">${esc(slug)}</b><span class="mono">${esc(f?.checkedAt ? T.readAgo(ago(f.checkedAt)) : T.notReadYet)}</span></header>`;
+		const read = f?.checkedAt ? T.readAgo(ago(f.checkedAt)) : T.notReadYet;
+		const old =
+			f?.checkedAt &&
+			Date.now() - Date.parse(f.checkedAt) > (S.freshness?.intervalMs ?? 90_000) * 3;
+		const header = `<header><b class="mono">${esc(slug)}</b><span class="mono">${esc(old ? T.stale(read) : read)}</span></header>`;
 		const failed = f?.error ? `<p class="err">${esc(T.githubError(f.error))}</p>` : "";
 		if (!r) return `<div class="act">${header}${failed}<p>${T.rulesNotLoaded}</p></div>`;
 		const state = r.observeOnly
@@ -775,14 +787,14 @@ function renderDrawer() {
 		recent
 			.map(
 				(r) =>
-					`<div class="act"><header><b>${esc(runName(r))}</b><span class="state ${esc(r.state)}">${esc(T.runState[r.state] ?? r.state)}</span><span class="mono">${r.endedAt ? clock(r.endedAt) : ""}</span></header><p>${esc(r.summary)}</p></div>`,
+					`<div class="act"><header><b>${esc(runName(r))}</b><span class="state ${esc(r.state)}">${esc(T.runState[r.state] ?? r.state)}</span><span class="mono">${r.state === "limited" && r.retryAt ? esc(T.limitedUntil(clock(r.retryAt))) : r.endedAt ? clock(r.endedAt) : ""}</span></header><p>${esc(r.summary)}</p></div>`,
 			)
 			.join("") || `<p class="act">${T.none}</p>`;
 	const journalHtml =
 		(S.journal ?? [])
 			.map(
 				(j) =>
-					`<li><span class="mono">${clock(j.at)}</span><span>${j.item ? `<button type="button" class="secondary small" data-focus="${esc(j.item)}">${esc(numOfKey(j.item))}</button> ` : ""}${esc(j.text)}${j.href ? ` <a href="${esc(j.href)}" target="_blank" rel="noopener">↗</a>` : ""}</span></li>`,
+					`<li${j.notify ? ' class="flag"' : ""}><span class="mono">${clock(j.at)}</span><span>${j.item ? `<button type="button" class="secondary small" data-focus="${esc(j.item)}">${esc(numOfKey(j.item))}</button> ` : ""}${esc(j.text)}${j.href ? ` <a href="${esc(j.href)}" target="_blank" rel="noopener">↗</a>` : ""}</span></li>`,
 			)
 			.join("") || `<li class="empty">${T.emptyJournal}</li>`;
 	el.innerHTML = `

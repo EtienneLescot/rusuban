@@ -18,6 +18,7 @@ const FIELDS = {
 	lockedPaths: strings,
 	sizeExempt: strings,
 	requiredChecks: strings,
+	ignoredChecks: strings,
 	requiredReviewers: strings,
 	maxLines: count,
 	maxFiles: count,
@@ -46,7 +47,52 @@ export function validateLocks(text) {
 		const verdict = check ? check(v) : `is not a known field (${Object.keys(FIELDS).join(", ")})`;
 		if (verdict !== true) errors.push(`locks.json: ${k} ${verdict}`);
 	}
+	const list = (v) => (Array.isArray(v) ? v : []);
+	const both = list(raw.requiredChecks).filter((n) => list(raw.ignoredChecks).includes(n));
+	if (both.length) errors.push(`locks.json: ${both.join(", ")} both required and ignored`);
 	return errors.length ? { locks: null, errors } : { locks: raw, errors: [] };
+}
+
+// What changed between two reads of a repo's rules (FR-027): which files, and a line diff, journaled
+// for the owner. Null when the `.rusuban/` tree is the same, or on the first read.
+export function rulesChange(prev, next) {
+	if (!prev?.treeSha || prev.treeSha === next.treeSha) return null;
+	const texts = (r) => new Map([...(r.files ?? []).map((f) => [`rules/${f.name}`, f.text])]);
+	const [before, after] = [texts(prev), texts(next)];
+	const names = [...new Set([...before.keys(), ...after.keys()])].sort();
+	const files = [];
+	const diff = [];
+	for (const name of names) {
+		const [a, b] = [before.get(name), after.get(name)];
+		if (a === b) continue;
+		files.push(`${name} ${a === undefined ? "added" : b === undefined ? "removed" : "edited"}`);
+		diff.push(`--- ${name}`, ...lineDiff(a ?? "", b ?? ""));
+	}
+	if (
+		JSON.stringify(prev.locks) !== JSON.stringify(next.locks) ||
+		prev.errors?.join() !== next.errors?.join()
+	)
+		files.push(next.errors?.length ? "locks.json invalid" : "locks.json edited");
+	return { files, diff: diff.join("\n").slice(0, 8000) };
+}
+
+// The lines removed (-) and added (+), in order, from a longest common subsequence. Rules files are
+// short: the O(n·m) table is fine.
+export function lineDiff(a, b) {
+	const [x, y] = [a.split("\n"), b.split("\n")];
+	const L = Array.from({ length: x.length + 1 }, () => new Array(y.length + 1).fill(0));
+	for (let i = x.length - 1; i >= 0; i--)
+		for (let j = y.length - 1; j >= 0; j--)
+			L[i][j] = x[i] === y[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+	const out = [];
+	let [i, j] = [0, 0];
+	while (i < x.length || j < y.length) {
+		if (i < x.length && j < y.length && x[i] === y[j]) [i, j] = [i + 1, j + 1];
+		else if (i < x.length && (j === y.length || L[i + 1][j] >= L[i][j + 1]))
+			out.push(`- ${x[i++]}`);
+		else out.push(`+ ${y[j++]}`);
+	}
+	return out;
 }
 
 export async function loadRules(slug, ref, cached = null, get = getJson) {

@@ -5,6 +5,7 @@ import path from "node:path";
 import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
+	assemblePrompt,
 	builtInDeny,
 	editRule,
 	executeRun,
@@ -17,8 +18,11 @@ import {
 	requestRun,
 	runner,
 	SHADOW_DENY,
+	scratchOf,
+	stopRun,
+	usageLimitOf,
 } from "../src/agents.mjs";
-import { homePath, write } from "../src/home.mjs";
+import { append, homePath, read, write } from "../src/home.mjs";
 
 const FAKE = [
 	process.execPath,
@@ -30,13 +34,14 @@ runner.launch = (id) => launched.push(id);
 beforeEach(() => {
 	process.env.RUSUBAN_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-agents-"));
 	launched.length = 0;
-	delete process.env.FAKE_CLAUDE_MS;
+	for (const k of ["FAKE_CLAUDE_MS", "FAKE_CLAUDE_EXIT", "FAKE_CLAUDE_LIMIT"])
+		delete process.env[k];
 });
 
 const denied = (args) => args.slice(args.indexOf("--disallowedTools") + 1);
 const WIN = process.platform === "win32";
 const HOME = WIN ? "C:\\Users\\a\\.rusuban" : "/home/a/.rusuban";
-const HOME_RULE = WIN ? "Edit(//c/Users/a/.rusuban/**)" : "Edit(//home/a/.rusuban/**)";
+const POSIX_HOME = WIN ? "//c/Users/a/.rusuban" : "//home/a/.rusuban";
 
 test("the built-in deny rules come with both profiles, and the owner's deny rules only add", () => {
 	const context = { home: HOME, defaultBranches: ["main", "main", "trunk"] };
@@ -46,73 +51,49 @@ test("the built-in deny rules come with both profiles, and the owner's deny rule
 		"Bash(gh api*merge*)",
 		"Bash(git push* main)",
 		"Bash(git push*:trunk)",
-		HOME_RULE,
+		`Edit(${POSIX_HOME}/config.json)`,
+		`Edit(${POSIX_HOME}/projects/**)`,
+		`Edit(${POSIX_HOME}/runs/**)`,
+		`Edit(${POSIX_HOME}/bin/**)`,
 	])
 		assert.ok(builtIn.includes(rule), rule);
+	// The agents' own folders under the home stay theirs.
+	assert.ok(!builtIn.some((r) => /scratch|worktrees|repos|\.rusuban\/\*\*/.test(r)));
 	assert.equal(builtIn.filter((r) => r === "Bash(git push* main)").length, 1);
 
 	const bypass = permissionArgs({ mode: "bypass", allow: [], deny: ["Bash(curl*)"] }, context);
-	assert.equal(bypass[0], "--dangerously-skip-permissions");
+	assert.deepEqual(bypass.slice(0, 3), [
+		"--setting-sources",
+		"user",
+		"--dangerously-skip-permissions",
+	]);
 	assert.deepEqual(denied(bypass), [...builtIn, "Bash(curl*)"]);
 
 	const allowlist = permissionArgs(
 		{ mode: "allowlist", allow: ["Bash(npm test*)", "Read"], deny: [] },
 		context,
 	);
-	assert.deepEqual(allowlist.slice(0, 5), [
+	assert.deepEqual(allowlist.slice(0, 8), [
+		"--setting-sources",
+		"user",
 		"--permission-mode",
 		"dontAsk",
 		"--allowedTools",
+		"Bash(rusuban *)",
 		"Bash(npm test*)",
 		"Read",
 	]);
 	assert.deepEqual(denied(allowlist), builtIn);
 	assert.ok(!allowlist.includes("--dangerously-skip-permissions"));
-
-	assert.ok(!permissionArgs({ mode: "allowlist" }, context).includes("--allowedTools"));
 	assert.throws(() => permissionArgs({}, context), /bypass" or "allowlist/);
 });
 
 test("path rules are POSIX, a Windows drive written /c", () => {
-	assert.equal(editRule(HOME), HOME_RULE);
+	assert.equal(editRule(HOME), `Edit(${POSIX_HOME}/**)`);
+	assert.equal(editRule(path.join(HOME, "config.json"), false), `Edit(${POSIX_HOME}/config.json)`);
 });
 
-const config = {
-	version: 1,
-	owner: { login: "alice" },
-	port: 0,
-	permissions: { mode: "bypass", allow: [], deny: [] },
-	limits: { maxWorkers: 3, maxRunMinutes: 150 },
-	projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
-	machines: [],
-	channels: [],
-};
-const request = (over = {}) =>
-	requestRun({ kind: "judge", project: "demo", prompt: "Judge #1", cwd: os.tmpdir(), ...over });
-
-test("a run records its session, steps, denials and summary, with the deny rules on its command line", async () => {
-	write("projects/demo/live.json", { repos: { "o/r": { defaultBranch: "main" } } });
-	const { id, state } = request({ items: ["o/r#1"] });
-	assert.deepEqual([state, launched], ["started", [id]]);
-	assert.equal(readRun(id).state, "queued");
-	const done = await executeRun(id, { config, command: FAKE });
-	assert.equal(done.state, "done");
-	assert.equal(done.session, "00000000-0000-4000-8000-000000000001");
-	assert.equal(done.step, "Reading: Judge #1");
-	assert.deepEqual(done.denials, [{ tool: "Bash", input: "gh pr merge 1" }]);
-	const reported = JSON.parse(done.summary);
-	assert.deepEqual([reported.run, reported.project], [id, "demo"]);
-	assert.ok(reported.args.includes("--dangerously-skip-permissions"));
-	for (const rule of builtInDeny({ home: process.env.RUSUBAN_HOME, defaultBranches: ["main"] }))
-		assert.ok(reported.args.includes(rule), rule);
-	const log = fs.readFileSync(homePath(`runs/${id}/${done.log}`), "utf8");
-	assert.match(log, /→ Bash gh pr merge 1/);
-	assert.match(log, /denied: Bash gh pr merge 1/);
-	assert.deepEqual(readRun(id), done);
-	assert.equal(holder("demo.judge"), null);
-});
-
-test("a shadow project's runs are denied every GitHub write, a live project's are not", async () => {
+test("a shadow project's runs are denied every GitHub write", () => {
 	for (const rule of [
 		"Bash(gh pr comment*)",
 		"Bash(gh pr review*)",
@@ -129,15 +110,143 @@ test("a shadow project's runs are denied every GitHub write, a live project's ar
 		builtInDeny({ home: HOME, shadow: true }).slice(-SHADOW_DENY.length),
 		SHADOW_DENY,
 	);
-	const argsOf = async (projects) => {
-		const { id } = request();
-		const done = await executeRun(id, { config: { ...config, projects }, command: FAKE });
-		return JSON.parse(done.summary).args;
+});
+
+const config = {
+	version: 1,
+	owner: { login: "alice" },
+	port: 0,
+	permissions: { mode: "bypass", allow: [], deny: [] },
+	limits: { maxWorkers: 3, maxRunMinutes: 150 },
+	projects: [{ id: "demo", title: "Demo", mode: "live", repos: [{ slug: "o/r" }] }],
+	machines: [],
+	channels: [],
+};
+const request = (over = {}) =>
+	requestRun({ kind: "judge", project: "demo", mission: "", lock: "demo.coordinator", ...over });
+const RULES = {
+	"o/r": {
+		observeOnly: false,
+		ref: "main",
+		treeSha: "tree123",
+		files: [{ name: "01-merge.md", text: "Bug fixes merge alone." }],
+		locks: { mergeMethod: "squash" },
+		errors: [],
+	},
+};
+
+test("a prompt is the product prompt, the frame, the rules with their source, the context, the mission", () => {
+	write("projects/demo/live.json", { repos: { "o/r": { defaultBranch: "main" } } });
+	write("projects/demo/rules.json", RULES);
+	const card = { to: "alice", q: "Ship the new parser?", resolvedAt: null, options: [] };
+	write("projects/demo/judgment.json", { items: { "o/r#7": { owner: "alice", decision: card } } });
+	const p = assemblePrompt({ kind: "judge", project: "demo", config, run: "judge-1" });
+	const at = (s) => {
+		const i = p.indexOf(s);
+		assert.ok(i >= 0, `missing: ${s}`);
+		return i;
 	};
-	assert.ok(!(await argsOf(config.projects)).includes("Bash(git push*)"));
-	assert.ok((await argsOf([{ id: "demo", mode: "shadow" }])).includes("Bash(git push*)"));
-	// A run whose project is no longer configured gets the shadow rules too.
-	assert.ok((await argsOf([])).includes("Bash(gh pr comment*)"));
+	const order = [
+		"# You are the judge",
+		"# Judgments, cards and workers",
+		"# Safety frame",
+		"# Project rules: o/r@tree123:.rusuban/rules/",
+		"Bug fixes merge alone.",
+		"# Context",
+		"- Owner: @alice.",
+		"default branch `main`",
+		'"mergeMethod":"squash"',
+		"- o/r#7, to @alice: Ship the new parser?",
+	].map(at);
+	assert.deepEqual(
+		order,
+		[...order].sort((a, b) => a - b),
+	);
+	assert.ok(!p.includes("## Answers to carry out"), "answers go to the coordinator only");
+
+	const worker = assemblePrompt({
+		kind: "worker",
+		project: "demo",
+		mission: "Fix #12.",
+		config,
+		run: "w-1",
+	});
+	assert.ok(worker.startsWith("# You are a worker") && worker.trimEnd().endsWith("Fix #12."));
+	assert.ok(!worker.includes("# Judgments, cards and workers"));
+
+	const pending = {
+		answers: [
+			{
+				item: "o/r#7",
+				card: "c1",
+				q: "Ship?",
+				chosen: { label: "Merge it", effect: "The server merges it.", merge: true },
+			},
+		],
+		asks: [{ at: "2026-11-07T10:00:00Z", text: "Close the stale issues." }],
+		reports: [{ worker: "fix-12", item: "o/r#12", state: "done", text: "PR #13 opened." }],
+	};
+	const act = assemblePrompt({ kind: "act", project: "demo", config, run: "act-1", pending });
+	for (const s of [
+		"a merge order the server carries out",
+		"Close the stale issues.",
+		"PR #13 opened.",
+	])
+		assert.ok(act.includes(s), s);
+
+	write("projects/demo/rules.json", {});
+	assert.match(
+		assemblePrompt({ kind: "judge", project: "demo", config, run: "j" }),
+		/has rules yet: do nothing autonomous/,
+	);
+	assert.throws(
+		() => assemblePrompt({ kind: "judge", project: "gone", config, run: "j" }),
+		/unknown project/,
+	);
+});
+
+test("a run builds its prompt when it starts, works in its folder with rusuban on its PATH, and records everything", async () => {
+	write("projects/demo/live.json", { repos: { "o/r": { defaultBranch: "main" } } });
+	const { id, state } = request({ items: ["o/r#1"], mission: "Look at #1 first." });
+	assert.deepEqual([state, launched], ["started", [id]]);
+	assert.equal(readRun(id).state, "queued");
+	const done = await executeRun(id, { config, command: FAKE });
+	assert.equal(done.state, "done");
+	assert.equal(done.session, "00000000-0000-4000-8000-000000000001");
+	assert.match(done.step, /^Reading: # You are the judge/);
+	assert.deepEqual(done.denials, [{ tool: "Bash", input: "gh pr merge 1" }]);
+	const reported = JSON.parse(done.summary);
+	assert.deepEqual([reported.run, reported.project], [id, "demo"]);
+	assert.equal(fs.realpathSync(reported.cwd), fs.realpathSync(scratchOf("demo")));
+	assert.equal(reported.cli, homePath("bin"));
+	assert.ok(fs.existsSync(homePath("bin/rusuban")) && fs.existsSync(homePath("bin/rusuban.cmd")));
+	assert.ok(reported.args.includes("--dangerously-skip-permissions"));
+	for (const rule of builtInDeny({ home: process.env.RUSUBAN_HOME, defaultBranches: ["main"] }))
+		assert.ok(reported.args.includes(rule), rule);
+	assert.ok(!reported.args.includes("Bash(git push*)"), "a live project gets no shadow rules");
+	assert.match(
+		fs.readFileSync(homePath(`runs/${id}/prompt.md`), "utf8"),
+		/# Your mission\n\nLook at #1 first\./,
+	);
+	const log = fs.readFileSync(homePath(`runs/${id}/${done.log}`), "utf8");
+	assert.match(log, /→ Bash gh pr merge 1/);
+	assert.match(log, /denied: Bash gh pr merge 1/);
+	assert.deepEqual(readRun(id), done);
+	assert.equal(holder("demo.coordinator"), null);
+});
+
+test("a run of a shadow project gets the shadow rules; a project no longer configured does not start", async () => {
+	const run = async (projects) => {
+		const { id } = request();
+		return executeRun(id, { config: { ...config, projects }, command: FAKE });
+	};
+	const shadow = await run([{ ...config.projects[0], mode: "shadow" }]);
+	assert.ok(JSON.parse(shadow.summary).args.includes("Bash(git push*)"));
+	const gone = await run([]);
+	assert.deepEqual(
+		[gone.state, gone.summary],
+		["failed", 'Could not start: unknown project "demo"'],
+	);
 });
 
 test("runs of one lock group go one after the other, in order of request", async () => {
@@ -147,23 +256,92 @@ test("runs of one lock group go one after the other, in order of request", async
 	const b = request();
 	const c = request();
 	assert.deepEqual([b.state, c.state], ["queued", "queued"]);
-	assert.deepEqual(queued("demo.judge"), [b.id, c.id]);
-	assert.equal(holder("demo.judge").run, a.id);
+	assert.deepEqual(queued("demo.coordinator"), [b.id, c.id]);
+	assert.equal(holder("demo.coordinator").run, a.id);
 	await first;
 	// The finished run hands over to the next one in line, and only that one.
 	assert.deepEqual(launched, [a.id, b.id]);
-	assert.deepEqual(queued("demo.judge"), [c.id]);
-	assert.equal(request({ kind: "act" }).state, "started");
+	assert.deepEqual(queued("demo.coordinator"), [c.id]);
+	assert.equal(request({ kind: "act", lock: "demo.act" }).state, "started");
 });
 
-test("a run that fails is marked failed, and a dead runner reads as interrupted", async () => {
-	process.env.FAKE_CLAUDE_EXIT = "3";
-	const { id } = request();
-	assert.equal((await executeRun(id, { config, command: FAKE })).state, "failed");
+test("a coordinator run that ends well consumes the requests and reports it was given; a failed one does not", async () => {
+	for (const text of ["one", "two"])
+		append("projects/demo/asks.jsonl", { at: "2026-11-07T10:00:00Z", text });
+	append("projects/demo/reports.jsonl", {
+		run: "w",
+		worker: "fix",
+		item: "o/r#1",
+		state: "done",
+		text: "ok",
+	});
+	process.env.FAKE_CLAUDE_EXIT = "2";
+	const failed = await executeRun(request({ kind: "act" }).id, { config, command: FAKE });
+	assert.equal(failed.state, "failed");
+	assert.equal(read("projects/demo/consumed.json", null), null);
 	delete process.env.FAKE_CLAUDE_EXIT;
-	write(`runs/${id}/status.json`, { ...readRun(id), state: "running", pid: 2 ** 22 + 12345 });
-	assert.equal(readRun(id).state, "interrupted");
-	assert.equal(listRuns("demo")[0].id, id);
+	await executeRun(request({ kind: "act" }).id, { config, command: FAKE });
+	assert.deepEqual(read("projects/demo/consumed.json"), { asks: 2, reports: 1 });
+});
+
+test("a usage limit makes the run limited until the reset, holds every queue, then asks the run again", async () => {
+	const reset = Math.floor(Date.now() / 1000) + 3600;
+	process.env.FAKE_CLAUDE_LIMIT = `Claude AI usage limit reached|${reset}`;
+	const { id } = request({ mission: "Judge #1." });
+	const limited = await executeRun(id, { config, command: FAKE });
+	assert.deepEqual(
+		[limited.state, limited.retryAt],
+		["limited", new Date(reset * 1000).toISOString()],
+	);
+	assert.equal(read("runs/limit.json").until, limited.retryAt);
+	launched.length = 0;
+	const waiting = request();
+	assert.equal(waiting.state, "queued", "nothing starts while the account is limited");
+	kickQueues(Date.parse(limited.retryAt) - 1000);
+	assert.deepEqual(launched, []);
+	write("runs/limit.json", { until: new Date(Date.now() - 1000).toISOString() });
+	kickQueues(Date.parse(limited.retryAt) + 1000);
+	const again = listRuns("demo").find((r) => r.retryOf === id);
+	assert.deepEqual([again.attempt, again.state, readRun(id).retriedBy], [2, "queued", again.id]);
+	assert.match(fs.readFileSync(homePath(`runs/${again.id}/mission.md`), "utf8"), /Judge #1\./);
+	assert.deepEqual(launched, [waiting.id, again.id], "the queue starts again, in order");
+});
+
+test("a usage-limit message gives its reset time, or none; other errors are not limits", () => {
+	const now = new Date(2026, 10, 7, 13, 0);
+	assert.equal(
+		usageLimitOf("Claude AI usage limit reached|1767225600").resetAt,
+		"2026-01-01T00:00:00.000Z",
+	);
+	const at3pm = new Date(usageLimitOf("5-hour limit reached ∙ resets 3pm", now).resetAt);
+	assert.deepEqual([at3pm.getHours(), at3pm.getDate()], [15, 7]);
+	const tomorrow = new Date(usageLimitOf("You've hit your limit · resets 9am", now).resetAt);
+	assert.deepEqual([tomorrow.getHours(), tomorrow.getDate()], [9, 8]);
+	assert.deepEqual(usageLimitOf("Usage limit reached."), { resetAt: null });
+	assert.equal(usageLimitOf("API Error: 500 Internal Server Error"), null);
+});
+
+test("a run whose runner died goes back to its queue, twice at most; a stopped one stays stopped", () => {
+	const dead = request();
+	write(`runs/${dead.id}/status.json`, {
+		...readRun(dead.id),
+		state: "running",
+		pid: 2 ** 22 + 12345,
+	});
+	kickQueues();
+	const retry = listRuns("demo").find((r) => r.retryOf === dead.id);
+	assert.equal(retry.attempt, 2);
+	write(`runs/${retry.id}/status.json`, {
+		...readRun(retry.id),
+		state: "running",
+		pid: 2 ** 22 + 12346,
+		attempt: 3,
+	});
+	kickQueues();
+	assert.equal(listRuns("demo").filter((r) => r.retryOf === retry.id).length, 0);
+	const waiting = request();
+	assert.equal(stopRun(waiting.id, "Not needed.").state, "stopped");
+	assert.ok(!queued("demo.coordinator").includes(waiting.id));
 });
 
 test("a queue whose holder died is restarted", () => {

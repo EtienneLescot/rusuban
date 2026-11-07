@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { applyJudgment, closeCard, parseItem } from "../src/model.mjs";
+import { applyEvidence, applyJudgment, closeCard, parseItem } from "../src/model.mjs";
 
 const REPOS = ["o/r"];
 const live = { prs: [{ repo: "o/r", n: 1, head: "abc" }], issues: [{ repo: "o/r", n: 10 }] };
@@ -99,12 +99,69 @@ test("closed or unknown items are refused, and #n needs a one-repo project", () 
 	assert.throws(() => parseItem("x/y#3", ["o/a"]), /not a repo of this project/);
 });
 
-test("evidence survives a rejudge on the same head only", () => {
+test("a judgment asks for a proof; a worker other than the judging run records it, on the live head", () => {
 	const judgment = fresh();
-	judge(prJ({ pr: { head: "abc", auto: true, evidence: { state: "ok", head: "abc" } } }), judgment);
+	const ok = { head: "abc", auto: true, evidence: { needed: true, state: "ok" } };
+	assert.throws(() => judge(prJ({ pr: ok }), judgment), /only asks for a proof/);
+	const asked = { head: "abc", auto: true, evidence: { needed: true } };
+	assert.equal(judge(prJ({ pr: asked }), judgment).pr.evidence.state, "todo");
+	applyJudgment(prJ(), live, judgment, { repos: REPOS, now: NOW, by: "agent:judge-1" });
+	assert.throws(() => applyEvidence(judgment, live, "o/r#1", "ok"), /worker run/);
+	assert.throws(
+		() => applyEvidence(judgment, live, "o/r#1", "ok", { run: "judge-1" }),
+		/judged it/,
+	);
+	const proof = { run: "worker-2", conversation: "s-1", href: "https://example.com/report" };
+	const e = applyEvidence(judgment, live, "o/r#1", "ok", proof);
+	assert.deepEqual([e.state, e.head, e.run, e.conversation], ["ok", "abc", "worker-2", "s-1"]);
+	// It survives a rejudge on the same head, never a new commit.
 	assert.equal(judge(prJ(), judgment).pr.evidence.state, "ok");
 	const moved = { prs: [{ repo: "o/r", n: 1, head: "def" }], issues: [] };
 	assert.equal(judge(prJ({ pr: { head: "def", auto: true } }), judgment, moved).pr.evidence, null);
+});
+
+test("a merge order is an option of a PR's card, tied to the head the card was written on", () => {
+	const judgment = fresh();
+	const order = [
+		{ id: "merge", label: "Merge it", effect: "The server merges it.", merge: true },
+		{ id: "wait", label: "Leave it", effect: "I leave it open." },
+	];
+	const prCard = (l = live) =>
+		applyJudgment(
+			prJ({
+				owner: "alice",
+				revisitAt: undefined,
+				decision: card({ options: order, rec: "merge" }),
+			}),
+			l,
+			judgment,
+			{ repos: REPOS, now: NOW },
+		).decision;
+	const first = prCard();
+	assert.equal(first.head, "abc");
+	assert.equal(prCard().id, first.id, "the same question on the same head is the same card");
+	const moved = { prs: [{ repo: "o/r", n: 1, head: "def" }], issues: [] };
+	const again = applyJudgment(
+		prJ({
+			owner: "alice",
+			revisitAt: undefined,
+			pr: { head: "def", auto: false },
+			decision: card({ options: order, rec: "merge" }),
+		}),
+		moved,
+		judgment,
+		{ repos: REPOS, now: NOW },
+	).decision;
+	assert.notEqual(again.id, first.id, "a new head is a new card");
+	assert.throws(
+		() => judge(issueJ({ decision: card({ options: order, rec: "merge" }) })),
+		/PR's card only/,
+	);
+	const bad = [{ ...order[0], merge: "yes" }, order[1]];
+	assert.throws(
+		() => judge(issueJ({ decision: card({ options: bad, rec: "wait" }) })),
+		/merge is true/,
+	);
 });
 
 test("closing a card: resolved once answered, replaced otherwise", () => {
@@ -152,11 +209,12 @@ test("the agent commands read and write a project's files", () => {
 		},
 	});
 	put("projects/demo/rules.json", { "o/r": { observeOnly: false, locks: null, errors: [] } });
-	const run = (...args) =>
+	const runAs = (runId, ...args) =>
 		spawnSync(process.execPath, [BIN, ...args], {
 			encoding: "utf8",
-			env: { ...process.env, RUSUBAN_HOME: home, RUSUBAN_RUN: "judge-1", RUSUBAN_PROJECT: "" },
+			env: { ...process.env, RUSUBAN_HOME: home, RUSUBAN_RUN: runId, RUSUBAN_PROJECT: "" },
 		});
+	const run = (...args) => runAs("judge-1", ...args);
 	const todo = () => JSON.parse(run("todo").stdout).map((t) => `${t.item}:${t.reason}`);
 
 	assert.deepEqual(todo(), ["o/r#1:unjudged", "o/r#10:unjudged"]);
@@ -185,8 +243,17 @@ test("the agent commands read and write a project's files", () => {
 	);
 	assert.ok(!fs.existsSync(path.join(home, "projects/demo/journal.jsonl")));
 	assert.ok(!fs.existsSync(path.join(home, "projects/demo/judgment.lock")));
-	assert.equal(run("evidence", "#1", "running").status, 0);
-	assert.equal(JSON.parse(run("show", "#1").stdout).judgment.pr.evidence.state, "running");
+	// A proof comes from a worker run, never from the judging run.
+	assert.match(run("evidence", "#1", "running").stderr, /recorded by a worker run/);
+	put("runs/worker-1/status.json", {
+		id: "worker-1",
+		kind: "worker",
+		state: "done",
+		session: "s-9",
+	});
+	assert.equal(runAs("worker-1", "evidence", "#1", "running").status, 0);
+	const proof = JSON.parse(run("show", "#1").stdout).judgment.pr.evidence;
+	assert.deepEqual([proof.state, proof.run, proof.conversation], ["running", "worker-1", "s-9"]);
 	assert.deepEqual(JSON.parse(run("answers").stdout), []);
 	assert.match(run("--version").stdout, /^rusuban \d+\.\d+\.\d+/);
 	assert.equal(run("nope").status, 1);

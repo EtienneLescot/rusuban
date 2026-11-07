@@ -1,0 +1,7 @@
+{
+	"why": "A commit was pushed after the judgment",
+	"body": "Fixes the crash.",
+	"judged": "auto",
+	"set": { "head": "fffffff0000000000000000000000000000000000" },
+	"stoppedBy": "Judgment"
+}

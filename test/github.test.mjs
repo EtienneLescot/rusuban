@@ -6,6 +6,7 @@ import {
 	ciOf,
 	nextDelay,
 	normalizePr,
+	pushesOf,
 	readProject,
 	reviewsOf,
 } from "../src/github.mjs";
@@ -136,4 +137,27 @@ test("a repo that fails keeps its last good state; changedAt moves only on chang
 	assert.deepEqual(second.repos["o/b"].prs, [{ n: 1 }]);
 	assert.equal(second.repos["o/b"].error, "HTTP 502");
 	assert.equal(first.rate.remaining, 10);
+});
+
+test("a commit on the default branch from no merged PR was pushed straight to it", () => {
+	const commit = (oid, prs) => ({
+		oid,
+		url: `https://github.com/o/r/commit/${oid}`,
+		committedDate: "2026-11-07T10:00:00Z",
+		messageHeadline: `commit ${oid}`,
+		author: { name: "Bob", user: oid === "c3" ? null : { login: "bob" } },
+		associatedPullRequests: { nodes: prs },
+	});
+	const pushes = pushesOf([
+		commit("c1", [{ number: 4, merged: true }]),
+		commit("c2", []),
+		commit("c3", [{ number: 5, merged: false }]),
+	]);
+	assert.deepEqual(
+		pushes.map((p) => [p.oid, p.author]),
+		[
+			["c2", "bob"],
+			["c3", "Bob"],
+		],
+	);
 });

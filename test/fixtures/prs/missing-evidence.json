@@ -1,0 +1,9 @@
+{
+	"why": "It touches the engine, which needs a recorded proof",
+	"body": "Faster inner loop.",
+	"judged": "auto",
+	"set": {
+		"files": [{ "path": "engine/core.rs", "additions": 12, "deletions": 4, "change": "MODIFIED" }]
+	},
+	"stoppedBy": "Evidence"
+}

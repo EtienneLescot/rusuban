@@ -1396,6 +1396,10 @@ a.num:hover .ext {
 .journal li.empty {
 	display: block;
 }
+/* What the owner must see: a merge or a push the server did not make, a rules change, a refusal. */
+.journal li.flag {
+	color: #fbbf24;
+}
 .journal .mono {
 	font-size: 11px;
 	color: var(--text-4);
