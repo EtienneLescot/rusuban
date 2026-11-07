@@ -669,6 +669,31 @@ export const runsOf = (project = null) =>
 			conversation: r.session ?? null,
 		}));
 
+// The Agents view: every project's runs and the recurring tasks, pushed like the inbox (T043).
+export const agentsState = (ctx) => ({
+	dry: ctx.dry,
+	runs: runsOf().slice(0, 40),
+	tasks: tasksState(ctx.config),
+});
+
+// A run's log and a task's file, as text the page opens in a tab. A log's name comes from the run's
+// status: a bare file name, never a path.
+const textOf = (file) => {
+	try {
+		return fs.readFileSync(file, "utf8");
+	} catch {
+		return null;
+	}
+};
+function runLog(id) {
+	const r = readRun(id);
+	return /^[\w.-]+\.log$/.test(r?.log ?? "") ? textOf(homePath(`runs/${id}/${r.log}`)) : null;
+}
+const text = (res, body) =>
+	typeof body === "string"
+		? send(res, 200, "text/plain; charset=utf-8", body)
+		: json(res, 404, { error: "not found" });
+
 // The agents' starters, which tests replace through `startServer({ deps })`.
 const depsOf = (ctx) => ctx.deps ?? DEPS;
 
@@ -800,13 +825,24 @@ async function handle(ctx, req, res) {
 			return json(res, 200, { tasks: tasksState(ctx.config) });
 		if (req.method === "GET" && url.pathname === "/api/runs")
 			return json(res, 200, { runs: runsOf(url.searchParams.get("project")) });
+		const log = req.method === "GET" && /^\/api\/runs\/([\w-]+)\/log$/.exec(url.pathname);
+		if (log) return text(res, runLog(log[1]));
+		const file = req.method === "GET" && /^\/api\/tasks\/([^/]+)\/file$/.exec(url.pathname);
+		if (file)
+			return text(res, readTask(file[1], ctx.config) && textOf(homePath(`tasks/${file[1]}.md`)));
 		if (req.method === "GET" && url.pathname === "/api/events") {
 			res.writeHead(200, {
 				"content-type": "text/event-stream",
 				"cache-control": "no-store",
 				connection: "keep-alive",
 			});
-			const client = { res, project: url.searchParams.get("project"), sent: "", sentInbox: "" };
+			const client = {
+				res,
+				project: url.searchParams.get("project"),
+				sent: "",
+				sentInbox: "",
+				sentAgents: "",
+			};
 			ctx.clients.add(client);
 			ctx.push(client, true);
 			req.on("close", () => ctx.clients.delete(client));
@@ -860,6 +896,7 @@ export async function startServer({
 		};
 		send("state", stateOf(ctx, client.project), "sent");
 		send("inbox", inboxState(ctx), "sentInbox");
+		send("agents", agentsState(ctx), "sentAgents");
 	};
 	// A state file the model cannot read (cut short, from an older version) costs the page one update,
 	// never the daemon nor a write that already happened: said once per distinct error.

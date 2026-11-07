@@ -175,6 +175,7 @@ export function tasksState(config, now = Date.now()) {
 			lock: t.lock,
 			cwd: t.cwd ?? (t.project ? scratchOf(t.project) : null),
 			error: t.error,
+			promptStart: t.prompt.slice(0, 400),
 			lastSlot: iso(lastSlot(t.slots, now)),
 			nextSlot: iso(nextSlot(t.slots, now)),
 			state: busyRun(t.id, mine)?.state ?? "idle",

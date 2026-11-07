@@ -12,12 +12,14 @@ dashboard's origin (local or `ts.net`) and the `x-rusuban: 1` header, and a body
 | GET | `/`, `/app.js`, `/app.css` | the page, no build |
 | GET | `/api/state?project=<id>` | the project's model: nodes, edges, cards, runs, freshness, journal |
 | GET | `/api/inbox` | open cards of every project, newest first |
-| GET | `/api/events` | SSE: `state` and `inbox` on each change, `: ping` every 15 s |
+| GET | `/api/events` | SSE: `state`, `inbox` and `agents` (every project's runs and the tasks) on each change, `: ping` every 15 s |
 | GET | `/api/conversations?project=&item=&q=` | Conversation list, newest activity first |
 | GET | `/api/conversations/<id>?before=<offset>` | one page of a transcript: user text, assistant text, tool calls (name and short input), results cut to 2 KB |
 | GET | `/api/machines` | machines, probe state, leases, queues |
 | GET | `/api/runs?project=` | runs, running first: kind, items, step, age, summary, conversation |
+| GET | `/api/runs/<id>/log` | the run's log, as text: what its conversation did, until the hub shows transcripts |
 | GET | `/api/tasks` | the task catalog and last runs |
+| GET | `/api/tasks/<id>/file` | the task's file, as text |
 
 ## Write
 

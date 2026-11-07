@@ -11,7 +11,7 @@ const T = {
 	github: "GitHub",
 	refreshNow: "Read GitHub now",
 	agents: "Agents",
-	agentsDrawer: "Agents and journal",
+	journalAndRules: "Journal and rules",
 	autoMerge: "Auto-merge",
 	forYou: "for you",
 	view: "View",
@@ -113,14 +113,36 @@ const T = {
 	notReadYet: "not read yet",
 	readError: (when, error) => `error ${when}: ${error}`,
 	githubError: (error) => `Last read failed: ${error}`,
-	agentsNow: "Agents now",
 	close: "Close",
-	idleLong: "Idle.",
 	recentRuns: "Recent runs",
 	none: "None.",
 	journal: "Journal",
 	emptyJournal: "Empty for now.",
+	// The Agents view
+	runningNow: "Running now",
+	nothingRunning: "Nothing runs now.",
+	recurringTasks: "Recurring tasks",
+	noTasks: "No recurring task.",
+	colTask: "Task",
+	colSchedule: "Schedule",
+	colNext: "Next",
+	colLastRun: "Last run",
+	onClick: "on a click",
+	lockOf: (lock) => `lock ${lock}`,
+	neverRun: "never run",
+	runNow: "Run now",
+	taskStarted: (title) => `${title} started`,
+	runRefused: (error) => `Run refused: ${error}`,
+	prompt: "Prompt",
+	openTaskFile: "Open the task file",
+	lastRuns: "Last runs",
+	today: "today",
+	yesterday: "yesterday",
+	tomorrow: "tomorrow",
+	runKinds: { judge: "Judge", act: "Coordinator", worker: "Worker", task: "Task" },
 	runState: {
+		running: "running",
+		queued: "queued",
 		done: "done",
 		failed: "failed",
 		stopped: "stopped",
@@ -249,7 +271,7 @@ const ui = {
 	fitted: !!saved,
 	card: null, // the card open in place of the inbox, from the address (#card/<id>)
 };
-if (!["graph", "kanban", "conversations"].includes(ui.view)) ui.view = "graph";
+if (!["graph", "kanban", "conversations", "agents"].includes(ui.view)) ui.view = "graph";
 const PHONE = matchMedia("(max-width: 720px)");
 const phone = () => PHONE.matches;
 if (!(ui.z >= 0.1 && ui.z <= 1.6)) Object.assign(ui, { z: 0.6, fitted: false });
@@ -262,9 +284,11 @@ const save = () => {
 
 let S = null; // the last state the server pushed
 let INBOX = { cards: [], flags: [] }; // the inbox the server pushed, every project's
+let AGENTS = { dry: false, runs: [], tasks: [] }; // every project's runs and the tasks
 let chosen = null; // the option picked on the open card, waiting for Send
 let stopArmed = null; // the run whose Stop was pressed once
-let runFocus = null; // the runs the drawer highlights: a run id, or an item's runs
+let runFocus = null; // the runs the Agents view highlights: a run id, or an item's runs
+const openTasks = new Set(); // the tasks unfolded in the Agents view
 
 // GitHub's icons: a dotted circle for an issue, a branch that joins back for a PR (Lucide).
 const ICON = {
@@ -369,6 +393,34 @@ const elapsed = (iso) => {
 	const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
 	return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 };
+// A time's day, the short way: today, yesterday, tomorrow, or its date.
+const dayOf = (iso) => {
+	const midnight = (t) => new Date(t).setHours(0, 0, 0, 0);
+	const days = Math.round((midnight(iso) - midnight(Date.now())) / 86400e3);
+	if (days === 0) return T.today;
+	if (days === -1) return T.yesterday;
+	if (days === 1) return T.tomorrow;
+	return new Date(iso).toLocaleDateString("en", { month: "short", day: "numeric" });
+};
+const when = (iso) => `${dayOf(iso)} ${clock(iso)}`;
+// Today's times by the clock, older ones by their day.
+const shortWhen = (iso) => (dayOf(iso) === T.today ? clock(iso) : dayOf(iso));
+
+// Agents write Markdown. A summary shows as one paragraph: code, bold and italics kept, every other
+// mark dropped, so no raw ** ever shows. The text is escaped first: only these tags come out.
+const flat = (s) =>
+	String(s ?? "")
+		.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+\.\s+|>\s?)/gm, "")
+		.replace(/\s*\n+\s*/g, " ")
+		.trim();
+const md = (s) =>
+	esc(flat(s))
+		.replace(/`([^`]+)`/g, "<code>$1</code>")
+		.replace(/\*\*(.+?)\*\*|__(.+?)__/g, (_, a, b) => `<b>${a ?? b}</b>`)
+		.replace(/\*\*|__/g, "")
+		.replace(/(^|[^\w*])\*(?=\S)([^*]+?)\*(?!\w)/g, "$1<i>$2</i>")
+		.replace(/\[([^\]]+)\]\([^)\s]+\)/g, "$1");
+const plain = (s) => flat(s).replace(/\*\*|__|`/g, "");
 
 let toastTimer = null;
 function toast(text, error = false) {
@@ -931,7 +983,7 @@ const runName = (r) =>
 	`${r.title || r.kind}${r.items?.length ? ` · ${r.items.map(numOfKey).join(", ")}` : ""}`;
 
 function agentsNow() {
-	const runs = S.runs ?? [];
+	const runs = AGENTS.runs;
 	const running = runs.filter((r) => r.state === "running");
 	if (running.length === 1)
 		return {
@@ -972,6 +1024,8 @@ function tick() {
 	$("agents-label").textContent = a.label;
 	$("agents-time").textContent = a.since ? elapsed(a.since) : "";
 	$("agents").classList.toggle("busy", a.busy);
+	for (const el of document.querySelectorAll("#agents-view [data-since]"))
+		el.textContent = elapsed(el.dataset.since);
 }
 
 const lockValue = (k, v) =>
@@ -1012,36 +1066,11 @@ function rulesHtml() {
 	return parts.join("");
 }
 
-const drawerShown = () => drawerOpen || (phone() && ui.tab === "agents");
-// A run the page points at (a card's conversation link) is lit in the drawer.
-const lit = (r) => runFocus && (r.id === runFocus || r.items?.includes(runFocus));
-
+// The journal and the rules, in a drawer over the view.
 function renderDrawer() {
 	const el = $("drawer");
-	const shown = drawerShown();
-	el.hidden = !shown;
-	$("agents").setAttribute("aria-expanded", String(shown));
-	if (!shown) return;
-	const runs = S.runs ?? [];
-	const live = runs.filter((r) => r.state === "running" || r.state === "queued");
-	const recent = runs
-		.filter((r) => r.state !== "running" && r.state !== "queued" && r.summary)
-		.slice(0, 30);
-	const liveHtml = live.length
-		? live
-				.map(
-					(r) =>
-						`<div class="act${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}"><header><span class="dot pulse"></span><b>${esc(runName(r))}</b><span class="mono">${r.state === "running" && r.startedAt ? elapsed(r.startedAt) : ""}</span><button type="button" class="secondary small${stopArmed === r.id ? " armed" : ""}" data-stop="${esc(r.id)}">${stopArmed === r.id ? T.confirmStop : T.stop}</button></header><p>${esc(r.state === "queued" ? T.queued : r.step || "…")}</p></div>`,
-				)
-				.join("")
-		: `<p class="act">${T.idleLong}</p>`;
-	const recentHtml =
-		recent
-			.map(
-				(r) =>
-					`<div class="act${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}"><header><b>${esc(runName(r))}</b><span class="state ${esc(r.state)}">${esc(T.runState[r.state] ?? r.state)}</span><span class="mono">${r.state === "limited" && r.retryAt ? esc(T.limitedUntil(clock(r.retryAt))) : r.endedAt ? clock(r.endedAt) : ""}</span></header><p>${esc(r.summary)}</p>${r.session ? `<small class="mono session">${esc(T.conversation)} ${esc(r.session)}</small>` : ""}</div>`,
-			)
-			.join("") || `<p class="act">${T.none}</p>`;
+	el.hidden = !drawerOpen;
+	if (!drawerOpen) return;
 	const journalHtml =
 		(S.journal ?? [])
 			.map(
@@ -1050,10 +1079,8 @@ function renderDrawer() {
 			)
 			.join("") || `<li class="empty">${T.emptyJournal}</li>`;
 	const html = `
-		<h2>${T.agentsNow} <button type="button" class="secondary" data-close>${T.close}</button></h2>
-		<section>${liveHtml}</section>
-		<section><h2>${T.recentRuns}</h2>${recentHtml}</section>
-		<section><h2>${T.journal}</h2><ul class="journal">${journalHtml}</ul></section>
+		<h2>${T.journal} <button type="button" class="secondary" data-close>${T.close}</button></h2>
+		<section><ul class="journal">${journalHtml}</ul></section>
 		<section><h2>${T.rulesAndLocks}</h2>${rulesHtml()}</section>`;
 	// Rebuilt only when it changes: the 2-second updates keep its scroll and the button under the mouse.
 	if (html === drawerHtml) return;
@@ -1061,13 +1088,151 @@ function renderDrawer() {
 	drawerHtml = html;
 	el.innerHTML = html;
 	el.scrollTop = scroll;
-	if (runFocus && scrolledTo !== runFocus) {
-		scrolledTo = runFocus;
-		el.querySelector(".act.lit")?.scrollIntoView({ block: "center" });
-	}
 }
 let drawerHtml = "";
+
+// ── Agents: what runs now, the recurring tasks, the recent runs, every project's (T043) ──────
+const AT_WORK = ["running", "queued"];
+// A run a card points at (its conversation links) is lit.
+const lit = (r) => runFocus && (r.id === runFocus || r.items?.includes(runFocus));
+const runLabel = (r) => `${T.runKinds[r.kind] ?? r.kind}${r.title ? ` ${r.title}` : ""}`;
+// A run's item, named as the inbox names it when its project is the one shown, by number otherwise.
+const itemRef = (project, key) => {
+	const n = String(key).split("#")[1];
+	const node = S?.project?.id === project ? S.model.nodes.find((x) => x.id === key) : null;
+	return node?.type === "pr" ? T.prRef(n) : node?.type === "issue" ? T.issueRef(n) : `#${n}`;
+};
+const runRef = (r) =>
+	r.items?.length
+		? `${itemRef(r.project, r.items[0])}${r.items.length > 1 ? ` +${r.items.length - 1}` : ""}`
+		: "";
+// A run's or a task's project, named only when the instance has several.
+const projectOf = (id) =>
+	(S?.projects?.length ?? 0) > 1 ? (S.projects.find((p) => p.id === id)?.title ?? id) : "";
+// A run's conversation, as its log tells it until the hub shows transcripts.
+const logUrl = (r) => `/api/runs/${encodeURIComponent(r.id)}/log`;
+const conversationLink = (r) =>
+	r.conversation
+		? `<a href="${logUrl(r)}" target="_blank" rel="noopener">${T.conversation}</a>`
+		: "";
+const stateDot = (r) =>
+	`<i class="sd ${esc(r.state)}" role="img" aria-label="${esc(T.runState[r.state] ?? r.state)}"></i>`;
+
+function runCardHtml(r) {
+	const queued = r.state === "queued";
+	const project = projectOf(r.project);
+	const time = queued
+		? `<span>${T.queued}</span>`
+		: `<span class="mono" data-since="${esc(r.startedAt ?? r.createdAt)}"></span>`;
+	return `<div class="ag-run${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}">
+		<div class="ag-head">${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b>${project ? `<span>${esc(project)}</span>` : ""}<span class="mono">${esc(runRef(r))}</span><span class="grow"></span>${time}</div>
+		${queued ? "" : `<span class="ag-step clamp2" title="${esc(plain(r.step))}">${md(r.step) || T.starting}</span>`}
+		<div class="ag-actions">${queued ? "" : conversationLink(r)}<span class="grow"></span><button type="button" class="ag-stop${stopArmed === r.id ? " armed" : ""}" data-stop="${esc(r.id)}">${stopArmed === r.id ? T.confirmStop : T.stop}</button></div>
+	</div>`;
+}
+
+// A task's last run: its state and when, the time it has worked when at work.
+function lastRunOf(t) {
+	const r = t.runs[0];
+	if (!r) return { state: "", html: esc(T.neverRun), short: T.neverRun };
+	const label = T.runState[r.state] ?? r.state;
+	if (r.state === "running")
+		return {
+			state: r.state,
+			html: `${esc(label)} · <span class="mono" data-since="${esc(r.startedAt ?? r.createdAt)}"></span>`,
+			short: label,
+		};
+	if (r.state === "queued") return { state: r.state, html: esc(label), short: label };
+	if (r.state === "limited" && r.retryAt)
+		return { state: r.state, html: esc(T.limitedUntil(clock(r.retryAt))), short: label };
+	const at = r.endedAt ?? r.createdAt;
+	return {
+		state: r.state,
+		html: `${esc(label)} · ${esc(when(at))}`,
+		short: `${label} ${shortWhen(at)}`,
+	};
+}
+
+const miniRunHtml = (r) =>
+	`<div class="ag-mini">${stateDot(r)}<span class="mono">${esc(shortWhen(r.endedAt ?? r.createdAt))}</span><span class="ag-sum" title="${esc(plain(r.summary))}">${md(r.summary) || esc(T.runState[r.state] ?? r.state)}</span>${conversationLink(r)}</div>`;
+
+// One row per task; a click unfolds the start of its prompt and its last three runs. "Run now" shows
+// only where it would start something.
+function taskHtml(t, ph) {
+	const open = openTasks.has(t.id);
+	const last = lastRunOf(t);
+	const lock = t.lock !== `${t.project}.task.${t.id}` ? T.lockOf(t.lock) : "";
+	const meta = [projectOf(t.project), lock].filter(Boolean).join(" · ");
+	const schedule = t.schedule ?? T.onClick;
+	const runNow =
+		!AGENTS.dry && !t.error && t.state === "idle"
+			? `<button type="button" class="secondary ag-run-now" data-run-task="${esc(t.id)}">${T.runNow}</button>`
+			: "";
+	const name = `<b>${esc(t.title)}</b>`;
+	const head = ph
+		? `<span class="ag-task-name">${name}<small class="st ${esc(last.state)}">${esc(last.short)} · ${esc(schedule)}</small></span>`
+		: `<span class="ag-task-name">${name}${meta ? `<small>${esc(meta)}</small>` : ""}</span><span${t.schedule ? ' class="mono"' : ""}>${esc(schedule)}</span><span>${t.nextSlot ? esc(when(t.nextSlot)) : ""}</span><span class="st ${esc(last.state)}">${last.html}</span>`;
+	const more = open
+		? `<div class="ag-more">
+			<div class="ag-col"><span class="ag-label">${T.prompt}</span><pre class="ag-prompt">${esc(t.promptStart)}</pre><a href="/api/tasks/${encodeURIComponent(t.id)}/file" target="_blank" rel="noopener">${T.openTaskFile}</a></div>
+			<div class="ag-col"><span class="ag-label">${T.lastRuns}</span>${t.runs.slice(0, 3).map(miniRunHtml).join("") || `<p class="ag-empty">${T.none}</p>`}</div>
+		</div>`
+		: "";
+	return `<div class="ag-task${open ? " open" : ""}">
+		<div class="ag-grid ag-task-row"><button type="button" class="ag-task-head" data-task="${esc(t.id)}" aria-expanded="${open}">${head}</button><span class="ag-task-act">${runNow}</span></div>
+		${t.error ? `<p class="ag-err">${esc(t.error)}</p>` : ""}${more}
+	</div>`;
+}
+
+// A recent run: one line on a desktop, two on a phone, where the whole line opens its conversation.
+function recentHtml(r, ph) {
+	const project = projectOf(r.project);
+	const at =
+		r.state === "limited" && r.retryAt
+			? T.limitedUntil(clock(r.retryAt))
+			: shortWhen(r.endedAt ?? r.createdAt);
+	const who = `${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b>${project ? `<span class="ag-proj">${esc(project)}</span>` : ""}`;
+	const sum = `<span class="ag-sum${ph ? " clamp2" : ""}" title="${esc(plain(r.summary))}">${md(r.summary)}</span>`;
+	const attrs = `class="ag-line${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}"`;
+	if (!ph)
+		return `<div ${attrs}>${who}${sum}<span class="mono">${esc(at)}</span>${conversationLink(r)}</div>`;
+	const inner = `<span class="ag-line-head">${who}<span class="grow"></span><span class="mono">${esc(at)}</span></span>${sum}`;
+	return r.conversation
+		? `<a ${attrs} href="${logUrl(r)}" target="_blank" rel="noopener">${inner}</a>`
+		: `<div ${attrs}>${inner}</div>`;
+}
+
+let agentsHtml = "";
 let scrolledTo = null;
+function renderAgents() {
+	const el = $("agents-view");
+	if (el.hidden) return;
+	const ph = phone();
+	const live = AGENTS.runs.filter((r) => AT_WORK.includes(r.state));
+	// A run that found nothing to do had no conversation: not worth a line.
+	const recent = AGENTS.runs
+		.filter((r) => !AT_WORK.includes(r.state) && (r.conversation || r.state !== "done"))
+		.slice(0, 30);
+	const cols = ph
+		? ""
+		: `<div class="ag-grid ag-cols"><span>${T.colTask}</span><span>${T.colSchedule}</span><span>${T.colNext}</span><span>${T.colLastRun}</span><span></span></div>`;
+	const html = `
+		<section aria-label="${T.runningNow}"><h2>${T.runningNow}</h2>${live.length ? `<div class="ag-running">${live.map(runCardHtml).join("")}</div>` : `<p class="ag-empty">${T.nothingRunning}</p>`}</section>
+		<section aria-label="${T.recurringTasks}"><h2>${T.recurringTasks}</h2>${AGENTS.tasks.length ? cols + AGENTS.tasks.map((t) => taskHtml(t, ph)).join("") : `<p class="ag-empty">${T.noTasks}</p>`}</section>
+		<section aria-label="${T.recentRuns}"><h2>${T.recentRuns}<span class="grow"></span><button type="button" class="linkish" data-journal>${T.journalAndRules}</button></h2>${recent.map((r) => recentHtml(r, ph)).join("") || `<p class="ag-empty">${T.none}</p>`}</section>`;
+	// Rebuilt only when it changes, keeping its scroll; the times at work tick in place.
+	if (html !== agentsHtml) {
+		const scroll = el.scrollTop;
+		agentsHtml = html;
+		el.innerHTML = html;
+		el.scrollTop = scroll;
+		tick();
+	}
+	if (runFocus && scrolledTo !== runFocus) {
+		scrolledTo = runFocus;
+		el.querySelector(".lit")?.scrollIntoView({ block: "center" });
+	}
+}
 
 // One project: its name. Several: a switcher (a switcher with one choice would do nothing).
 let projectsKey = "";
@@ -1107,11 +1272,13 @@ function render() {
 	$("shadow").hidden = S.project?.mode !== "shadow";
 	for (const b of document.querySelectorAll(".views button"))
 		b.setAttribute("aria-selected", String(b.dataset.view === ui.view));
-	// A phone's Conversations tab shows that view, whatever the view tabs say.
-	const view = phone() && ui.tab === "conversations" ? "conversations" : ui.view;
+	// A phone's Conversations and Agents tabs show that view, whatever the view tabs say.
+	const view = phone() && ["conversations", "agents"].includes(ui.tab) ? ui.tab : ui.view;
+	document.body.dataset.showing = view;
 	$("vp").hidden = view !== "graph";
 	$("kanban").hidden = view !== "kanban";
 	$("conversations").hidden = view !== "conversations";
+	$("agents-view").hidden = view !== "agents";
 	$("themes").setAttribute("aria-pressed", String(ui.themes));
 	$("own-chips").innerHTML = ["all", "mine", "agent", "others"]
 		.map(
@@ -1142,6 +1309,7 @@ function render() {
 		if (!ui.fitted) ui.fitted = fit();
 		applyTransform();
 	} else if (view === "kanban") renderKanban();
+	renderAgents();
 	renderDrawer();
 	tick();
 }
@@ -1277,9 +1445,10 @@ $("fresh").onclick = () =>
 		toast(T.refreshFailed(err.message), true),
 	);
 $("agents").onclick = () => {
-	drawerOpen = !drawerOpen;
+	ui.view = "agents";
 	runFocus = null;
-	renderDrawer();
+	save();
+	render();
 };
 $("feed-open").onclick = () => {
 	drawerOpen = true;
@@ -1310,21 +1479,34 @@ function cardClick(t) {
 	} else if (d.stop) {
 		if (stopArmed !== d.stop) {
 			stopArmed = d.stop;
-			return renderDrawer();
+			return renderAgents();
 		}
 		stopArmed = null;
 		post(`/api/runs/${encodeURIComponent(d.stop)}/stop`)
 			.then(() => toast(T.runStopped))
 			.catch((err) => toast(T.stopFailed(err.message), true));
+	} else if (d.runTask) {
+		const t = AGENTS.tasks.find((x) => x.id === d.runTask);
+		post(`/api/tasks/${encodeURIComponent(d.runTask)}/run`)
+			.then(() => toast(T.taskStarted(t?.title ?? d.runTask)))
+			.catch((err) => toast(T.runRefused(err.message), true));
+	} else if (d.task) {
+		if (openTasks.has(d.task)) openTasks.delete(d.task);
+		else openTasks.add(d.task);
+		renderAgents();
+	} else if (d.journal !== undefined) {
+		drawerOpen = true;
+		renderDrawer();
 	} else if (d.run || d.runs) {
+		// A card's conversations: the Agents view, the runs lit; a phone shows it alone, card closed.
 		runFocus = d.run || d.runs;
 		scrolledTo = null;
-		drawerOpen = true;
-		// A phone shows one screen: the Agents tab, the card closed.
+		ui.view = "agents";
 		if (phone()) {
 			ui.tab = "agents";
 			location.hash = "agents";
 		}
+		save();
 		render();
 	} else if (d.tab) {
 		ui.tab = d.tab;
@@ -1341,13 +1523,14 @@ document.addEventListener("input", (e) => {
 
 document.addEventListener("click", (e) => {
 	if (e.target.closest("a[href]")) return;
+	// The tab bar's own buttons only: <body> carries the current tab too, and every click reaches it.
 	const card = e.target.closest(
-		"[data-card],[data-back],[data-option],[data-send],[data-send-free],[data-stop],[data-run],[data-runs],[data-tab]",
+		"[data-card],[data-back],[data-option],[data-send],[data-send-free],[data-stop],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],#tabbar [data-tab]",
 	);
 	// A Stop pressed once is forgotten at the next click elsewhere.
 	if (stopArmed && !card?.dataset.stop) {
 		stopArmed = null;
-		renderDrawer();
+		renderAgents();
 	}
 	if (card && cardClick(card)) return;
 	const t = e.target.closest(
@@ -1362,11 +1545,7 @@ document.addEventListener("click", (e) => {
 	else if (t.dataset.own) ui.own = t.dataset.own;
 	else if (t.dataset.kind) ui.kind = t.dataset.kind;
 	else if (t.dataset.view) ui.view = t.dataset.view;
-	else if (t.dataset.close !== undefined) {
-		drawerOpen = false;
-		runFocus = null;
-		if (phone() && ui.tab === "agents") ui.tab = "inbox";
-	}
+	else if (t.dataset.close !== undefined) drawerOpen = false;
 	$("collapse").hidden = !ui.exp.size;
 	save();
 	render();
@@ -1397,6 +1576,11 @@ function connect() {
 		INBOX = JSON.parse(ev.data);
 		render();
 		followCard();
+	});
+	// Every project's runs and the tasks, for the Agents view and the header.
+	es.addEventListener("agents", (ev) => {
+		AGENTS = JSON.parse(ev.data);
+		render();
 	});
 	es.onerror = () => {
 		$("offline").hidden = false;
