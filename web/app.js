@@ -155,6 +155,44 @@ const T = {
 	in: (span) => `in ${span}`,
 	switchFailed: (error) => `Switch refused: ${error}`,
 	refreshFailed: (error) => `Read refused: ${error}`,
+	// The inbox and its cards
+	inbox: "Inbox",
+	conversations: "Conversations",
+	conversationsSoon: "The project's Claude conversations will come here.",
+	menu: "Menu",
+	forYouAll: "for you · all projects",
+	forYouTitle: "For you",
+	nothingForYou: "Nothing waits for you.",
+	digest: "digest",
+	forYouUrgency: (urgency) => `for you · ${urgency}`,
+	byAuthor: (login) => `by @${login}`,
+	gitHubLink: "GitHub",
+	conversationCount: (n) => plural(n, "conversation"),
+	whatIDid: "What I did",
+	whatIDidCount: (n) => `What I did · ${plural(n, "conversation")}`,
+	judgedIn: "Judged in this run.",
+	conversation: "Conversation",
+	link: "Link",
+	proof: "Proof",
+	proofState: (state) => `A worker's proof on the head: ${state}.`,
+	recommended: "Recommended",
+	ownWords: "Or answer in your own words",
+	ownWordsShort: "Or in your own words",
+	send: "Send",
+	sendOption: (label) => `Send “${label}”`,
+	postsOnGitHub: "Posts on GitHub:",
+	answeredCard: (label) => `Answered: “${label}”`,
+	carriedOut: "The coordinator carries it out.",
+	cardGone: "This card is closed: it was answered or replaced.",
+	answerSent: "Answer sent",
+	answerFailed: (error) => `Answer refused: ${error}`,
+	flagged: "Flagged for you",
+	issueRef: (n) => `Issue #${n}`,
+	prRef: (n) => `PR #${n}`,
+	stop: "Stop",
+	confirmStop: "Stop it?",
+	runStopped: "Run stopped",
+	stopFailed: (error) => `Stop refused: ${error}`,
 };
 
 const KIND_COLOR = {
@@ -202,21 +240,31 @@ const ui = {
 	own: "all",
 	kind: "all",
 	themes: true,
-	// A phone opens on the kanban, readable at that width; the graph is one tap away.
-	view: matchMedia("(max-width: 720px)").matches ? "kanban" : "graph",
+	view: "graph",
+	// A phone opens on its inbox: the decisions waiting are what one checks from it.
+	tab: "inbox",
 	project: null,
 	...saved,
 	exp: new Set(saved?.exp ?? []),
 	fitted: !!saved,
+	card: null, // the card open in place of the inbox, from the address (#card/<id>)
 };
+if (!["graph", "kanban", "conversations"].includes(ui.view)) ui.view = "graph";
+const PHONE = matchMedia("(max-width: 720px)");
+const phone = () => PHONE.matches;
 if (!(ui.z >= 0.1 && ui.z <= 1.6)) Object.assign(ui, { z: 0.6, fitted: false });
 const save = () => {
 	try {
-		localStorage.setItem("rusuban.view", JSON.stringify({ ...ui, exp: [...ui.exp] }));
+		const { card, ...kept } = ui;
+		localStorage.setItem("rusuban.view", JSON.stringify({ ...kept, exp: [...ui.exp] }));
 	} catch {}
 };
 
 let S = null; // the last state the server pushed
+let INBOX = { cards: [], flags: [] }; // the inbox the server pushed, every project's
+let chosen = null; // the option picked on the open card, waiting for Send
+let stopArmed = null; // the run whose Stop was pressed once
+let runFocus = null; // the runs the drawer highlights: a run id, or an item's runs
 
 // GitHub's icons: a dotted circle for an issue, a branch that joins back for a PR (Lucide).
 const ICON = {
@@ -263,9 +311,15 @@ const answerOf = (n) =>
 		: null;
 const recentlySettled = (n) =>
 	!n.decision && n.settled && Date.now() - Date.parse(n.settled.at) < 2 * 3600e3;
+// A card waits for the owner: its node is outlined in amber, and says so.
+const forYou = (n) => !!n.decision && !n.decision.answer && n.decision.to === S.me;
+// The open card's entry in the inbox, and the item it is about.
+const openCard = () => (ui.card ? (INBOX.cards.find((c) => c.card.id === ui.card) ?? null) : null);
+const cardItem = () => openCard()?.item ?? null;
 
 function subOf(n) {
 	if (answerOf(n)) return { t: T.answerApplying, c: "#4ade80" };
+	if (forYou(n)) return { t: T.forYou, c: "#fbbf24" };
 	if (recentlySettled(n))
 		return { t: n.settled.state === "replaced" ? T.cardReplaced : T.cardSettled, c: "#4ade80" };
 	if (n.type === "pr") {
@@ -414,6 +468,8 @@ function nodeHtml(n, ports, linked) {
 		!matches(n) && "dim",
 		n.overdue && "overdue",
 		focusId === n.id && "focus",
+		forYou(n) && "for-you",
+		cardItem() === n.id && "card-node",
 	]
 		.filter(Boolean)
 		.join(" ");
@@ -468,9 +524,12 @@ function renderGraph() {
 		ui.themes,
 		[...ui.exp],
 		focusId,
+		cardItem(),
 	]);
 	if (key === graphKey) return;
 	graphKey = key;
+	// An open card's node stays lit, the rest of the graph fades.
+	$("world").classList.toggle("card-open", !!byId.get(cardItem()));
 
 	$("frames").innerHTML = M.frames
 		.filter((f) => ui.themes || f.kind === "group")
@@ -679,6 +738,194 @@ function renderKanban() {
 		`${col("mine")}${col("agent")}${col("others")}<section class="col"><h2>${T.merged7}<span class="mono">${M.merged.length}</span></h2>${merged}</section>`;
 }
 
+// ── Inbox and cards ───────────────────────────────────────────────────────────────────────────
+// Links that agents or GitHub wrote show only as web links: never a `javascript:` one.
+const safeUrl = (u) => (/^https?:\/\//i.test(String(u ?? "")) ? u : null);
+const BACK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
+const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+const refOf = (c) => {
+	const n = String(c.item).split("#")[1];
+	return c.type === "pr" ? T.prRef(n) : T.issueRef(n);
+};
+const answerLabel = (c) =>
+	c.answer ? (c.card.options.find((o) => o.id === c.answer.option)?.label ?? c.answer.note) : null;
+const waiting = () => INBOX.cards.filter((c) => !c.answer);
+let draft = { card: null, text: "" }; // a free answer being typed survives a re-render
+
+function inboxItemHtml(c) {
+	const d = c.card;
+	const now = d.urgency === "now";
+	const current = d.id === ui.card;
+	return `<button type="button" class="ibx-item${current ? " current" : ""}${c.answer ? " answered" : ""}" data-card="${esc(d.id)}"${current ? ' aria-current="true"' : ""}>
+		<span class="ibx-meta"><i class="dot" style="background:var(${now ? "--amber" : "--grey"})"></i><span class="ibx-project">${esc(c.projectTitle)}</span><span class="mono">${esc(refOf(c))}</span><span class="grow"></span><span class="mono">${esc(now ? span(Date.now() - Date.parse(d.createdAt)) : T.digest)}</span></span>
+		<span class="ibx-q">${esc(d.q)}</span>
+		${c.answer ? `<span class="ibx-answered">${CHECK}${esc(T.answeredCard(answerLabel(c)))}</span>` : ""}
+	</button>`;
+}
+
+function inboxListHtml() {
+	const count = waiting().length;
+	const head = phone()
+		? `<div class="ibx-head"><h1>${T.forYouTitle}</h1><b class="mono amber">${count}</b></div>`
+		: `<div class="ibx-head"><h1>${T.inbox}</h1><span><b class="mono amber">${count}</b> ${T.forYouAll}</span></div>`;
+	const list = INBOX.cards.length
+		? INBOX.cards.map(inboxItemHtml).join("")
+		: `<p class="ibx-empty">${T.nothingForYou}</p>`;
+	const flags = INBOX.flags.length
+		? `<section class="ibx-flags"><h2>${T.flagged}</h2><ul>${INBOX.flags
+				.slice(0, 12)
+				.map(
+					(f) =>
+						`<li><span class="mono">${esc(clock(f.at))}</span><span>${esc(f.text)}${safeUrl(f.href) ? ` <a href="${esc(f.href)}" target="_blank" rel="noopener">↗</a>` : ""}</span></li>`,
+				)
+				.join("")}</ul></section>`
+		: "";
+	return `${head}<div class="ibx-list">${list}</div>${flags}`;
+}
+
+// "What I did": the agents' steps, each with the link that shows it, then the judging run's
+// conversation and the proof when there is one.
+function stepsOf(c) {
+	const done = Array.isArray(c.card.done) ? c.card.done : c.card.done ? [c.card.done] : [];
+	const steps = done.map((s) => (typeof s === "string" ? { text: s } : s));
+	const judge = /^agent:([\w.-]+)$/.exec(c.judgedBy ?? "");
+	if (judge && !steps.some((s) => s.href === `run:${judge[1]}`))
+		steps.push({ text: T.judgedIn, href: `run:${judge[1]}`, label: T.conversation });
+	if (safeUrl(c.evidence?.href) && !steps.some((s) => s.href === c.evidence.href))
+		steps.push({ text: T.proofState(c.evidence.state), href: c.evidence.href, label: T.proof });
+	return steps;
+}
+function stepHtml(s) {
+	const run = /^run:([\w.-]+)$/.exec(s.href ?? "");
+	const link = run
+		? `<button type="button" class="linkish" data-run="${esc(run[1])}">${esc(s.label || T.conversation)}</button>`
+		: safeUrl(s.href)
+			? `<a href="${esc(s.href)}" target="_blank" rel="noopener">${esc(s.label || T.link)}</a>`
+			: "";
+	return `<li>${esc(s.text)}${link ? ` ${link}` : ""}</li>`;
+}
+
+// The open card, in place of the inbox: what it is about, the question, what the agent did, then
+// the options, the recommended one first. An option is sent with a second tap, on its Send.
+function cardViewHtml(c) {
+	const d = c.card;
+	const ph = phone();
+	const runsOn = (S?.runs ?? []).filter((r) => r.session && r.items?.includes(c.item));
+	const kind = c.kind
+		? `<span class="tag" style="--tag:${KIND_COLOR[c.kind] ?? UNJUDGED_COLOR}">${esc(T.kinds[c.kind] ?? c.kind)}</span>`
+		: "";
+	const top = `<div class="cv-top"><button type="button" class="cv-back" data-back>${BACK}${T.inbox}</button><span class="grow"></span>${safeUrl(c.url) ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${T.gitHubLink} ↗</a>` : ""}${!ph && runsOn.length ? `<button type="button" class="linkish" data-runs="${esc(c.item)}">${esc(T.conversationCount(runsOn.length))}</button>` : ""}</div>`;
+	const chips = `<div class="cv-chips"><span class="cv-project">${esc(c.projectTitle)}</span><span class="mono">${esc(refOf(c))}</span>${kind}<span class="tag you">${esc(T.forYouUrgency(d.urgency))}</span>${c.author && !ph ? `<span class="cv-by">${esc(T.byAuthor(c.author))}</span>` : ""}</div>`;
+	const ctx = esc(d.ctx).replace(/(Missing:[\s\S]*)$/, '<span class="missing">$1</span>');
+	const steps = stepsOf(c);
+	const list = `<ul>${steps.map(stepHtml).join("")}</ul>`;
+	const did = !steps.length
+		? ""
+		: ph
+			? `<details class="cv-did"><summary>${esc(runsOn.length ? T.whatIDidCount(runsOn.length) : T.whatIDid)}</summary>${list}</details>`
+			: `<section class="cv-did"><h3>${T.whatIDid}</h3>${list}</section>`;
+	let body;
+	if (c.answer)
+		body = `<div class="done-box" role="status">${CHECK}<div><b>${esc(T.answeredCard(answerLabel(c)))}</b><span><span class="dot pulse"></span>${T.carriedOut}</span></div></div>`;
+	else {
+		const rec = d.options.find((o) => o.id === d.rec);
+		const ordered = [...(rec ? [rec] : []), ...d.options.filter((o) => o !== rec)];
+		const opt = (o, small) =>
+			`<button type="button" class="cv-opt${small ? " small" : ""}${o === rec ? " rec" : ""}" data-option="${esc(o.id)}" aria-pressed="${chosen === o.id}"><span class="cv-opt-label"><b>${esc(o.label)}</b>${o === rec ? `<span class="badge">${T.recommended}</span>` : ""}</span>${small && ph ? "" : `<span class="cv-opt-effect">${esc(o.effect)}</span>`}</button>`;
+		const rest = ordered.slice(2);
+		const pick = d.options.find((o) => o.id === chosen);
+		body = `<div class="cv-opts">${ordered
+			.slice(0, 2)
+			.map((o) => opt(o, false))
+			.join(
+				"",
+			)}${rest.length ? `<div class="cv-grid">${rest.map((o) => opt(o, true)).join("")}</div>` : ""}</div>
+			${pick ? `<div class="cv-confirm"><button type="button" class="send-option" data-send>${esc(T.sendOption(pick.label))}</button>${pick.message ? `<small>${T.postsOnGitHub} ${esc(pick.message)}</small>` : ""}</div>` : ""}
+			<label for="cv-free" class="cv-free-label">${ph ? T.ownWordsShort : T.ownWords}</label>
+			<div class="cv-free"><textarea id="cv-free" rows="2"></textarea><button type="button" class="send" data-send-free${ph ? ` aria-label="${T.send}"` : ""}>${ph ? ARROW : T.send}</button></div>`;
+	}
+	return `<article class="cv" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${did}${body}</article>`;
+}
+
+let inboxKey = "";
+function renderInbox() {
+	const c = openCard();
+	// Ages move once a minute in the list; an open card is rebuilt only when it changes, so typing
+	// in it is never cut.
+	const key = JSON.stringify([
+		INBOX,
+		ui.card,
+		chosen,
+		phone(),
+		c ? (S?.runs ?? []).filter((r) => r.items?.includes(c.item)).map((r) => r.id) : null,
+		ui.card ? 0 : Math.floor(Date.now() / 60000),
+	]);
+	if (key === inboxKey) return;
+	inboxKey = key;
+	const el = $("inbox");
+	el.classList.toggle("card-mode", !!ui.card);
+	el.innerHTML = !ui.card
+		? inboxListHtml()
+		: c
+			? cardViewHtml(c)
+			: `<article class="cv"><div class="cv-top"><button type="button" class="cv-back" data-back>${BACK}${T.inbox}</button></div><p class="cv-gone">${T.cardGone}</p></article>`;
+	const area = $("cv-free");
+	if (area && draft.card === ui.card) area.value = draft.text;
+}
+
+async function sendAnswer(c, option, note = "") {
+	try {
+		await post("/api/answer", {
+			project: c.project,
+			item: c.item,
+			card: c.card.id,
+			option,
+			note,
+		});
+		chosen = null;
+		draft = { card: null, text: "" };
+		toast(T.answerSent);
+	} catch (err) {
+		toast(T.answerFailed(err.message), true);
+	}
+}
+
+// The open card's node, centred once in the graph; a card of another project shows that project,
+// once: a project picked afterwards in the header stays.
+let followed = null;
+function centerOn(id) {
+	const node = S.model.nodes.find((x) => x.id === id);
+	const vp = $("vp");
+	if (!node || !vp.clientWidth) return false;
+	ui.z = Math.max(ui.z, 0.8);
+	ui.px = vp.clientWidth / 2 - (node.x + W / 2) * ui.z;
+	ui.py = vp.clientHeight * 0.4 - (node.y + 38) * ui.z;
+	applyTransform();
+	save();
+	return true;
+}
+function followCard() {
+	const c = openCard();
+	if (!c || !S || followed === ui.card) return;
+	if (c.project !== ui.project) {
+		ui.project = c.project;
+		ui.fitted = false;
+		graphKey = "";
+		save();
+		connect();
+		return;
+	}
+	if (phone() || ui.view !== "graph" || centerOn(c.item)) followed = ui.card;
+}
+function readHash() {
+	const m = /^#card\/(.+)$/.exec(location.hash);
+	const id = m ? decodeURIComponent(m[1]) : null;
+	if (id === ui.card) return;
+	ui.card = id;
+	chosen = null;
+	followed = null;
+}
+
 // ── Header, footer, drawer ────────────────────────────────────────────────────────────────────
 const runName = (r) =>
 	`${r.title || r.kind}${r.items?.length ? ` · ${r.items.map(numOfKey).join(", ")}` : ""}`;
@@ -765,21 +1012,26 @@ function rulesHtml() {
 	return parts.join("");
 }
 
+const drawerShown = () => drawerOpen || (phone() && ui.tab === "agents");
+// A run the page points at (a card's conversation link) is lit in the drawer.
+const lit = (r) => runFocus && (r.id === runFocus || r.items?.includes(runFocus));
+
 function renderDrawer() {
 	const el = $("drawer");
-	el.hidden = !drawerOpen;
-	$("agents").setAttribute("aria-expanded", String(drawerOpen));
-	if (!drawerOpen) return;
+	const shown = drawerShown();
+	el.hidden = !shown;
+	$("agents").setAttribute("aria-expanded", String(shown));
+	if (!shown) return;
 	const runs = S.runs ?? [];
 	const live = runs.filter((r) => r.state === "running" || r.state === "queued");
 	const recent = runs
 		.filter((r) => r.state !== "running" && r.state !== "queued" && r.summary)
-		.slice(0, 10);
+		.slice(0, 30);
 	const liveHtml = live.length
 		? live
 				.map(
 					(r) =>
-						`<div class="act"><header><span class="dot pulse"></span><b>${esc(runName(r))}</b><span class="mono">${r.state === "running" && r.startedAt ? elapsed(r.startedAt) : ""}</span></header><p>${esc(r.state === "queued" ? T.queued : r.step || "…")}</p></div>`,
+						`<div class="act${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}"><header><span class="dot pulse"></span><b>${esc(runName(r))}</b><span class="mono">${r.state === "running" && r.startedAt ? elapsed(r.startedAt) : ""}</span><button type="button" class="secondary small${stopArmed === r.id ? " armed" : ""}" data-stop="${esc(r.id)}">${stopArmed === r.id ? T.confirmStop : T.stop}</button></header><p>${esc(r.state === "queued" ? T.queued : r.step || "…")}</p></div>`,
 				)
 				.join("")
 		: `<p class="act">${T.idleLong}</p>`;
@@ -787,23 +1039,35 @@ function renderDrawer() {
 		recent
 			.map(
 				(r) =>
-					`<div class="act"><header><b>${esc(runName(r))}</b><span class="state ${esc(r.state)}">${esc(T.runState[r.state] ?? r.state)}</span><span class="mono">${r.state === "limited" && r.retryAt ? esc(T.limitedUntil(clock(r.retryAt))) : r.endedAt ? clock(r.endedAt) : ""}</span></header><p>${esc(r.summary)}</p></div>`,
+					`<div class="act${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}"><header><b>${esc(runName(r))}</b><span class="state ${esc(r.state)}">${esc(T.runState[r.state] ?? r.state)}</span><span class="mono">${r.state === "limited" && r.retryAt ? esc(T.limitedUntil(clock(r.retryAt))) : r.endedAt ? clock(r.endedAt) : ""}</span></header><p>${esc(r.summary)}</p>${r.session ? `<small class="mono session">${esc(T.conversation)} ${esc(r.session)}</small>` : ""}</div>`,
 			)
 			.join("") || `<p class="act">${T.none}</p>`;
 	const journalHtml =
 		(S.journal ?? [])
 			.map(
 				(j) =>
-					`<li${j.notify ? ' class="flag"' : ""}><span class="mono">${clock(j.at)}</span><span>${j.item ? `<button type="button" class="secondary small" data-focus="${esc(j.item)}">${esc(numOfKey(j.item))}</button> ` : ""}${esc(j.text)}${j.href ? ` <a href="${esc(j.href)}" target="_blank" rel="noopener">↗</a>` : ""}</span></li>`,
+					`<li${j.notify ? ' class="flag"' : ""}><span class="mono">${clock(j.at)}</span><span>${j.item ? `<button type="button" class="secondary small" data-focus="${esc(j.item)}">${esc(numOfKey(j.item))}</button> ` : ""}${esc(j.text)}${safeUrl(j.href) ? ` <a href="${esc(j.href)}" target="_blank" rel="noopener">↗</a>` : ""}</span></li>`,
 			)
 			.join("") || `<li class="empty">${T.emptyJournal}</li>`;
-	el.innerHTML = `
+	const html = `
 		<h2>${T.agentsNow} <button type="button" class="secondary" data-close>${T.close}</button></h2>
 		<section>${liveHtml}</section>
 		<section><h2>${T.recentRuns}</h2>${recentHtml}</section>
 		<section><h2>${T.journal}</h2><ul class="journal">${journalHtml}</ul></section>
 		<section><h2>${T.rulesAndLocks}</h2>${rulesHtml()}</section>`;
+	// Rebuilt only when it changes: the 2-second updates keep its scroll and the button under the mouse.
+	if (html === drawerHtml) return;
+	const scroll = el.scrollTop;
+	drawerHtml = html;
+	el.innerHTML = html;
+	el.scrollTop = scroll;
+	if (runFocus && scrolledTo !== runFocus) {
+		scrolledTo = runFocus;
+		el.querySelector(".act.lit")?.scrollIntoView({ block: "center" });
+	}
 }
+let drawerHtml = "";
+let scrolledTo = null;
 
 // One project: its name. Several: a switcher (a switcher with one choice would do nothing).
 let projectsKey = "";
@@ -824,20 +1088,30 @@ function renderProjects() {
 }
 
 function render() {
+	// The inbox needs no project state: it shows as soon as it arrives.
+	renderInbox();
+	const count = waiting().length;
+	$("tab-count").textContent = count ? String(count) : "";
+	// On a phone one screen shows at a time, picked in the tab bar; an open card covers them all.
+	document.body.dataset.tab = ui.tab;
+	document.body.classList.toggle("card-open", !!ui.card);
+	for (const b of document.querySelectorAll("#tabbar [data-tab]"))
+		b.setAttribute("aria-current", b.dataset.tab === ui.tab && !ui.card ? "page" : "false");
 	if (!S) return;
 	const M = S.model;
 	renderProjects();
-	$("mine-count").textContent = M.counts.mine;
-	$("mine").setAttribute("aria-pressed", String(ui.own === "mine"));
 	$("auto").setAttribute("aria-checked", String(S.armed));
 	$("paused").hidden = S.armed;
 	$("observe").hidden = !S.project?.observeOnly;
 	$("dry").hidden = !S.dry;
 	$("shadow").hidden = S.project?.mode !== "shadow";
-	for (const b of document.querySelectorAll(".tabs button"))
+	for (const b of document.querySelectorAll(".views button"))
 		b.setAttribute("aria-selected", String(b.dataset.view === ui.view));
-	$("vp").hidden = ui.view !== "graph";
-	$("kanban").hidden = ui.view !== "kanban";
+	// A phone's Conversations tab shows that view, whatever the view tabs say.
+	const view = phone() && ui.tab === "conversations" ? "conversations" : ui.view;
+	$("vp").hidden = view !== "graph";
+	$("kanban").hidden = view !== "kanban";
+	$("conversations").hidden = view !== "conversations";
 	$("themes").setAttribute("aria-pressed", String(ui.themes));
 	$("own-chips").innerHTML = ["all", "mine", "agent", "others"]
 		.map(
@@ -863,11 +1137,11 @@ function render() {
 		.slice(0, 3)
 		.map((j) => `<span><span class="mono">${clock(j.at)}</span>${esc(j.text)}</span>`)
 		.join("");
-	if (ui.view === "graph") {
+	if (view === "graph") {
 		renderGraph();
 		if (!ui.fitted) ui.fitted = fit();
 		applyTransform();
-	} else renderKanban();
+	} else if (view === "kanban") renderKanban();
 	renderDrawer();
 	tick();
 }
@@ -985,10 +1259,10 @@ $("themes").onclick = () => {
 	save();
 	render();
 };
-$("mine").onclick = () => {
-	ui.own = ui.own === "mine" ? "all" : "mine";
-	save();
-	render();
+$("menu").onclick = () => {
+	const open = !document.body.classList.contains("menu-open");
+	document.body.classList.toggle("menu-open", open);
+	$("menu").setAttribute("aria-expanded", String(open));
 };
 $("auto").onclick = async () => {
 	try {
@@ -1004,6 +1278,7 @@ $("fresh").onclick = () =>
 	);
 $("agents").onclick = () => {
 	drawerOpen = !drawerOpen;
+	runFocus = null;
 	renderDrawer();
 };
 $("feed-open").onclick = () => {
@@ -1018,8 +1293,63 @@ $("project").addEventListener("change", (e) => {
 	connect();
 });
 
+// The inbox, its cards and the runs: what a click there does.
+function cardClick(t) {
+	const c = openCard();
+	const d = t.dataset;
+	if (d.card) location.hash = `card/${encodeURIComponent(d.card)}`;
+	else if (d.back !== undefined) location.hash = "inbox";
+	else if (d.option) {
+		chosen = chosen === d.option ? null : d.option;
+		renderInbox();
+	} else if (d.send !== undefined && c && chosen) sendAnswer(c, chosen);
+	else if (d.sendFree !== undefined && c) {
+		const note = $("cv-free")?.value.trim();
+		if (note) sendAnswer(c, "other", note);
+		else $("cv-free")?.focus();
+	} else if (d.stop) {
+		if (stopArmed !== d.stop) {
+			stopArmed = d.stop;
+			return renderDrawer();
+		}
+		stopArmed = null;
+		post(`/api/runs/${encodeURIComponent(d.stop)}/stop`)
+			.then(() => toast(T.runStopped))
+			.catch((err) => toast(T.stopFailed(err.message), true));
+	} else if (d.run || d.runs) {
+		runFocus = d.run || d.runs;
+		scrolledTo = null;
+		drawerOpen = true;
+		// A phone shows one screen: the Agents tab, the card closed.
+		if (phone()) {
+			ui.tab = "agents";
+			location.hash = "agents";
+		}
+		render();
+	} else if (d.tab) {
+		ui.tab = d.tab;
+		if (ui.card) location.hash = d.tab;
+		save();
+		render();
+	} else return false;
+	return true;
+}
+
+document.addEventListener("input", (e) => {
+	if (e.target.id === "cv-free") draft = { card: ui.card, text: e.target.value };
+});
+
 document.addEventListener("click", (e) => {
 	if (e.target.closest("a[href]")) return;
+	const card = e.target.closest(
+		"[data-card],[data-back],[data-option],[data-send],[data-send-free],[data-stop],[data-run],[data-runs],[data-tab]",
+	);
+	// A Stop pressed once is forgotten at the next click elsewhere.
+	if (stopArmed && !card?.dataset.stop) {
+		stopArmed = null;
+		renderDrawer();
+	}
+	if (card && cardClick(card)) return;
 	const t = e.target.closest(
 		"[data-toggle],[data-focus],[data-own],[data-kind],[data-view],[data-close]",
 	);
@@ -1032,7 +1362,11 @@ document.addEventListener("click", (e) => {
 	else if (t.dataset.own) ui.own = t.dataset.own;
 	else if (t.dataset.kind) ui.kind = t.dataset.kind;
 	else if (t.dataset.view) ui.view = t.dataset.view;
-	else if (t.dataset.close !== undefined) drawerOpen = false;
+	else if (t.dataset.close !== undefined) {
+		drawerOpen = false;
+		runFocus = null;
+		if (phone() && ui.tab === "agents") ui.tab = "inbox";
+	}
 	$("collapse").hidden = !ui.exp.size;
 	save();
 	render();
@@ -1056,11 +1390,26 @@ function connect() {
 		$("offline").hidden = true;
 		$("collapse").hidden = !ui.exp.size;
 		render();
+		followCard();
+	});
+	// The inbox holds every project's cards: it comes with every project's stream.
+	es.addEventListener("inbox", (ev) => {
+		INBOX = JSON.parse(ev.data);
+		render();
+		followCard();
 	});
 	es.onerror = () => {
 		$("offline").hidden = false;
 	};
 }
+// The address names the open card (#card/<id>), so a ping's link opens it.
+window.addEventListener("hashchange", () => {
+	readHash();
+	render();
+	followCard();
+});
+PHONE.addEventListener("change", () => render());
+readHash();
 connect();
 setInterval(tick, 1000);
 applyTransform();
