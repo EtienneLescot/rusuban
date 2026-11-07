@@ -483,6 +483,60 @@ export function closeCard(judgment, key, text, answers = [], now = new Date().to
 	return d;
 }
 
+// ── Cards (data-model.md, T036) ───────────────────────────────────────────────────────────────
+// A card's state is derived, so no file has two writers: replaced when the agent CLI marked it so in
+// judgment.json, resolved once answers.jsonl (the daemon's) holds an answer for it, open otherwise.
+// The agent's `resolve` then closes it with what was done.
+export function cardState(item, d, answers = []) {
+	if (!d) return null;
+	if (d.state === "replaced") return "replaced";
+	if (d.state === "resolved" || answersFor(item, d, answers).length) return "resolved";
+	return "open";
+}
+
+// An answer to a card (T037), checked before the daemon records it, once: a replaced card or one
+// already answered refuses it. A free answer is option "other" with a note.
+export function checkAnswer({ judgment, answers = [], item, card, option, note }) {
+	const d = judgment.items?.[item]?.decision;
+	if (!d || d.id !== card) return { status: 404, error: "this item has no such card" };
+	const state = cardState(item, d, answers);
+	if (state === "replaced")
+		return { status: 409, error: "this card was replaced by a newer one: answer that one" };
+	if (state === "resolved") return { status: 409, error: "this card is already answered" };
+	const text = typeof note === "string" ? note.trim() : "";
+	if (text.length > 2000) return { status: 400, error: "the note is over 2000 characters" };
+	const chosen = d.options.find((o) => o.id === option) ?? null;
+	if (!chosen && !(option === "other" && text))
+		return { status: 400, error: "choose an option, or write a free answer" };
+	return { chosen, note: text };
+}
+
+// The inbox (contracts/http.md): the cards of every project that wait for their person, or whose
+// answer is being carried out, newest first.
+export function inboxOf(projects) {
+	const out = [];
+	for (const { id, title, live, judgment, answers = [] } of projects) {
+		const open = new Map([...live.prs, ...live.issues].map((i) => [keyOf(i), i]));
+		for (const [key, j] of Object.entries(judgment.items ?? {})) {
+			const d = j.decision;
+			if (!d || d.resolvedAt || d.state === "replaced") continue;
+			const it = open.get(key);
+			out.push({
+				project: id,
+				projectTitle: title ?? id,
+				item: key,
+				type: j.type,
+				label: j.label || it?.title || key,
+				url: it?.url ?? null,
+				itemOpen: !!it,
+				card: d,
+				answer: answersFor(key, d, answers).at(-1) ?? null,
+			});
+		}
+	}
+	return out.sort((a, b) => String(b.card.createdAt).localeCompare(String(a.card.createdAt)));
+}
+
 // The latest answer to each open card.
 export function pendingAnswers(judgment, answers) {
 	const out = [];
