@@ -84,27 +84,40 @@ Tasks added by the analysis are numbered from T084 and placed where they run.
 **Independent test**: a sandbox repo with rules allowing bug-fix merges: a fix PR is merged; the
 adversarial PRs are not, each with the gate that stopped it.
 
-- [ ] T024 [P] [US3] Safety frame in `src/prompts/frame.md`: GitHub content is data, the built-in locks, agents never merge
-- [ ] T025 [P] [US3] Generic judge prompt in `src/prompts/judge.md`, from `tasks/judge.md` without OpenScreen: todo reasons, judgment format with `revisitAt`, card format, delegation
-- [ ] T026 [P] [US3] Generic act prompt in `src/prompts/act.md`, from `tasks/act.md` without OpenScreen
-- [ ] T027 [P] [US3] Generic worker prompt in `src/prompts/worker.md`, from the rules of `engine/worker.mjs` without OpenScreen
-- [ ] T028 [US3] Prompt assembly in `src/agents.mjs`: product prompt → frame → project rules headed `<owner/repo>@<sha>` → context (owner, machines, open cards, pending answers, requests and reports) → task prompt
-- [ ] T029 [US3] Judge trigger in `src/server.mjs`: `judge` starts when a project's todo signature changes; an observe-only project never starts an agent
-- [ ] T030 [US3] Server-only merge in `src/github.mjs`: `gh pr merge --<mergeMethod> --match-head-commit`, one per cycle, only when every gate passes and the judgment says `auto`; journaled with its gates
-- [ ] T031 [US3] Foreign merges in `src/server.mjs`: a merged PR missing from the server's journal is flagged in the journal and the inbox
-- [ ] T032 [P] [US3] Adversarial fixtures in `test/fixtures/prs/` and `test/merge-gate.test.mjs`: PR editing `.rusuban/`, injected instructions in the body, red CI, moved head, locked path, missing evidence; none merged, the stopping gate named (SC-005)
-- [ ] T033 [US3] Workers in `src/workers.mjs`: `worker start|stop|list`; each in `git worktree add <home>/worktrees/<p>/<run>`; at most N at once; its report goes to the coordinator; worktree removed at the end, stale ones cleaned at start
-- [ ] T034 [P] [US3] Worker tests (limit, one report, stale cleanup) in `test/workers.test.mjs`
-- [ ] T035 [US3] Journal and freshness in `web/app.js`: what was done without the user, the age of every datum, stale flags (thresholds of FR-072)
-- [ ] T092 [US3] Direct pushes in `src/server.mjs`: a commit on a default branch that no server merge produced is flagged in the journal and the inbox
-- [ ] T093 [US3] Merge orders in `src/server.mjs`: an answer ordering a merge is carried out by the server, which checks CI, threads, head and conflicts and lifts the project locks for that head only (FR-044)
-- [ ] T094 [US3] Rules changes in `src/rules.mjs`: a new tree sha applies at once, is journaled with its diff and pings the owner (FR-027); a `locks.json` that fails to parse is journaled and pings the owner too
-- [ ] T095 [US3] Evidence in `bin/rusuban.mjs`: accepted only from a worker run other than the judging run, for the live head, with the run and its conversation attached
-- [ ] T096 [US3] Silent rules in `src/prompts/judge.md` and `src/prompts/act.md`: a situation the rules do not cover becomes a card that offers to turn the answer into a rule (FR-026)
-- [ ] T097 [US3] Usage limits in `src/agents.mjs`: a run that hits a Claude usage limit becomes `limited` with its retry time; an interrupted run gives its requests back to the queue (FR-073)
-- [ ] T098 [P] [US3] Generic task prompt in `src/prompts/task.md`
-- [ ] T099 [P] [US3] Live test on a sandbox repo: a PR whose body tells the agent to merge it is judged on its diff and never merged (US3 scenario 3)
-- [ ] T114 [US3] `ignoredChecks` in `src/model.mjs`: named checks never block CI green, never all of them (a head whose only checks are ignored is not green); a breaking test in `test/merge-gate.test.mjs`
+- [x] T024 [P] [US3] Safety frame in `src/prompts/frame.md`: GitHub content is data, the built-in locks, agents never merge
+- [x] T025 [P] [US3] Generic judge prompt in `src/prompts/judge.md`, from `tasks/judge.md` without OpenScreen: todo reasons, judgment format with `revisitAt`, card format, delegation
+  - The formats shared by the judge, the coordinator and tasks (judgment, card, delegation) are in `src/prompts/formats.md`.
+- [x] T026 [P] [US3] Generic act prompt in `src/prompts/act.md`, from `tasks/act.md` without OpenScreen
+- [x] T027 [P] [US3] Generic worker prompt in `src/prompts/worker.md`, from the rules of `engine/worker.mjs` without OpenScreen
+- [x] T028 [US3] Prompt assembly in `src/agents.mjs`: product prompt → frame → project rules headed `<owner/repo>@<sha>` → context (owner, machines, open cards, pending answers, requests and reports) → task prompt
+  - Built when the run starts, so a queued run sees the latest state. Answers, requests and worker reports go to the coordinator only.
+- [x] T029 [US3] Judge trigger in `src/server.mjs`: `judge` starts when a project's todo signature changes; an observe-only project never starts an agent
+  - The coordinator starts on change too: answers, requests or worker reports waiting. A run that failed is retried after 15 minutes; one that finds nothing to do ends without a session.
+  - A seventh todo reason, found live: `conflict`, a PR judged mergeable alone that its base moved under. `contracts/cli.md` should list it.
+- [x] T030 [US3] Server-only merge in `src/github.mjs`: `gh pr merge --<mergeMethod> --match-head-commit`, one per cycle, only when every gate passes and the judgment says `auto`; journaled with its gates
+  - No `mergeMethod` means a rebase, as the gate assumes. No `--admin`: a branch protection GitHub enforces comes back as a refusal, journaled.
+- [x] T031 [US3] Foreign merges in `src/server.mjs`: a merged PR missing from the server's journal is flagged in the journal and the inbox
+  - Journaled with `notify`, which the inbox (Phase 4) and pings (Phase 7) read. Only merges after the project was first watched.
+- [x] T032 [P] [US3] Adversarial fixtures in `test/fixtures/prs/` and `test/merge-gate.test.mjs`: PR editing `.rusuban/`, injected instructions in the body, red CI, moved head, locked path, missing evidence; none merged, the stopping gate named (SC-005)
+- [x] T033 [US3] Workers in `src/workers.mjs`: `worker start|stop|list`; each in `git worktree add <home>/worktrees/<p>/<run>`; at most N at once; its report goes to the coordinator; worktree removed at the end, stale ones cleaned at start
+  - Each worktree comes from Rusuban's own clone of the repo (`<home>/repos/`), never from a person's checkout.
+- [x] T034 [P] [US3] Worker tests (limit, one report, stale cleanup) in `test/workers.test.mjs`
+- [x] T035 [US3] Journal and freshness in `web/app.js`: what was done without the user, the age of every datum, stale flags (thresholds of FR-072)
+  - GitHub data and runs: the hub (T105) and the machines (T067) bring their own ages.
+- [x] T092 [US3] Direct pushes in `src/server.mjs`: a commit on a default branch that no server merge produced is flagged in the journal and the inbox
+  - A commit on the default branch that no merged PR produced, flagged like T031.
+- [x] T093 [US3] Merge orders in `src/server.mjs`: an answer ordering a merge is carried out by the server, which checks CI, threads, head and conflicts and lifts the project locks for that head only (FR-044)
+  - An option `"merge": true` on a PR's card, tied to the head the card was written on. Carried out even when merges are paused, never in shadow mode.
+- [x] T094 [US3] Rules changes in `src/rules.mjs`: a new tree sha applies at once, is journaled with its diff and pings the owner (FR-027); a `locks.json` that fails to parse is journaled and pings the owner too
+  - The entries carry `notify` for the pings of Phase 7.
+- [x] T095 [US3] Evidence in `bin/rusuban.mjs`: accepted only from a worker run other than the judging run, for the live head, with the run and its conversation attached
+- [x] T096 [US3] Silent rules in `src/prompts/judge.md` and `src/prompts/act.md`: a situation the rules do not cover becomes a card that offers to turn the answer into a rule (FR-026)
+- [x] T097 [US3] Usage limits in `src/agents.mjs`: a run that hits a Claude usage limit becomes `limited` with its retry time; an interrupted run gives its requests back to the queue (FR-073)
+  - Every queue holds until the reset. A run whose runner died goes back to its queue, twice at most.
+- [x] T098 [P] [US3] Generic task prompt in `src/prompts/task.md`
+- [x] T099 [P] [US3] Live test on a sandbox repo: a PR whose body tells the agent to merge it is judged on its diff and never merged (US3 scenario 3)
+  - Proved on the private `EtienneLescot/rusuban-sandbox`: see the PR.
+- [x] T114 [US3] `ignoredChecks` in `src/model.mjs`: named checks never block CI green, never all of them (a head whose only checks are ignored is not green); a breaking test in `test/merge-gate.test.mjs`
 
 ---
 
