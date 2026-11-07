@@ -1,0 +1,114 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import {
+	bodyRefs,
+	checksOf,
+	ciOf,
+	nextDelay,
+	normalizePr,
+	readProject,
+	reviewsOf,
+} from "../src/github.mjs";
+
+const run = (name, workflow, status, conclusion) => ({
+	__typename: "CheckRun",
+	name,
+	status,
+	conclusion,
+	checkSuite: { workflowRun: workflow ? { workflow: { name: workflow } } : null },
+});
+
+test("checks: runs carry their workflow, statuses their context, and skips do not count as CI", () => {
+	const checks = checksOf([
+		run("test", "CI", "COMPLETED", "SUCCESS"),
+		run("lint", "CI", "IN_PROGRESS", null),
+		{ __typename: "StatusContext", context: "CodeRabbit", state: "SUCCESS" },
+	]);
+	assert.deepEqual(
+		checks.map((c) => `${c.workflow}/${c.name}:${c.state}`),
+		["CI/test:success", "CI/lint:pending", "null/CodeRabbit:success"],
+	);
+	assert.equal(ciOf(checksOf([run("x", "CI", "COMPLETED", "SKIPPED")]), []).state, "none");
+	assert.equal(ciOf(checksOf([run("x", "CI", "COMPLETED", "TIMED_OUT")]), []).state, "failure");
+});
+
+test("a fork's workflow awaiting approval wins over a green rollup, and is named", () => {
+	const suites = [
+		{
+			status: "COMPLETED",
+			conclusion: "SUCCESS",
+			workflowRun: { databaseId: 1, workflow: { name: "CI" } },
+		},
+		{
+			status: "COMPLETED",
+			conclusion: "ACTION_REQUIRED",
+			workflowRun: { databaseId: 7, workflow: { name: "Diagnostics" } },
+		},
+	];
+	const ci = ciOf(checksOf([run("test", "CI", "COMPLETED", "SUCCESS")]), suites);
+	assert.deepEqual([ci.state, ci.runId, ci.waiting], ["action_required", 7, ["Diagnostics"]]);
+});
+
+test("only reviews of the head commit count, the latest per reviewer", () => {
+	const nodes = [
+		{ author: { login: "bob" }, state: "CHANGES_REQUESTED", commit: { oid: "old" } },
+		{ author: { login: "ann" }, state: "COMMENTED", commit: { oid: "head" } },
+		{ author: { login: "ann" }, state: "APPROVED", commit: { oid: "head" } },
+	];
+	assert.deepEqual(reviewsOf(nodes, "head"), { ann: "APPROVED" });
+});
+
+test("cited issues come from the description, not from HTML comments", () => {
+	assert.deepEqual(bodyRefs("Fixes #12, refs #13\n<!-- closes #99 -->"), [12, 13]);
+});
+
+test("a PR with unseen files or threads is read the safe way", () => {
+	const pr = normalizePr("o/r", {
+		number: 5,
+		body: "",
+		isDraft: false,
+		changedFiles: 140,
+		headRefOid: "h",
+		author: null,
+		files: { nodes: [{ path: "a.js", additions: 1, deletions: 0 }] },
+		reviewThreads: {
+			totalCount: 103,
+			nodes: Array.from({ length: 100 }, () => ({ isResolved: true })),
+		},
+		reviews: { nodes: [] },
+		closingIssuesReferences: {
+			nodes: [
+				{ number: 4, repository: { nameWithOwner: "fork/r" } },
+				{ number: 3, repository: { nameWithOwner: "o/r" } },
+			],
+		},
+		commits: { nodes: [] },
+	});
+	assert.equal(pr.filesTruncated, true);
+	assert.equal(pr.threadsOpen, 3);
+	assert.deepEqual(pr.closes, [3]);
+	assert.equal(pr.repo, "o/r");
+});
+
+test("polling slows down under 20 % of the rate-limit budget", () => {
+	assert.equal(nextDelay(90, { remaining: 4000, limit: 5000 }), 90_000);
+	assert.equal(nextDelay(90, { remaining: 900, limit: 5000 }), 360_000);
+	assert.equal(nextDelay(90, null), 90_000);
+});
+
+test("a repo that fails keeps its last good state; changedAt moves only on change", async () => {
+	const project = { repos: [{ slug: "o/a" }, { slug: "o/b" }] };
+	const data = { prs: [{ n: 1 }], issues: [], merged: [] };
+	const first = await readProject(project, null, async () => ({
+		...data,
+		rate: { remaining: 10, limit: 5000 },
+	}));
+	const second = await readProject(project, first, async (slug) => {
+		if (slug === "o/b") throw new Error("HTTP 502\ndetails");
+		return data;
+	});
+	assert.equal(second.repos["o/a"].changedAt, first.repos["o/a"].changedAt);
+	assert.deepEqual(second.repos["o/b"].prs, [{ n: 1 }]);
+	assert.equal(second.repos["o/b"].error, "HTTP 502");
+	assert.equal(first.rate.remaining, 10);
+});
