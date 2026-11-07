@@ -27,7 +27,7 @@ the only writers of the judgment file; each validates and locks before writing.
 
 | Command | Effect |
 |---|---|
-| `todo` | JSON list of what the agents must do, each with a reason, all computed by the server: `unjudged` (open item, no judgment); `new-commit` (PR head differs from the judged head); `ci-approval` (a fork's workflow waits for approval); `missing-card` (owned by a person, no open card); `revisit-due` (its `revisitAt` has passed: the agent sets it from the rules, no delay is built in; OpenScreen waits 2 days for a third party); `lock-blocked` (judged `auto` but a project lock or the rules-folder lock stops it: the agent writes a card). |
+| `todo` | JSON list of what the agents must do, each with a reason, all computed by the server: `unjudged` (open item, no judgment); `new-commit` (PR head differs from the judged head); `ci-approval` (a fork's workflow waits for approval); `missing-card` (owned by a person, no open card); `revisit-due` (its `revisitAt` has passed: the agent sets it from the rules, no delay is built in; OpenScreen waits 2 days for a third party); `lock-blocked` (judged `auto` but a project lock or the rules-folder lock stops it: the agent writes a card); `conflict` (judged `auto` on its head, but its base moved and it now conflicts, or cannot be rebased for a rebase merge: a worker rebases it). |
 | `show <item>` | Live state and judgment of one item. |
 | `judge <file.json>` | Writes judgments. Refuses an incomplete one, or a PR judged on a head that is not the live head. |
 | `resolve <item> <text>` | Closes a card as replaced, with the reason. |
