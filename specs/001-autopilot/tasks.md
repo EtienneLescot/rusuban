@@ -98,12 +98,13 @@ adversarial PRs are not, each with the gate that stopped it.
 - [ ] T035 [US3] Journal and freshness in `web/app.js`: what was done without the user, the age of every datum, stale flags (thresholds of FR-072)
 - [ ] T092 [US3] Direct pushes in `src/server.mjs`: a commit on a default branch that no server merge produced is flagged in the journal and the inbox
 - [ ] T093 [US3] Merge orders in `src/server.mjs`: an answer ordering a merge is carried out by the server, which checks CI, threads, head and conflicts and lifts the project locks for that head only (FR-044)
-- [ ] T094 [US3] Rules changes in `src/rules.mjs`: a new tree sha applies at once, is journaled with its diff and pings the owner (FR-027)
+- [ ] T094 [US3] Rules changes in `src/rules.mjs`: a new tree sha applies at once, is journaled with its diff and pings the owner (FR-027); a `locks.json` that fails to parse is journaled and pings the owner too
 - [ ] T095 [US3] Evidence in `bin/rusuban.mjs`: accepted only from a worker run other than the judging run, for the live head, with the run and its conversation attached
 - [ ] T096 [US3] Silent rules in `src/prompts/judge.md` and `src/prompts/act.md`: a situation the rules do not cover becomes a card that offers to turn the answer into a rule (FR-026)
 - [ ] T097 [US3] Usage limits in `src/agents.mjs`: a run that hits a Claude usage limit becomes `limited` with its retry time; an interrupted run gives its requests back to the queue (FR-073)
 - [ ] T098 [P] [US3] Generic task prompt in `src/prompts/task.md`
 - [ ] T099 [P] [US3] Live test on a sandbox repo: a PR whose body tells the agent to merge it is judged on its diff and never merged (US3 scenario 3)
+- [ ] T114 [US3] `ignoredChecks` in `src/model.mjs`: named checks never block CI green, never all of them (a head whose only checks are ignored is not green); a breaking test in `test/merge-gate.test.mjs`
 
 ---
 
@@ -200,7 +201,7 @@ an answer from the phone appears in its transcript.
 **Independent test**: two agents need macOS; the second waits for the first's lease; killing the first
 frees the Mac at expiry.
 
-- [ ] T066 [US5] Registry in `src/machines.mjs`: `{ name, os, ssh | null, caps[], checkout, owner?, maxLeaseMin }`; `machine add` checks SSH (`BatchMode`, 5 s timeout), git and the checkout folder
+- [ ] T066 [US5] Registry in `src/machines.mjs`: `{ name, os, ssh | null, caps[], workspace, agentUser, owner?, maxLeaseMin }`; `machine add` checks SSH (`BatchMode`, 5 s timeout), the `rusuban` account, git and the workspace, and creates the bare mirror
 - [ ] T067 [US5] Probe every 2 min, plus `tailscale status --json` when present; state pushed to the page
 - [ ] T068 [US5] Leases in `src/machines.mjs`: exclusive file (`wx`) `{ machine, run, pid, since, expires, reason }`, renewed while the run lives, freed when the holder dies or expires, FIFO queue, capability match; agent commands `lease` and `release`
 - [ ] T069 [P] [US5] Lease tests (two waiters, dead holder, expiry, capability match) in `test/machines.test.mjs` (SC-006)
