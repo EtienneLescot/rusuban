@@ -334,3 +334,20 @@ test("a state file the model cannot read costs the page an update, never the dae
 		srv.ctx.clients.delete(client);
 	}
 });
+
+test("what the agents did may be a list of steps, each with the link that shows it", () => {
+	const steps = [
+		{ text: "Rebased it on main.", href: "run:worker-1", label: "Conversation" },
+		{ text: "Asked the author for a Linux check.", href: "https://github.com/o/r/pull/1#c-1" },
+		"Read the whole thread.",
+	];
+	const judgment = { items: {} };
+	assert.deepEqual(toAlice(judgment, { done: steps }).done, steps);
+	for (const done of [[], [{ href: "run:x" }], [{ text: "x", href: "javascript:alert(1)" }]])
+		assert.throws(() => toAlice({ items: {} }, { done }), /decision.done/);
+	const [entry] = inboxOf([{ id: "p", live, judgment }]);
+	assert.deepEqual(
+		[entry.kind, entry.author, entry.judgedBy, entry.evidence],
+		["feature", null, null, null],
+	);
+});

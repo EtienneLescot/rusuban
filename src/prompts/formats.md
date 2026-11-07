@@ -39,7 +39,11 @@ Required when the owner is a person, and only then. Add it to the judgment:
 
 A card reads in three voices, with no doubt about who speaks:
 
-- **`done`**: you, in the past tense: what you did or checked (tests, measurements, reading).
+- **`done`**: you, in the past tense: what you did or checked (tests, measurements, reading). Better
+  as a list of steps, each with the link that shows it: `[{ "text": "Rebased it on main.", "href":
+  "run:<run id>", "label": "Conversation" }, { "text": "Asked the author for a Linux check.", "href":
+  "<comment URL>", "label": "Comment" }]`. `run:<id>` points to a run's conversation: yours is in the
+  context, and so are the workers' whose reports you integrate.
 - **`q`**: the question put to the person.
 - **`label`**: what the person tells you, as an order ("Merge it", "Ask the author to rebase", "Close
   as duplicate"). Never a statement they would make, never a question.

@@ -203,7 +203,8 @@ function contextOf({ p, kind, run, config, pending }) {
 			"",
 			...list(
 				pending.reports,
-				(r) => `- Worker \`${r.worker}\` on ${r.item} ended ${r.state}: ${r.text}`,
+				(r) =>
+					`- Worker \`${r.worker}\` (run \`${r.run}\`) on ${r.item} ended ${r.state}: ${r.text}`,
 			),
 		);
 	return out.join("\n");
