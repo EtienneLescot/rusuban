@@ -128,11 +128,14 @@ adversarial PRs are not, each with the gate that stopped it.
 starts the coordinator, which applies the answer.
 
 - [ ] T100 [US2] Mockups of the inbox and the cards, desktop and phone, validated by Etienne before T038
-- [ ] T036 [US2] Cards in `src/model.mjs`: `{ id, to, urgency: "now" | "digest", q, ctx, rec, why, options[{ id, label, effect, message? }], createdAt, resolvedAt, outcome }`, transitions `open → resolved | replaced`
-- [ ] T037 [US2] `/api/answer` and `/api/ask` in `src/server.mjs`: a replaced card refuses late answers; an answer starts the coordinator at once
+- [x] T036 [US2] Cards in `src/model.mjs`: `{ id, to, urgency: "now" | "digest", q, ctx, rec, why, options[{ id, label, effect, message? }], createdAt, resolvedAt, outcome }`, transitions `open → resolved | replaced`
+  - A card's state is derived (`cardState`): replaced when the agent CLI says so, resolved once `answers.jsonl` holds its answer. A card belongs to one head (Phase 3).
+- [x] T037 [US2] `/api/answer` and `/api/ask` in `src/server.mjs`: a replaced card refuses late answers; an answer starts the coordinator at once
+  - A card takes one answer: a second one is refused like a late one. An answer that orders a merge also starts a GitHub read, so the server carries it out at once.
 - [ ] T038 [US2] Inbox in `web/app.js`: open cards of every project, newest first, answer by option or free note
-- [ ] T039 [P] [US2] Card tests (replaced card refused, answer recorded once) in `test/cards.test.mjs`
+- [x] T039 [P] [US2] Card tests (replaced card refused, answer recorded once) in `test/cards.test.mjs`
 - [ ] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
+  - Back end done: `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The view waits for the mockup (T100).
 
 ---
 
@@ -169,6 +172,7 @@ show in the journal.
 - [ ] T049 Configure Etienne's instance: the `openscreen` project; the `publications` and `n8n-series` tasks moved to `~/.rusuban/tasks/`
 - [ ] T050 Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge), judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
 - [ ] T051 Switch: the project goes `live`; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
+  - Decide first: the server merges without `--admin` (T030), so a branch protection that requires an approval comes back as a journaled refusal. The pilot merged with `--admin`: relax that protection on `getopenscreen/openscreen`, or add an opt-in.
 - [ ] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)
 
 ---
