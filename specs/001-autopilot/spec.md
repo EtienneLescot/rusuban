@@ -54,6 +54,27 @@ this for one repo with OpenScreen-specific code and prompts.
   dashboard.
 - Q: Several maintainers in v1? → A: Later. v1 is single-user, every decision already names a login.
 
+### Session 2026-11-07 (analysis, see [analysis.md](analysis.md))
+
+- Q: The rules say nothing about a situation? → A: The agent asks the owner on a card; the answer may
+  become a rule.
+- Q: Mockups? → A: Mockups of each new view, validated by Etienne, before the phase that builds it.
+- Q: Where do leases and run folders live on a test machine? → A: On the machine itself: an atomic
+  lock, and a workspace with a bare mirror and one worktree per run (reflection P1, P2).
+- Q: A runner on each machine for graphical tests? → A: Right after v1 (reflection P4).
+- Q: A rules change on the default branch? → A: It applies at once. The repo's rules say what may be
+  done to the repo, and delaying them would keep stale permissions alive. The change is journaled with
+  its diff and the owner is told; the host stays protected by the instance's permission profile, which
+  no rule can widen.
+- Q: Who lifts an evidence lock? → A: The agent that measured: a worker other than the run that judged,
+  with a link to its conversation, journaled.
+- Q: Answering a conversation opened in Claude Desktop or a terminal? → A: Through a linked fork, so a
+  session Desktop may hold open is never altered. Rusuban's own sessions resume in place.
+- Q: A project without rules? → A: Nothing autonomous. The owner's explicit requests, answers and tasks
+  still start agents.
+- Q: The OpenScreen pilot's history? → A: Not imported; the old pilot is archived read-only (default
+  taken during the analysis, open to change).
+
 ## Positioning
 
 | | Dashboard | Text rules per item | Own sessions gathered | Test machine fleet | Hosting | Windows |
@@ -174,7 +195,8 @@ the first's lease to end.
 A task is a text file: a title, a schedule, a working folder, and a prompt. It runs on schedule or on a
 click, and reports in the journal like the rest.
 
-**Independent Test**: add a daily task file, see it run at its time, open its conversation from the journal.
+**Independent Test**: add a daily task file, see it run at its time, and find its summary and log in the
+journal.
 
 **Acceptance Scenarios**:
 
@@ -245,24 +267,36 @@ rules route each decision to the right person.
   from its default branch only. They say everything about behavior: what agents do alone, how far
   (autonomy), who is pinged for what, how messages are written. The product has no default rules.
 - **FR-021**: Built-in hard locks MUST be enforced by the server without the model, in every project:
-  CI green on the exact head, no open review thread, head unchanged since judgment, the rules folder
-  itself never changed without a human, never a direct push to the default branch, a dashboard switch
-  that pauses all merges.
+  CI green on the exact head, no open review thread, head unchanged since judgment, no conflict
+  (rebaseable for a rebase merge), the rules folder itself never changed without a person, never a
+  direct push to the default branch, a switch that pauses all merges. **CI green** means: at least one
+  check on the head; every check run and status on it is `success`, `neutral` or `skipped`; none is
+  pending, failed, cancelled, timed out or waiting for approval; every name in `requiredChecks` is
+  present and `success`.
 - **FR-022**: A project MAY add hard locks in a small structured file next to its rules (locked paths,
-  size limits). Text rules MUST never lift a hard lock; a judgment that would break one becomes a card.
+  size limits, required checks, evidence). Text rules MUST never lift a hard lock; a judgment that would
+  break one becomes a card, and a person's merge order on that card is carried out under FR-044.
 - **FR-023**: Content from GitHub (issues, PRs, comments, diffs) MUST reach the agents as data, never as
   instructions.
-- **FR-024**: Without a rules folder, Rusuban MUST only observe. The docs MUST ship example rules,
-  including the OpenScreen ones.
+- **FR-024**: Without a rules folder, Rusuban MUST do nothing autonomous: no judgment on change, no
+  merge, nothing written on GitHub on its own. The owner's explicit requests, answers and tasks still
+  start agents. The docs MUST ship example rules, including the OpenScreen ones.
 - **FR-025**: What agents may run on a host (tool allowlist or full bypass) MUST belong to the instance
   owner, set at init, never to the repo's rules: whoever can merge in the repo must not gain a shell on
   a maintainer's machine.
+- **FR-026**: When the rules say nothing about a situation, the agent MUST ask the owner on a card
+  rather than act; the card offers to turn the answer into a rule.
+- **FR-027**: A rules change on the default branch MUST apply at the next read; it is journaled with its
+  diff and the owner is pinged. No rule can widen the instance's permission profile.
+- **FR-028**: A project MUST have a mode: `live`, or `shadow`, where agents judge and propose but every
+  GitHub write is denied and nothing is merged (used for the switch from the OpenScreen pilot).
 
 **Agents**
 
-- **FR-030**: Agents MUST be headless Claude Code sessions, with an explicit permission profile per task.
-- **FR-031**: A short coordinator MUST apply decisions and delegate long work to workers, each in its own
-  git worktree, with a configurable limit on concurrent workers.
+- **FR-030**: Every run (judge, act, worker, task, reply) MUST be a headless Claude Code session started
+  by the same launcher, with the instance's permission profile and the built-in deny rules.
+- **FR-031**: A short coordinator run (`act`) MUST apply decisions and delegate long work to workers,
+  each in its own git worktree, at most `limits.maxWorkers` at once (instance config).
 - **FR-032**: Every run MUST record its session id, folder, linked items, machines held, status, live
   step and final summary.
 
@@ -274,35 +308,53 @@ rules route each decision to the right person.
   e-mail; each ping links to its card. In v1 channels are outbound only: answers happen in the dashboard.
 - **FR-042**: Rules MUST decide who is pinged and how urgently; the person's settings decide where.
 - **FR-043**: Answering a card MUST start the coordinator at once.
+- **FR-044**: An answer that orders a merge MUST be carried out by the server, never by an agent. The
+  server still checks CI, threads, head and conflicts; the answer lifts the project's own locks (paths,
+  size, evidence) for that head only.
+- **FR-045**: A ping MUST link straight to its card, on the tailnet address when remote access is on.
+  In v1 every card goes to the owner; a card meant for another login says so.
 
 **Conversations hub**
 
 - **FR-050**: The hub MUST index every Claude Code session whose folder belongs to a project (repo
   checkouts and their worktrees), whatever started it, within one minute.
-- **FR-051**: It MUST link sessions to items by pilot metadata, branch name and cited numbers.
+- **FR-051**: It MUST link sessions to items by Rusuban's run metadata, the PR links Claude Code records,
+  branch names (a PR's head ref, a number in the name) and cited numbers.
 - **FR-052**: The user MUST be able to read a full transcript in the dashboard, on a phone too.
-- **FR-053**: The user MUST be able to answer a session from the dashboard; a session live elsewhere is
-  answered through a fork.
+- **FR-053**: The user MUST be able to answer a session from the dashboard. A session Rusuban started
+  resumes in place unless its run is alive; any other session (Desktop, terminal) is answered through a
+  fork listed under the original.
 - **FR-054**: An "open in terminal" action MUST resume any session on the host.
+- **FR-055**: The hub MUST rescan every 30 seconds and show the age of its index.
 
 **Machines**
 
 - **FR-060**: A registry MUST describe each machine: OS, access (SSH alias or local), capabilities,
-  checkout folder, and whether it is a person's desktop.
+  workspace folder, and whether it is a person's desktop.
 - **FR-061**: The server MUST probe machines and show online, offline, free or leased, and by whom.
-- **FR-062**: Agents MUST take an exclusive, expiring lease before using a machine, and release it after.
-- **FR-063**: A person's desktop MUST be leased only after that person accepts a card.
-- **FR-064**: An enrollment command MUST check SSH, prerequisites and the checkout, and add the machine.
+- **FR-062**: Agents MUST take an exclusive lease, stored on the machine itself and capped at
+  `maxLeaseMin`, before using a machine, and release it after. Each run works in its own worktree of
+  the machine's bare mirror, never in a person's checkout.
+- **FR-063**: A person's desktop MUST be leased only after that person accepts a card. Its alias is
+  denied to every run that does not hold its lease.
+- **FR-064**: An enrollment command and a `doctor` command MUST check SSH, the agent account,
+  prerequisites and the workspace, and add or recheck the machine.
 
 **Tasks, journal, freshness**
 
 - **FR-070**: Recurring tasks MUST be text files with a schedule, a lock group, a folder and a prompt.
 - **FR-071**: The journal MUST record everything done without the user, with links.
-- **FR-072**: The age of every piece of data MUST be visible; stale data is flagged.
+- **FR-072**: The age of every piece of data MUST be visible. It is stale past three refresh periods for
+  GitHub, three minutes for the hub, two probes for machines, and flagged as such.
+- **FR-073**: A run that hits a Claude usage limit MUST wait with the time it can resume, shown in the
+  dashboard; an interrupted run gives its requests back to the queue.
+- **FR-074**: The instance config and state files MUST carry a version; an update of the package
+  migrates them on load.
 
 **Team (P3, after v1)**
 
-- **FR-080**: Every owner and decision MUST name a GitHub login, even with one user (v1).
+- **FR-080**: Every person named as an owner or a card recipient MUST be a GitHub login, even with one
+  user (v1). `agent` and `third` are the only owners that are not people.
 - **FR-081** (after v1): An instance MUST claim an item on GitHub before working on it and skip items
   claimed by another instance.
 
@@ -345,11 +397,10 @@ rules route each decision to the right person.
 - Users run agents on their own Claude plan or API key, within its usage limits.
 - GitHub is the only forge; `gh` is the GitHub client.
 - Remote access relies on Tailscale; no account system in v1.
+- The OpenScreen pilot's history (judgments, journal) is not imported; it stays archived read-only.
 
 ## Next steps
 
-1. Choose the name (npm and GitHub check) and the repo owner.
-2. Technical plan (`/speckit-plan`): what moves out of `.claude/pilot`, the config and rules layout,
-   the hub's transcript parser, the machine registry, the channel plugins.
-3. The OpenScreen project becomes the first user: its rules move to its repo, its machines to the
-   registry, its tasks to text files (SC-002).
+Done: the name ([naming.md](naming.md)), the plan, the tasks, the analysis ([analysis.md](analysis.md))
+and the reflection on machines and people ([reflection-team-and-machines.md](reflection-team-and-machines.md)).
+Next: Phase 2 and its amendments, then mockups before each interface phase, then the OpenScreen switch.

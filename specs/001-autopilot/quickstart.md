@@ -33,8 +33,11 @@ npx rusuban init
 
 1. Write OpenScreen's rules and locks from `tasks/judge.md`, `tasks/act.md` and the constitution, and
    propose them to `getopenscreen/openscreen` as `.rusuban/` (a PR Etienne merges).
-2. Register `mac`, `vivobook`, `sarae` and Etienne's desktop (`--owner EtienneLescot`); move the
-   `publications` and `n8n-series` tasks to the instance.
-3. Shadow week: the new pilot observes; its judgments are compared with the old pilot's.
-4. Switch: the new service replaces the `OpenScreenDashboard` and `OpenScreenTasks` Windows tasks, the
-   shortcuts are repointed, and `.claude/pilot` is archived.
+2. Move the `publications` and `n8n-series` tasks to the instance. OpenScreen's rules describe its
+   machines as text, as today; the registry (`mac`, `vivobook`, `sarae`, Etienne's desktop with
+   `--owner EtienneLescot`) comes with Phase 9.
+3. Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge); its
+   judgments are compared daily with the old pilot's.
+4. Switch: the project goes `live`; the `OpenScreenDashboard` Windows task is repointed to
+   `rusuban start`, `OpenScreenTasks` is removed (the daemon schedules tasks), the shortcuts are
+   repointed, and `.claude/pilot` is archived read-only.

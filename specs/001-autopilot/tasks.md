@@ -10,7 +10,7 @@ description: "Task list for the public project autopilot"
 **Tests**: included where the spec measures a criterion (SC-002, SC-005, SC-006) and for every pure
 module, as in the OpenScreen pilot (`node --test`).
 
-**Paths**: root of the new repository `EtienneLescot/rusuban`; `rusuban` is replaced once chosen.
+**Paths**: root of the repository `EtienneLescot/rusuban`.
 
 **Order**: the stories are delivered in the order decided on 2026-11-07, parity first, not strictly
 by priority (see Implementation Strategy).
@@ -57,6 +57,21 @@ by priority (see Implementation Strategy).
 
 ---
 
+## Phase 2b: Foundation amendments (analysis of 2026-11-07, see analysis.md)
+
+Tasks added by the analysis are numbered from T084 and placed where they run.
+
+- [ ] T084 Config in `src/home.mjs`: `"version": 1` checked on load, `limits { maxWorkers, maxRunMinutes }`, `owner.tailscaleLogin`, project `mode: "live" | "shadow"`, machine `workspace`
+- [ ] T085 Split the journal in `src/home.mjs`: `journal.jsonl` (daemon) and `agent-log.jsonl` (agent CLI, under the judgment lock), shown as one
+- [ ] T086 Merge switch in `src/server.mjs`: `automerge.json` written by the daemon only, `POST /api/automerge`, the switch in the page header
+- [ ] T087 CI-green and conflict gates in `src/model.mjs` exactly as FR-021 defines them: no check is not green; pending, failed, cancelled, timed out or waiting checks block; every `requiredChecks` name must succeed; rebaseable for a rebase merge
+- [ ] T088 Todo reasons in `src/model.mjs` as `contracts/cli.md` defines them, `lock-blocked` included
+- [ ] T089 Host check in `src/server.mjs`: `Host` must be loopback or the tailnet name; on the tailnet name, `Tailscale-User-Login` must equal `owner.tailscaleLogin`; GET requests included
+- [ ] T090 Every run through the launcher of T016 (workers, tasks, replies included); shadow projects add deny rules for every GitHub write
+- [ ] T091 [P] One breaking test per lock in `test/merge-gate.test.mjs` and `test/server.test.mjs`: open thread, switch paused, size, conflict, missing required check, no check at all, wrong `Host`, wrong Tailscale login
+
+---
+
 ## Phase 3: User Story 3 - The project moves on its own (P1) 🎯 MVP
 
 **Goal**: triage, fixes and merges under the project's text rules, inside the hard locks.
@@ -74,7 +89,15 @@ adversarial PRs are not, each with the gate that stopped it.
 - [ ] T032 [P] [US3] Adversarial fixtures in `test/fixtures/prs/` and `test/merge-gate.test.mjs`: PR editing `.rusuban/`, injected instructions in the body, red CI, moved head, locked path, missing evidence; none merged, the stopping gate named (SC-005)
 - [ ] T033 [US3] Workers in `src/workers.mjs`: `worker start|stop|list`; each in `git worktree add <home>/worktrees/<p>/<run>`; at most N at once; its report goes to the coordinator; worktree removed at the end, stale ones cleaned at start
 - [ ] T034 [P] [US3] Worker tests (limit, one report, stale cleanup) in `test/workers.test.mjs`
-- [ ] T035 [US3] Journal and freshness in `web/app.js`: what was done without the user, the age of every datum, stale flags
+- [ ] T035 [US3] Journal and freshness in `web/app.js`: what was done without the user, the age of every datum, stale flags (thresholds of FR-072)
+- [ ] T092 [US3] Direct pushes in `src/server.mjs`: a commit on a default branch that no server merge produced is flagged in the journal and the inbox
+- [ ] T093 [US3] Merge orders in `src/server.mjs`: an answer ordering a merge is carried out by the server, which checks CI, threads, head and conflicts and lifts the project locks for that head only (FR-044)
+- [ ] T094 [US3] Rules changes in `src/rules.mjs`: a new tree sha applies at once, is journaled with its diff and pings the owner (FR-027)
+- [ ] T095 [US3] Evidence in `bin/rusuban.mjs`: accepted only from a worker run other than the judging run, for the live head, with the run and its conversation attached
+- [ ] T096 [US3] Silent rules in `src/prompts/judge.md` and `src/prompts/act.md`: a situation the rules do not cover becomes a card that offers to turn the answer into a rule (FR-026)
+- [ ] T097 [US3] Usage limits in `src/agents.mjs`: a run that hits a Claude usage limit becomes `limited` with its retry time; an interrupted run gives its requests back to the queue (FR-073)
+- [ ] T098 [P] [US3] Generic task prompt in `src/prompts/task.md`
+- [ ] T099 [P] [US3] Live test on a sandbox repo: a PR whose body tells the agent to merge it is judged on its diff and never merged (US3 scenario 3)
 
 ---
 
@@ -84,23 +107,27 @@ adversarial PRs are not, each with the gate that stopped it.
 **Independent test**: a rule routes features to the owner; a feature PR produces a card; answering it
 starts the coordinator, which applies the answer.
 
+- [ ] T100 [US2] Mockups of the inbox and the cards, desktop and phone, validated by Etienne before T038
 - [ ] T036 [US2] Cards in `src/model.mjs`: `{ id, to, urgency: "now" | "digest", q, ctx, rec, why, options[{ id, label, effect, message? }], createdAt, resolvedAt, outcome }`, transitions `open → resolved | replaced`
 - [ ] T037 [US2] `/api/answer` and `/api/ask` in `src/server.mjs`: a replaced card refuses late answers; an answer starts the coordinator at once
 - [ ] T038 [US2] Inbox in `web/app.js`: open cards of every project, newest first, answer by option or free note
 - [ ] T039 [P] [US2] Card tests (replaced card refused, answer recorded once) in `test/cards.test.mjs`
+- [ ] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
 
 ---
 
 ## Phase 5: User Story 6 - Recurring tasks written as text (P2)
 
 **Goal**: text-defined jobs on a schedule or a click.
-**Independent test**: a daily task runs at its time, once after a skipped slot, and its conversation opens
-from the journal.
+**Independent test**: a daily task runs at its time, once after a skipped slot, and its summary and log
+show in the journal.
 
 - [ ] T040 [US6] Task catalog in `src/tasks.mjs`: `tasks/<id>.md` with front matter `title`, `project`, `schedule` (`daily HH:MM,…`), `lock`, `cwd`, then the prompt (port of `engine/tasks.mjs`)
 - [ ] T041 [US6] Scheduler inside the daemon in `src/server.mjs`: a missed slot runs once (`lastSlot`), lock groups run one after the other
 - [ ] T042 [P] [US6] Scheduler tests (missed slot, shared lock) in `test/tasks.test.mjs`
+- [ ] T102 [US6] Mockup of the tasks view, validated by Etienne before T043
 - [ ] T043 [US6] `/api/tasks` and `/api/tasks/<id>/run` in `src/server.mjs`, tasks view in `web/app.js`
+- [ ] T103 [US6] `task list|run` in `bin/rusuban.mjs`
 
 ---
 
@@ -120,8 +147,8 @@ from the journal.
 - [ ] T047 Write OpenScreen's rules from `.claude/pilot/tasks/judge.md`, `act.md` and its constitution into `examples/rules/openscreen/rules/*.md` and `locks.json`
 - [ ] T048 Propose them to `getopenscreen/openscreen` as `.rusuban/` in a PR, which Etienne merges
 - [ ] T049 Configure Etienne's instance: the `openscreen` project; the `publications` and `n8n-series` tasks moved to `~/.rusuban/tasks/`
-- [ ] T050 Shadow week: merges paused, judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
-- [ ] T051 Switch: the service replaces the `OpenScreenDashboard` and `OpenScreenTasks` Windows tasks, shortcuts repointed, `.claude/pilot` archived
+- [ ] T050 Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge), judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
+- [ ] T051 Switch: the project goes `live`; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
 - [ ] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)
 
 ---
@@ -132,15 +159,18 @@ from the journal.
 **Independent test**: a Desktop session about PR #N in a project worktree shows under #N within a minute;
 an answer from the phone appears in its transcript.
 
+- [ ] T104 [US4] Mockups of the conversations list and reader, desktop and phone, validated by Etienne before T061
 - [ ] T053 [P] [US4] Scrubbed transcript fixtures (Desktop, CLI, `sdk-cli`, with `custom-title`, `pr-link`, `relocated`, a corrupt line) in `test/fixtures/transcripts/`
 - [ ] T054 [US4] Discovery in `src/hub.mjs`: scan `~/.claude/projects/*/`; keep sessions whose `cwd` or `relocatedCwd` is inside a project folder (checkouts, their worktrees, extra folders); membership by `cwd`, never by folder slug
 - [ ] T055 [US4] Incremental parser in `src/hub.mjs`: byte offset per file in `hub/index.json`; title (`custom-title`, `agent-name`, first user text), origin from `entrypoint`, `firstAt`, `lastAt`, `branch`, `prs[]` from `pr-link`, cited `#N` and URLs; unknown line types skipped, parse errors recorded
 - [ ] T056 [US4] Links in `src/hub.mjs`, in this order: run metadata, `pr-link`, `gitBranch` equal to a PR head ref, cited numbers
 - [ ] T057 [P] [US4] Parser and link tests in `test/hub.test.mjs`: at least 90 % linked on the fixtures, plain list on an unknown format
 - [ ] T058 [US4] `/api/conversations` (filters) and `/api/conversations/<id>?before=` (a page: user text, assistant text, tool calls with a short input, results cut to 2 KB) in `src/server.mjs`
-- [ ] T059 [US4] Reply in `src/hub.mjs`: `claude -p <text> --resume <id>` in its `cwd`, as a `reply` run; `--fork-session` when the file changed in the last 120 s; `/api/conversations/<id>/reply` answers `{ run, forked }`
+- [ ] T059 [US4] Reply in `src/hub.mjs`, through the launcher of T016: a session Rusuban started resumes in place (`--resume <id>`) unless its run is alive; any other session is answered with `--fork-session`, recorded as `forkOf` and listed under the original; `/api/conversations/<id>/reply` answers `{ run, forked }`
 - [ ] T060 [US4] `/api/conversations/<id>/terminal`, loopback only: opens the session in a terminal on the host (Windows Terminal, Terminal.app, `$TERMINAL`)
+- [ ] T105 [US4] Hub loop in `src/server.mjs`: rescan every 30 s and show the index age (FR-055); a number in a branch name links to its issue
 - [ ] T061 [US4] Conversations view in `web/app.js`: list by project and item, reader, answer box, phone layout; each item lists its conversations
+- [ ] T106 [US4] Live proof of M2: a Desktop session on a real item shows under it within a minute, and an answer from the phone lands in its fork
 
 ---
 
@@ -153,6 +183,8 @@ an answer from the phone appears in its transcript.
 - [ ] T063 [P] [US2] One payload test per channel (card in, payload with the card link out) in `test/pings.test.mjs`
 - [ ] T064 [US2] Dispatch in `src/pings.mjs`: a new card for the owner goes to the channels of its urgency; digest at `digestAt`; quiet hours; a failed send retried, then journaled
 - [ ] T065 [US2] `channel add|test|list` in `bin/rusuban.mjs`; secrets only in `config.json` (mode 600)
+- [ ] T107 [US2] Ping links straight to the card (`/#card/<id>`), on the tailnet address when remote access is on; in v1 every card goes to the owner (FR-045)
+- [ ] T108 [US2] Live proof of M3: a real card pings a phone and is answered in three taps (SC-004)
 
 ---
 
@@ -168,7 +200,11 @@ frees the Mac at expiry.
 - [ ] T069 [P] [US5] Lease tests (two waiters, dead holder, expiry, capability match) in `test/machines.test.mjs` (SC-006)
 - [ ] T070 [US5] A person's desktop (`owner` set): a lease request opens a card to that person and is granted only on acceptance
 - [ ] T071 [US5] `/api/machines` and `/api/machines/<machine>/release` in `src/server.mjs`, machines view in `web/app.js`
-- [ ] T072 [US5] Machines and their live state in every prompt's context, in `src/agents.mjs`
+- [ ] T072 [US5] Live machine state in the prompt context of T028, in `src/agents.mjs` (one copy, not a second one)
+- [ ] T109 [US5] `machine list|probe|doctor` in `bin/rusuban.mjs`; setup scripts per OS (OpenSSH server, `rusuban` account, the host's key) in `docs/machines/`
+- [ ] T110 [US5] Desktop guard: a person's desktop alias is denied to every run that does not hold its lease (FR-063)
+- [ ] T111 [US5] Mockup of the machines view, validated by Etienne before T071
+- [ ] T112 [US5] Live proof of M4: two runs need macOS on the real Mac; the second waits; killing the first frees the Mac at expiry
 
 ---
 
@@ -178,12 +214,13 @@ frees the Mac at expiry.
 **Independent test**: on clean Windows, macOS and Linux machines with `gh` and `claude` logged in, the
 dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 
-- [ ] T073 [US1] `init` in `bin/rusuban.mjs`: checks the `gh` and `claude` logins, owner login from `gh`, asks the host permission mode (no default), adds a first project, installs the service, prints and opens the URL
+- [ ] T073 [US1] `init` in `bin/rusuban.mjs`: checks the `gh` and `claude` logins, owner login from `gh`, asks the host permission mode and whether to arm automatic merges (no default for either), writes `limits` explicitly, adds a first project, installs the service, prints and opens the URL
 - [ ] T074 [P] [US1] Service installers in `src/service.mjs`: Task Scheduler at logon with restart on failure (Windows), launchd agent with `KeepAlive` (macOS), `systemd --user` unit with `Restart=on-failure` (Linux); `service install|uninstall`
 - [ ] T075 [P] [US1] `start`, `open`, `status`, and a desktop or menu shortcut per OS, in `bin/rusuban.mjs` and `src/service.mjs`
-- [ ] T076 [US1] `remote enable|disable`: `tailscale serve --bg --https=443 http://127.0.0.1:<port>`; `status` shows the tailnet URL
+- [ ] T076 [US1] `remote enable|disable`: `tailscale serve --bg --https=443 http://127.0.0.1:<port>`; `status` shows the tailnet URL; stores `owner.tailscaleLogin` from `tailscale status --json`
 - [ ] T077 [US1] Observe-only page in `web/app.js`: without rules, items and conversations show, with how to add rules and links to `examples/rules/`
 - [ ] T078 [US1] Timed clean-machine install on the three OSes (SC-001)
+- [ ] T113 [US1] Updates: `status` compares the installed version with npm; config and state files carry a version, migrated on load (FR-074)
 
 ---
 
@@ -193,17 +230,19 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 - [ ] T080 [P] Generic rule examples in `examples/rules/` next to OpenScreen's
 - [ ] T081 [P] Playwright tests in `test/e2e/`: answer a card, answer a conversation, release a machine
 - [ ] T082 Run every check of quickstart.md (SC-001 to SC-007) and record the results in `specs/001-autopilot/validation.md`
-- [ ] T083 Publish v0.1.0 on npm and write the release notes (the repo is public since M0)
+- [ ] T083 Remove `"private": true` from `package.json`, publish v0.1.0 on npm and write the release notes (the repo is public since M0)
 
-**After v1, not scheduled**: team claims (US8, FR-081), answers from the channels, an agent-only
-GitHub token with a repository ruleset.
+**After v1**: first the machine runner for graphical tests, screenshots and recordings (reflection P4);
+then team claims (US8, FR-081), machine lending (reflection P6), answers from the channels, an
+agent-only GitHub token with a repository ruleset.
 
 ---
 
 ## Dependencies
 
-- Setup → Foundational → US3 → US2 (cards) → US6 → US7 → **OpenScreen switch** → US4 → US2 (pings)
-  → US5 → US1 → Polish.
+- Setup → Foundational → Foundation amendments (2b) → US3 → US2 (cards) → US6 → US7 → **OpenScreen
+  switch** → US4 → US2 (pings) → US5 → US1 → Polish.
+- Every interface phase starts with its mockup task, validated by Etienne (T100, T102, T104, T111).
 - After the switch, US4, US2 (pings) and US5 touch different modules (`hub.mjs`, `pings.mjs`,
   `machines.mjs`) and can run in parallel; the order above is the default.
 - US1 installs what the other stories built, so it comes last.
