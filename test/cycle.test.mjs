@@ -274,3 +274,23 @@ test("a rules change is journaled with its diff for the owner; so is an invalid 
 	assert.match(entries[0].diff, /- Fixes merge alone\.\n\+ Fixes and docs merge alone\./);
 	assert.match(entries[1].text, /nothing merges in o\/other until it is fixed/);
 });
+
+test("no second coordinator while one is at work: it takes what is new when it ends", async () => {
+	write("runs/act-1/status.json", {
+		id: "act-1",
+		kind: "act",
+		project: "demo",
+		state: "running",
+		pid: process.pid,
+		createdAt: "2026-11-07T10:00:00Z",
+	});
+	append("projects/demo/reports.jsonl", {
+		run: "w-1",
+		worker: "fix",
+		item: "o/r#1",
+		state: "done",
+		text: "ok",
+	});
+	await runCycle(ctxOf(), project(), liveOf([]), RULES, deps);
+	assert.deepEqual(coordinators, []);
+});

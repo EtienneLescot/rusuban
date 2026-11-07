@@ -494,3 +494,21 @@ test("a merge order lifts the project's locks and the judgment for its head, nev
 	const closed = judgment({ ...card, resolvedAt: "2026-11-07T12:00:00Z" });
 	assert.deepEqual(orders(locked, closed), []);
 });
+
+test("conflict: a PR judged mergeable alone that its base moved under goes back to the agents", () => {
+	const todo = (p, j = fix(1), rules = RULES) =>
+		todoOf({
+			live: { prs: [p], issues: [] },
+			judgment: { items: { "o/r#1": j } },
+			rules: { [REPO]: rules },
+		}).map((t) => t.reason);
+	assert.deepEqual(todo(pr(1, { mergeable: "CONFLICTING" })), ["conflict"]);
+	// No mergeMethod: a rebase is assumed, so a PR that cannot be rebased conflicts too.
+	assert.deepEqual(todo(pr(1, { canBeRebased: false })), ["conflict"]);
+	const squash = { ...RULES, locks: { ...LOCKS, mergeMethod: "squash" } };
+	assert.deepEqual(todo(pr(1, { canBeRebased: false }), fix(1), squash), []);
+	const manual = fix(1, { pr: { head: "sha1", auto: false } });
+	assert.deepEqual(todo(pr(1, { mergeable: "CONFLICTING" }), manual), []);
+	assert.deepEqual(todo(pr(1, { mergeable: "UNKNOWN" })), []);
+	assert.deepEqual(todo(pr(1, { mergeable: "CONFLICTING", draft: true })), []);
+});

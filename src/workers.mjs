@@ -20,27 +20,46 @@ export const cloneOf = (slug) => homePath(`repos/${slug}`);
 export const worktreeOf = (project, run) => homePath(`worktrees/${project}/${run}`);
 const active = (r) => r.kind === "worker" && ["queued", "running"].includes(r.state);
 
+// Workers starting together would clone or fetch the same repo at once, and git's own locks make all
+// but one fail: one worker at a time prepares a clone. A lock older than 10 minutes is a dead one's.
+function withCloneLock(slug, fn) {
+	const lock = `${cloneOf(slug)}.lock`;
+	fs.mkdirSync(path.dirname(lock), { recursive: true });
+	const until = Date.now() + 600_000;
+	for (;;) {
+		try {
+			fs.mkdirSync(lock);
+			break;
+		} catch {
+			if (Date.now() > until) fs.rmSync(lock, { recursive: true, force: true });
+			else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
+		}
+	}
+	try {
+		return fn();
+	} finally {
+		fs.rmSync(lock, { recursive: true, force: true });
+	}
+}
+
 // A worker's folder: a detached worktree on the default branch of Rusuban's own clone of the repo,
 // made on first use (partial: blobs come on demand) and fetched each time.
 export function prepareWorktree({ slug, branch, project, run }) {
 	if (!slug || !branch) throw new Error(`no default branch known for ${slug}: read GitHub first`);
 	const clone = cloneOf(slug);
-	if (!fs.existsSync(path.join(clone, ".git"))) {
-		fs.mkdirSync(path.dirname(clone), { recursive: true });
-		execFileSync(
-			"gh",
-			["repo", "clone", slug, clone, "--", "--filter=blob:none", "--no-checkout"],
-			{
-				stdio: "ignore",
-				windowsHide: true,
-			},
-		);
-	}
-	git(["fetch", "--prune", "origin"], clone);
 	const dir = worktreeOf(project, run);
-	fs.mkdirSync(path.dirname(dir), { recursive: true });
-	git(["worktree", "add", "--detach", dir, `origin/${branch}`], clone);
-	return dir;
+	return withCloneLock(slug, () => {
+		if (!fs.existsSync(path.join(clone, ".git")))
+			execFileSync(
+				"gh",
+				["repo", "clone", slug, clone, "--", "--filter=blob:none", "--no-checkout"],
+				{ stdio: "ignore", windowsHide: true },
+			);
+		git(["fetch", "--prune", "origin"], clone);
+		fs.mkdirSync(path.dirname(dir), { recursive: true });
+		git(["worktree", "add", "--detach", dir, `origin/${branch}`], clone);
+		return dir;
+	});
 }
 
 const prune = (slug) => {

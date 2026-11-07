@@ -458,8 +458,10 @@ function triggerRuns(p, { live, judgment, rules }, deps) {
 		...pending.asks.map((a) => `ask:${a.at}`),
 		...pending.reports.map((r) => `report:${r.run}`),
 	];
+	// A coordinator at work takes what is new when it ends; a second one would find nothing.
 	const act =
 		waiting.length > 0 &&
+		!busy(p.id, "act") &&
 		fire("act", hash(waiting.join()), () => deps.requestCoordinator(p.id, "change"));
 	if (judge || act) write(`${dir}/triggers.json`, t);
 }
