@@ -389,9 +389,17 @@ export function applyJudgment(
 			fail(`${key}: decision.to must be the owner, ${next.owner}`);
 		if (!d.q || !d.ctx || !Array.isArray(d.options) || d.options.length < 2)
 			fail(`${key}: decision is { urgency, done, q, ctx, rec, why, options[2+] }`);
-		if (!d.done)
+		// What the agents did: a sentence or two, or a list of steps, each with the link that shows it
+		// (a comment, a report, `run:<id>` for a run's conversation).
+		const steps = Array.isArray(d.done) ? d.done : [d.done];
+		const step = (s) =>
+			(typeof s === "string" && s.trim()) ||
+			(typeof s?.text === "string" &&
+				s.text.trim() &&
+				(s.href == null || /^(https?:\/\/|run:[\w.-]+$)/.test(s.href)));
+		if (!steps.length || !steps.every(step))
 			fail(
-				`${key}: decision.done is required: what the agent already did or checked, in a sentence or two`,
+				`${key}: decision.done is required: what the agent already did or checked, a sentence or a list of { text, href? } (href a URL or run:<id>)`,
 			);
 		if (!["now", "digest"].includes(d.urgency))
 			fail(`${key}: decision.urgency is "now" or "digest", from the rules`);
@@ -527,8 +535,12 @@ export function inboxOf(projects) {
 				item: key,
 				type: j.type,
 				label: j.label || it?.title || key,
+				kind: j.kind ?? null,
+				author: it?.author ?? null,
 				url: it?.url ?? null,
 				itemOpen: !!it,
+				judgedBy: j.judgedBy ?? null,
+				evidence: j.pr?.evidence ?? null,
 				card: d,
 				answer: answersFor(key, d, answers).at(-1) ?? null,
 			});
