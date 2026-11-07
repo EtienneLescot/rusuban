@@ -24,11 +24,11 @@ by priority (see Implementation Strategy).
 
 ## Phase 1: Setup (M0)
 
-- [ ] T001 Create the private repo `EtienneLescot/rusuban`: MIT `LICENSE`, `README.md` stub, `.gitignore`, `package.json` (`"type": "module"`, `bin`, `"engines": { "node": ">=22" }`, `files`)
-- [ ] T002 [P] Ratify the product constitution in `.specify/memory/constitution.md`: English, generalized from the OpenScreen pilot's (principle III and the interface language changed, per plan.md)
-- [ ] T003 [P] Copy this feature's documents into `specs/001-autopilot/` of the new repo
-- [ ] T004 [P] Configure Biome (tabs, double quotes) in `biome.json`, and npm scripts `lint`, `test` (`node --test`), `test:e2e`
-- [ ] T005 [P] CI in `.github/workflows/ci.yml`: lint and `node --test` on Ubuntu, macOS and Windows, Node 22 and 24
+- [x] T001 Create the private repo `EtienneLescot/rusuban`: MIT `LICENSE`, `README.md` stub, `.gitignore`, `package.json` (`"type": "module"`, `bin`, `"engines": { "node": ">=22" }`, `files`)
+- [x] T002 [P] Ratify the product constitution in `.specify/memory/constitution.md`: English, generalized from the OpenScreen pilot's (principle III and the interface language changed, per plan.md)
+- [x] T003 [P] Copy this feature's documents into `specs/001-autopilot/` of the new repo
+- [x] T004 [P] Configure Biome (tabs, double quotes) in `biome.json`, and npm scripts `lint`, `test` (`node --test`), `test:e2e`
+- [x] T005 [P] CI in `.github/workflows/ci.yml`: lint and `node --test` on Ubuntu, macOS and Windows, Node 22 and 24
 
 ---
 
