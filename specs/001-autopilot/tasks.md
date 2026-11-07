@@ -61,14 +61,20 @@ by priority (see Implementation Strategy).
 
 Tasks added by the analysis are numbered from T084 and placed where they run.
 
-- [ ] T084 Config in `src/home.mjs`: `"version": 1` checked on load, `limits { maxWorkers, maxRunMinutes }`, `owner.tailscaleLogin`, project `mode: "live" | "shadow"`, machine `workspace`
-- [ ] T085 Split the journal in `src/home.mjs`: `journal.jsonl` (daemon) and `agent-log.jsonl` (agent CLI, under the judgment lock), shown as one
-- [ ] T086 Merge switch in `src/server.mjs`: `automerge.json` written by the daemon only, `POST /api/automerge`, the switch in the page header
-- [ ] T087 CI-green and conflict gates in `src/model.mjs` exactly as FR-021 defines them: no check is not green; pending, failed, cancelled, timed out or waiting checks block; every `requiredChecks` name must succeed; rebaseable for a rebase merge
-- [ ] T088 Todo reasons in `src/model.mjs` as `contracts/cli.md` defines them, `lock-blocked` included
-- [ ] T089 Host check in `src/server.mjs`: `Host` must be loopback or the tailnet name; on the tailnet name, `Tailscale-User-Login` must equal `owner.tailscaleLogin`; GET requests included
-- [ ] T090 Every run through the launcher of T016 (workers, tasks, replies included); shadow projects add deny rules for every GitHub write
-- [ ] T091 [P] One breaking test per lock in `test/merge-gate.test.mjs` and `test/server.test.mjs`: open thread, switch paused, size, conflict, missing required check, no check at all, wrong `Host`, wrong Tailscale login
+- [x] T084 Config in `src/home.mjs`: `"version": 1` checked on load, `limits { maxWorkers, maxRunMinutes }`, `owner.tailscaleLogin`, project `mode: "live" | "shadow"`, machine `workspace`
+  - Version and limits came with Phase 2 (PR #1). `owner.tailscaleLogin` replaces Phase 2's `owner.tailscale`; `mode` is required, with no default. Nothing reads machines before T066, so `workspace` has no code yet.
+- [x] T085 Split the journal in `src/home.mjs`: `journal.jsonl` (daemon) and `agent-log.jsonl` (agent CLI, under the judgment lock), shown as one
+- [x] T086 Merge switch in `src/server.mjs`: `automerge.json` written by the daemon only, `POST /api/automerge`, the switch in the page header
+  - Already done in Phase 2 (PR #1).
+- [x] T087 CI-green and conflict gates in `src/model.mjs` exactly as FR-021 defines them: no check is not green; pending, failed, cancelled, timed out or waiting checks block; every `requiredChecks` name must succeed; rebaseable for a rebase merge
+  - Every check counts; `requiredChecks` only adds names that must succeed. Checks that were all skipped are green, as FR-021 is written. Without a `mergeMethod`, a rebase is assumed.
+- [x] T088 Todo reasons in `src/model.mjs` as `contracts/cli.md` defines them, `lock-blocked` included
+  - Phase 2 had the first five reasons. `lock-blocked` names the lock; a broken `locks.json` raises none.
+- [x] T089 Host check in `src/server.mjs`: `Host` must be loopback or the tailnet name; on the tailnet name, `Tailscale-User-Login` must equal `owner.tailscaleLogin`; GET requests included
+  - Phase 2 accepted any `ts.net` name and the GitHub login. The name now comes from `tailscale status --json`, read at start and every 5 minutes.
+- [x] T090 Every run through the launcher of T016 (workers, tasks, replies included); shadow projects add deny rules for every GitHub write
+  - The launcher is the only way to start `claude` today; T033, T041 and T059 must keep it so. A run of a project no longer in the config gets the shadow rules too.
+- [x] T091 [P] One breaking test per lock in `test/merge-gate.test.mjs` and `test/server.test.mjs`: open thread, switch paused, size, conflict, missing required check, no check at all, wrong `Host`, wrong Tailscale login
 
 ---
 
