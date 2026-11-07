@@ -140,7 +140,8 @@ firstAt, lastAt, live, branch, prs[], items[], parseError? }`
 ### Task (`tasks/<id>.md`)
 
 Front matter `title`, `project`, `schedule` (`daily HH:MM,…`, optional), `lock` (group), `cwd`, then the
-prompt. Unchanged from today, plus `project`.
+prompt. Unchanged from today, plus `project`. Without `lock` a task is its own group; without `cwd` it
+works in its project's scratch folder.
 
 ### Channel
 

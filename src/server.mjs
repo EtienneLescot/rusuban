@@ -42,6 +42,15 @@ import {
 	todoOf,
 } from "./model.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
+import {
+	busyRun,
+	dueTasks,
+	listTasks,
+	readTask,
+	startTask,
+	tasksState,
+	waiting,
+} from "./tasks.mjs";
 import { cleanStale } from "./workers.mjs";
 
 const WEB = new URL("../web/", import.meta.url);
@@ -489,6 +498,67 @@ export async function runCycle(ctx, p, liveFile, rules, deps = DEPS) {
 	if (!ctx.dry) triggerRuns(p, { live, judgment, rules }, deps);
 }
 
+// ── Recurring tasks (T041, T043) ──────────────────────────────────────────────────────────────
+// A task's run, journaled by the daemon: started at its time, or on the owner's click.
+function startTaskRun(ctx, t, trigger) {
+	const r = startTask(t, trigger, depsOf(ctx).requestRun);
+	const scheduled = trigger === "schedule";
+	journal(t.project, {
+		kind: "task",
+		item: null,
+		text: `Started the task “${t.title}”${scheduled ? " at its time" : ""}`,
+		by: scheduled ? "server" : ctx.config.owner.login,
+		run: r.id,
+	});
+	return r;
+}
+
+// Every 30 seconds: the tasks a slot is due for start (lock groups queue them one after the other),
+// and what an ended task said goes to its project's journal, once; one that did not end well is
+// flagged.
+export function runSchedule(ctx, now = Date.now()) {
+	if (ctx.dry) return [];
+	const runs = listRuns();
+	const started = dueTasks({ tasks: listTasks(ctx.config), runs, now }).map(({ task }) =>
+		startTaskRun(ctx, task, "schedule"),
+	);
+	const said = new Map();
+	for (const r of runs) {
+		if (r.kind !== "task" || !r.task || waiting(r) || r.retriedBy) continue;
+		if (!said.has(r.project))
+			said.set(
+				r.project,
+				new Set(
+					readJsonl(`projects/${r.project}/journal.jsonl`)
+						.filter((e) => e.kind === "task-end")
+						.map((e) => e.run),
+				),
+			);
+		if (said.get(r.project).has(r.id)) continue;
+		journal(r.project, {
+			kind: "task-end",
+			item: null,
+			text: `${r.title ?? r.task}, ${r.state}: ${firstLine(r.summary ?? "no final answer").slice(0, 300)}`,
+			by: "server",
+			run: r.id,
+			...(r.state === "done" ? {} : { notify: true }),
+		});
+	}
+	if (started.length) ctx.broadcast?.(true);
+	return started;
+}
+
+function runTaskNow(ctx, id, res) {
+	const t = readTask(id, ctx.config);
+	if (!t) return json(res, 404, { error: "no such task" });
+	if (t.error) return json(res, 400, { error: t.error });
+	if (busyRun(t.id)) return json(res, 409, { error: "this task already waits or works" });
+	if (ctx.dry) return json(res, 200, { run: null, state: "dry" });
+	const r = startTaskRun(ctx, t, "button");
+	ctx.broadcast(true);
+	return json(res, 200, { run: r.id, state: r.state });
+}
+
 // ── The daemon ────────────────────────────────────────────────────────────────────────────────
 function startLoop(ctx, p) {
 	const dir = `projects/${p.id}`;
@@ -687,6 +757,8 @@ async function post(ctx, path, body, res) {
 	if (path === "/api/ask") return ask(ctx, body, res);
 	const stopping = /^\/api\/runs\/([^/]+)\/stop$/.exec(path);
 	if (stopping) return stop(ctx, decodeURIComponent(stopping[1]), res);
+	const running = /^\/api\/tasks\/([^/]+)\/run$/.exec(path);
+	if (running) return runTaskNow(ctx, decodeURIComponent(running[1]), res);
 	if (path === "/api/automerge") {
 		if (typeof body.armed !== "boolean")
 			return json(res, 400, { error: "armed must be true or false" });
@@ -724,6 +796,8 @@ async function handle(ctx, req, res) {
 			return json(res, 200, stateOf(ctx, url.searchParams.get("project")));
 		if (req.method === "GET" && url.pathname === "/api/inbox")
 			return json(res, 200, inboxState(ctx));
+		if (req.method === "GET" && url.pathname === "/api/tasks")
+			return json(res, 200, { tasks: tasksState(ctx.config) });
 		if (req.method === "GET" && url.pathname === "/api/runs")
 			return json(res, 200, { runs: runsOf(url.searchParams.get("project")) });
 		if (req.method === "GET" && url.pathname === "/api/events") {
@@ -749,9 +823,9 @@ async function handle(ctx, req, res) {
 	}
 }
 
-// Starts the daemon. `polling: false` serves without reading GitHub (tests); `port` overrides the
-// config's (0 picks a free one); `tailnet` sets the tailnet name instead of asking Tailscale; `deps`
-// replaces what merges and starts agents (tests).
+// Starts the daemon. `polling: false` serves without reading GitHub nor starting tasks at their
+// times (tests); `port` overrides the config's (0 picks a free one); `tailnet` sets the tailnet name
+// instead of asking Tailscale; `deps` replaces what merges and starts agents (tests).
 export async function startServer({
 	dry = false,
 	port,
@@ -832,6 +906,18 @@ export async function startServer({
 			p.repos.map((r) => r.slug),
 		);
 	if (polling) for (const p of config.projects) startLoop(ctx, p);
+	// Recurring tasks: their slots are looked at every 30 s, and once at start for those missed.
+	const schedule = () => {
+		try {
+			for (const r of runSchedule(ctx)) ctx.say(`task ${r.task}: started (${r.id})`);
+		} catch (e) {
+			ctx.say(`tasks: ${firstLine(e)}`);
+		}
+	};
+	if (polling && !dry) {
+		schedule();
+		timers.push(setInterval(schedule, 30_000));
+	}
 	ctx.say(
 		`rusuban ${version} on http://127.0.0.1:${ctx.port}/${dry ? " (dry: no GitHub write, no agent)" : ""}`,
 	);
