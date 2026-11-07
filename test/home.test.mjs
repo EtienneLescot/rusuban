@@ -4,11 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
 import {
+	agentLog,
 	append,
 	homePath,
 	journal,
 	loadConfig,
 	read,
+	readJournal,
 	readJsonl,
 	saveConfig,
 	validateConfig,
@@ -24,8 +26,25 @@ const config = (over = {}) => ({
 	owner: { login: "alice" },
 	permissions: { mode: "allowlist" },
 	limits: { maxWorkers: 3, maxRunMinutes: 150 },
-	projects: [{ id: "demo", repos: [{ slug: "alice/demo" }] }],
+	projects: [{ id: "demo", mode: "live", repos: [{ slug: "alice/demo" }] }],
 	...over,
+});
+
+test("each project states its mode, live or shadow, with no default", () => {
+	const project = (mode) => config({ projects: [{ id: "demo", mode, repos: [{ slug: "a/b" }] }] });
+	assert.throws(() => validateConfig(project(undefined)), /projects\[0\]\.mode.*no default/);
+	assert.throws(() => validateConfig(project("dry")), /"live" or "shadow"/);
+	assert.equal(validateConfig(project("shadow")).projects[0].mode, "shadow");
+});
+
+test("the owner's Tailscale login is optional, and kept apart from the GitHub login", () => {
+	assert.deepEqual(validateConfig(config()).owner, { login: "alice" });
+	const owner = { login: "alice", tailscaleLogin: "alice@example.com" };
+	assert.deepEqual(validateConfig(config({ owner })).owner, owner);
+	assert.throws(
+		() => validateConfig(config({ owner: { login: "alice", tailscaleLogin: " " } })),
+		/owner.tailscaleLogin/,
+	);
 });
 
 test("the config states its version, and a newer one is refused", () => {
@@ -72,11 +91,23 @@ test("append adds lines, and a line cut by a crash is skipped alone", () => {
 	);
 });
 
-test("the journal stamps each entry", () => {
-	journal("demo", { kind: "note", text: "hello", by: "server" });
-	const [e] = readJsonl("projects/demo/journal.jsonl");
-	assert.equal(e.text, "hello");
-	assert.ok(Date.parse(e.at) > 0);
+test("the journal is two files, one per writer, read back as one in time order", () => {
+	journal("demo", { kind: "note", text: "daemon", by: "server", at: "2026-11-07T10:00:02Z" });
+	agentLog("demo", { kind: "note", text: "agent", by: "agent", at: "2026-11-07T10:00:01Z" });
+	journal("demo", { kind: "note", text: "stamped", by: "server" });
+	assert.deepEqual(
+		readJsonl("projects/demo/journal.jsonl").map((e) => e.text),
+		["daemon", "stamped"],
+	);
+	assert.deepEqual(
+		readJsonl("projects/demo/agent-log.jsonl").map((e) => e.text),
+		["agent"],
+	);
+	assert.deepEqual(
+		readJournal("demo").map((e) => e.text),
+		["agent", "daemon", "stamped"],
+	);
+	assert.ok(Date.parse(readJournal("demo")[2].at) > 0);
 });
 
 test("the host permission mode has no default", () => {
@@ -91,8 +122,8 @@ test("config defaults fill what is not policy, and mistakes are all reported", (
 	const bad = config({
 		owner: {},
 		projects: [
-			{ id: "Demo", repos: [] },
-			{ id: "x", repos: [{ slug: "nope" }], refreshSec: 5 },
+			{ id: "Demo", mode: "live", repos: [] },
+			{ id: "x", mode: "live", repos: [{ slug: "nope" }], refreshSec: 5 },
 		],
 	});
 	assert.throws(

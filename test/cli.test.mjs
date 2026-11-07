@@ -131,14 +131,20 @@ test("the agent commands read and write a project's files", () => {
 		owner: { login: "alice" },
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
-		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
+		projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
 	});
 	put("projects/demo/live.json", {
 		repos: {
 			"o/r": {
 				defaultBranch: "main",
 				prs: [
-					{ repo: "o/r", n: 1, head: "abc", ci: { state: "success", runIds: [], waiting: [] } },
+					{
+						repo: "o/r",
+						n: 1,
+						head: "abc",
+						files: [],
+						ci: { state: "success", runIds: [], waiting: [] },
+					},
 				],
 				issues: [{ repo: "o/r", n: 10 }],
 				merged: [],
@@ -168,14 +174,17 @@ test("the agent commands read and write a project's files", () => {
 	assert.equal(refused.status, 1);
 	assert.match(refused.stderr, /^refused: o\/r#1: pr.head must be the live head/);
 
+	// The agent CLI writes its own journal file, never the daemon's, and leaves no lock behind.
 	assert.equal(run("log", "note", "#10", "Asked the reporter for logs.").status, 0);
 	const entry = JSON.parse(
-		fs.readFileSync(path.join(home, "projects/demo/journal.jsonl"), "utf8").trim(),
+		fs.readFileSync(path.join(home, "projects/demo/agent-log.jsonl"), "utf8").trim(),
 	);
 	assert.deepEqual(
 		[entry.item, entry.by, entry.text],
 		["o/r#10", "agent:judge-1", "Asked the reporter for logs."],
 	);
+	assert.ok(!fs.existsSync(path.join(home, "projects/demo/journal.jsonl")));
+	assert.ok(!fs.existsSync(path.join(home, "projects/demo/judgment.lock")));
 	assert.equal(run("evidence", "#1", "running").status, 0);
 	assert.equal(JSON.parse(run("show", "#1").stdout).judgment.pr.evidence.state, "running");
 	assert.deepEqual(JSON.parse(run("answers").stdout), []);

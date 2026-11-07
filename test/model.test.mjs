@@ -79,8 +79,11 @@ test("a new commit invalidates the judgment", () => {
 	assert.ok(!isEligible(g));
 });
 
-test("the merge switch, observe-only repos and unloaded rules keep every merge shut", () => {
+test("the merge switch, shadow projects, observe-only repos and unloaded rules keep every merge shut", () => {
 	assert.equal(by(gates(pr(1), fix(1), RULES, false), "Switch").state, "fail");
+	const shadow = gatesOf(pr(1), fix(1), { rules: RULES, armed: true, shadow: true });
+	assert.match(by(shadow, "Switch").detail, /Shadow mode/);
+	assert.ok(!isEligible(shadow));
 	assert.match(by(gates(pr(1), fix(1), { observeOnly: true }), "Judgment").detail, /Observe only/);
 	assert.equal(by(gatesOf(pr(1), fix(1), { armed: true }), "Judgment").state, "fail");
 });
@@ -143,12 +146,13 @@ test("fork CI awaiting approval, open threads, conflicts, drafts and rebases blo
 	assert.equal(by(gates(pr(1, { mergeable: "CONFLICTING" }), fix(1)), "Mergeable").state, "fail");
 	assert.equal(by(gates(pr(1, { mergeable: "UNKNOWN" }), fix(1)), "Mergeable").state, "wait");
 	assert.equal(by(gates(pr(1, { draft: true }), fix(1)), "Mergeable").state, "fail");
-	assert.equal(by(gates(pr(1, { canBeRebased: false }), fix(1)), "Mergeable").state, "ok");
-	const rebase = { ...RULES, locks: { ...LOCKS, mergeMethod: "rebase" } };
-	assert.equal(
-		by(gates(pr(1, { canBeRebased: false }), fix(1), rebase), "Mergeable").state,
-		"fail",
-	);
+	const method = (mergeMethod) => ({ ...RULES, locks: { ...LOCKS, mergeMethod } });
+	const unrebasable = (rules) =>
+		by(gates(pr(1, { canBeRebased: false }), fix(1), rules), "Mergeable");
+	assert.equal(unrebasable(method("rebase")).state, "fail");
+	assert.equal(unrebasable(method("squash")).state, "ok");
+	// No method stated: the strictest, a rebase, is assumed.
+	assert.equal(unrebasable(RULES).state, "fail");
 	assert.equal(
 		by(gates(pr(1, { ci: { state: "none", runIds: [], waiting: [] }, checks: [] }), fix(1)), "CI")
 			.state,
@@ -156,24 +160,31 @@ test("fork CI awaiting approval, open threads, conflicts, drafts and rebases blo
 	);
 });
 
-test("requiredChecks narrow CI to the named checks or workflows", () => {
+test("CI green is FR-021's: every check passes, and each required name has a success", () => {
 	const rules = (requiredChecks) => ({ ...RULES, locks: { ...LOCKS, requiredChecks } });
-	const ci = (p, required) => by(gates(p, fix(1), rules(required)), "CI");
-	const checks = [
-		{ name: "test", workflow: "CI", state: "success" },
-		{ name: "lint", workflow: "CI", state: "success" },
-		{ name: "CodeRabbit", workflow: null, state: "success" },
-		{ name: "nix build", workflow: "Nix", state: "failure" },
+	const ci = (checks, required = [], over = {}) =>
+		by(gates(pr(1, { checks, ...over }), fix(1), rules(required)), "CI");
+	const c = (name, workflow, state) => ({ name, workflow, state });
+	const green = [
+		c("test", "CI", "success"),
+		c("lint", "CI", "skipped"),
+		c("CodeRabbit", null, "success"),
 	];
+	assert.equal(ci(green, ["CI", "CodeRabbit"]).state, "ok");
+	// Every check counts, not only the required ones.
+	const nix = c("nix build", "Nix", "failure");
+	assert.match(ci([...green, nix], ["CI", "CodeRabbit"]).detail, /CI failed: nix build/);
+	assert.equal(ci([...green, c("nix build", "Nix", "pending")], ["CI"]).state, "wait");
 	const notify = { state: "action_required", runId: 9, runIds: [9], waiting: ["Discord"] };
-	assert.equal(ci(pr(1, { checks, ci: notify }), ["CI", "CodeRabbit"]).state, "ok");
-	assert.equal(ci(pr(1, { checks, ci: { ...notify, waiting: ["CI"] } }), ["CI"]).state, "wait");
-	assert.equal(ci(pr(1, { checks }), ["Nix"]).state, "fail");
-	assert.match(ci(pr(1, { checks }), ["e2e"]).detail, /e2e has not run/);
-	assert.equal(
-		ci(pr(1, { checks, ci: { state: "failure", runIds: [], waiting: [] } }), []).state,
-		"fail",
-	);
+	assert.match(ci(green, ["CI"], { ci: notify }).detail, /Awaiting approval: Discord/);
+	assert.match(ci([...green, c("deploy", "CD", "waiting")]).detail, /Awaiting approval: deploy/);
+	// A required name must be there with a success: absent waits, skipped fails.
+	assert.match(ci(green, ["e2e"]).detail, /Required but not run: e2e/);
+	assert.match(ci(green, ["lint"]).detail, /Required but skipped: lint/);
+	assert.equal(ci(green, ["lint"]).state, "fail");
+	// No check at all is not green; checks that were all skipped are (FR-021 as written).
+	assert.equal(ci([]).state, "todo");
+	assert.equal(ci([c("docs", "Docs", "skipped")]).state, "ok");
 });
 
 test("required reviewers must review the head, and changes requested block", () => {
@@ -244,7 +255,7 @@ test("todo lists every reason, and skips observe-only repos", () => {
 			"o/r#13": third("2026-11-06T12:00:00Z"),
 		},
 	};
-	const reasons = todoOf({ live, judgment, acting: new Set([REPO]), now })
+	const reasons = todoOf({ live, judgment, rules: { [REPO]: RULES }, now })
 		.map((t) => `${t.item}:${t.reason}`)
 		.sort();
 	assert.deepEqual(reasons, [
@@ -255,13 +266,48 @@ test("todo lists every reason, and skips observe-only repos", () => {
 		"o/r#2:ci-approval",
 		"o/r#2:new-commit",
 	]);
-	assert.deepEqual(todoOf({ live, judgment, acting: new Set(), now }), []);
+	assert.deepEqual(todoOf({ live, judgment, rules: {}, now }), []);
+	assert.deepEqual(todoOf({ live, judgment, rules: { [REPO]: { observeOnly: true } }, now }), []);
+});
+
+test("lock-blocked: a PR judged mergeable alone that a project lock or .rusuban/ stops", () => {
+	const todo = (p, j, rules = RULES) =>
+		todoOf({
+			live: { prs: [p], issues: [] },
+			judgment: { items: { [`${REPO}#1`]: j } },
+			rules: { [REPO]: rules },
+		});
+	const locked = todo(pr(1, { files: [file(".github/workflows/ci.yml")] }), fix(1));
+	assert.deepEqual(
+		locked.map((t) => [t.reason, t.head, t.lock]),
+		[["lock-blocked", "sha1", "Locks: Locked paths: .github/workflows/ci.yml"]],
+	);
+	assert.equal(
+		todo(pr(1, { files: [file(".rusuban/rules/a.md")] }), fix(1))[0].reason,
+		"lock-blocked",
+	);
+	assert.equal(todo(pr(1, { files: [file("src/a.js", 400)] }), fix(1))[0].reason, "lock-blocked");
+	const proof = { needed: true, state: "fail", head: "sha1" };
+	const impact = fix(1, { pr: { head: "sha1", auto: true, evidence: proof } });
+	assert.match(todo(pr(1), impact)[0].lock, /^Evidence: The proof shows an impact/);
+	// Not blocked by a lock: a card already open, judged not to merge alone, a proof still to make,
+	// a broken locks file (fixed in the repo, not on a card per PR).
+	const card = {
+		...fix(1, { owner: "alice", revisitAt: undefined }),
+		decision: { id: "c", q: "?", options: [], createdAt: "2026-11-07T00:00:00Z", resolvedAt: null },
+	};
+	assert.deepEqual(todo(pr(1, { files: [file(".github/x.yml")] }), card), []);
+	const manual = fix(1, { pr: { head: "sha1", auto: false } });
+	assert.deepEqual(todo(pr(1, { files: [file(".github/x.yml")] }), manual), []);
+	assert.deepEqual(todo(pr(1, { files: [file("crates/compositor/a.rs")] }), fix(1)), []);
+	const broken = { observeOnly: false, locks: null, errors: ["locks.json: bad"] };
+	assert.deepEqual(todo(pr(1), fix(1), broken), []);
 });
 
 test("multi-repo: the same number in two repos is two items", () => {
 	const live = { prs: [pr(1), pr(1, { repo: "o/b", head: "other" })], issues: [], merged: [] };
 	const judgment = { items: { "o/r#1": fix(1) } };
-	const todo = todoOf({ live, judgment, acting: new Set([REPO, "o/b"]) });
+	const todo = todoOf({ live, judgment, rules: { [REPO]: RULES, "o/b": RULES } });
 	assert.deepEqual(
 		todo.map((t) => `${t.item}:${t.reason}`),
 		["o/b#1:unjudged"],
@@ -302,9 +348,10 @@ test("layout: no overlapping nodes, stable from one run to the next", () => {
 	assert.ok(a.frames.some((f) => f.kind === "group" && f.group === "mine" && f.count === 10));
 });
 
-test("only PRs on the merge lane feed main, and a paused switch keeps them still", () => {
+test("only PRs on the merge lane feed main, and a paused switch or shadow mode keeps them still", () => {
+	const running = { checks: [{ name: "test", workflow: "CI", state: "pending" }] };
 	const live = {
-		prs: [pr(1), pr(2, { ci: { state: "pending", runIds: [], waiting: [] } }), pr(3)],
+		prs: [pr(1), pr(2, running), pr(3)],
 		issues: [],
 		merged: [],
 	};
@@ -327,6 +374,9 @@ test("only PRs on the merge lane feed main, and a paused switch keeps them still
 	const paused = buildModel({ live, judgment, rules, armed: false });
 	assert.deepEqual(toMain(paused), ["o/r#1:false", "o/r#2:false"]);
 	assert.equal(paused.edges.find((e) => e.from === "o/r#1").label, "ready, merges paused");
+	const shadow = buildModel({ live, judgment, rules, armed: true, shadow: true });
+	assert.deepEqual(toMain(shadow), ["o/r#1:false", "o/r#2:false"]);
+	assert.equal(shadow.edges.find((e) => e.from === "o/r#1").label, "ready, shadow mode");
 });
 
 test("a closed card stays visible for 48 h with the chosen option", () => {

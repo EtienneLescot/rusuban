@@ -39,6 +39,7 @@ const gate = (state, detail) => ({ state, detail });
 const fail = (msg) => {
 	throw new Error(msg);
 };
+const few = (list) => `${list.slice(0, 2).join(", ")}${list.length > 2 ? "…" : ""}`;
 
 // A reference to an item: a number or "#12" in the same repo, or "owner/repo#12".
 export function refKey(ref, repo) {
@@ -94,36 +95,30 @@ export function sizeOf(pr, locks = {}) {
 }
 
 // ── Gates ─────────────────────────────────────────────────────────────────────────────────────
-// CI: the checks the locks name (a check or a whole workflow), or else every check, green on the head.
+// CI green, as FR-021 defines it: at least one check on the head; every check run and status on it
+// succeeded, or was neutral or skipped; none pending, failed, cancelled, timed out or waiting for an
+// approval; and every name in requiredChecks (a check, or a whole workflow) has a success on it.
 function ciGate(pr, required) {
-	if (!required.length) {
-		if (pr.ci.state === "action_required")
-			return gate("wait", `Awaiting approval: ${pr.ci.waiting?.join(", ") || "fork workflows"}`);
-		const failed = (pr.checks ?? []).filter((c) => c.state === "failure").map((c) => c.name);
-		return (
-			{
-				success: gate("ok", "CI green on the head"),
-				pending: gate("wait", "CI running"),
-				failure: gate(
-					"fail",
-					`CI failed${failed.length ? `: ${failed.slice(0, 2).join(", ")}` : ""}`,
-				),
-			}[pr.ci.state] ?? gate("todo", "No CI run on the head")
-		);
-	}
-	const results = required.map((name) => {
-		if (pr.ci.waiting?.includes(name)) return { name, state: "wait", why: "awaits approval" };
-		const runs = (pr.checks ?? []).filter((c) => c.name === name || c.workflow === name);
-		if (!runs.length) return { name, state: "wait", why: "has not run" };
-		if (runs.some((c) => c.state === "failure")) return { name, state: "fail" };
-		if (runs.some((c) => c.state === "pending")) return { name, state: "wait", why: "running" };
-		return { name, state: "ok" };
+	const checks = pr.checks ?? [];
+	const named = (state) => [...new Set(checks.filter((c) => c.state === state).map((c) => c.name))];
+	const runsOf = (name) => checks.filter((c) => c.name === name || c.workflow === name);
+	const failed = named("failure");
+	if (failed.length) return gate("fail", `CI failed: ${few(failed)}`);
+	// Present, finished and never a success: skipped or neutral where the project wants a success.
+	const skipped = required.filter((name) => {
+		const runs = runsOf(name);
+		return runs.length && runs.every((c) => c.state === "skipped");
 	});
-	const failed = results.filter((r) => r.state === "fail").map((r) => r.name);
-	if (failed.length) return gate("fail", `${failed.join(", ")} failed`);
-	const waiting = results.filter((r) => r.state === "wait");
-	if (waiting.length) return gate("wait", waiting.map((r) => `${r.name} ${r.why}`).join(", "));
-	return gate("ok", `${required.join(", ")} green on the head`);
+	if (skipped.length) return gate("fail", `Required but skipped: ${skipped.join(", ")}`);
+	const approval = [...(pr.ci?.waiting ?? []), ...named("waiting")];
+	if (pr.ci?.state === "action_required" || approval.length)
+		return gate("wait", `Awaiting approval: ${few([...new Set(approval)]) || "fork workflows"}`);
+	if (!checks.length) return gate("todo", "No check on the head");
+	const pending = named("pending");
+	if (pending.length) return gate("wait", `CI running: ${few(pending)}`);
+	const missing = required.filter((name) => !runsOf(name).length);
+	if (missing.length) return gate("wait", `Required but not run: ${missing.join(", ")}`);
+	return gate("ok", "CI green on the head");
 }
 
 // Reviews: changes requested on the head stop a merge; required reviewers must have reviewed the head.
@@ -147,7 +142,8 @@ function mergeableGate(pr, method) {
 	if (pr.mergeable === "CONFLICTING")
 		return gate("fail", `Conflicts with ${pr.base ?? "its base"}`);
 	if (pr.mergeable === "UNKNOWN") return gate("wait", "GitHub is computing mergeability");
-	if (method === "rebase" && pr.canBeRebased === false)
+	// Without a mergeMethod in the locks, the strictest merge, a rebase, is assumed.
+	if ((method ?? "rebase") === "rebase" && pr.canBeRebased === false)
 		return gate("fail", "Cannot be rebased (a merge commit?)");
 	return gate("ok", `Mergeable into ${pr.base ?? "its base"}`);
 }
@@ -170,18 +166,10 @@ function locksGate(pr, rules) {
 	// ponytail: GitHub's GraphQL gives no old path for a rename, so a rename could move a file out of
 	// a locked path unseen; renames are refused here. Read REST `previous_filename` to lift this.
 	const renamed = pr.files.filter((f) => f.change === "RENAMED").map((f) => f.path);
-	if (renamed.length)
-		return gate(
-			"fail",
-			`Renamed files: ${renamed.slice(0, 2).join(", ")}${renamed.length > 2 ? "…" : ""}`,
-		);
+	if (renamed.length) return gate("fail", `Renamed files: ${few(renamed)}`);
 	const locks = rules.locks ?? {};
 	const locked = paths.filter(matcher(locks.lockedPaths));
-	if (locked.length)
-		return gate(
-			"fail",
-			`Locked paths: ${locked.slice(0, 2).join(", ")}${locked.length > 2 ? "…" : ""}`,
-		);
+	if (locked.length) return gate("fail", `Locked paths: ${few(locked)}`);
 	const size = sizeOf(pr, locks);
 	if (
 		(locks.maxLines && size.lines > locks.maxLines) ||
@@ -212,8 +200,8 @@ function evidenceGate(pr, j, locks) {
 }
 
 // `rules` is the PR's repo entry of rules.json. Until rules are loaded and say otherwise, the repo
-// is only observed: the Judgment gate stays shut.
-export function gatesOf(pr, j, { rules = {}, armed = false } = {}) {
+// is only observed: the Judgment gate stays shut. A shadow project merges nothing (FR-028).
+export function gatesOf(pr, j, { rules = {}, armed = false, shadow = false } = {}) {
 	const locks = rules.locks ?? {};
 	return [
 		ciGate(pr, locks.requiredChecks ?? []),
@@ -225,7 +213,11 @@ export function gatesOf(pr, j, { rules = {}, armed = false } = {}) {
 		judgmentGate(pr, j, rules.observeOnly !== false),
 		locksGate(pr, rules),
 		evidenceGate(pr, j, locks),
-		armed ? gate("ok", "Merges armed") : gate("fail", "Merges paused"),
+		shadow
+			? gate("fail", "Shadow mode: nothing is merged")
+			: armed
+				? gate("ok", "Merges armed")
+				: gate("fail", "Merges paused"),
 	].map((g, i) => ({ name: GATES[i], ...g }));
 }
 
@@ -251,9 +243,22 @@ export const actingRepos = (rules) =>
 	);
 
 // ── What the agents must do ───────────────────────────────────────────────────────────────────
-// No delay is built in: an item comes back to the agents at its judgment's revisitAt, which the
-// agent sets from the project's rules. Items of observe-only repos never appear.
-export function todoOf({ live, judgment, acting, now = Date.now() }) {
+const hasOpenCard = (j) => !!(j?.decision && !j.decision.resolvedAt);
+
+// What stops a PR judged mergeable alone on its head: a project lock (paths, size, evidence) or the
+// rules-folder lock. A person's merge order on a card lifts it for that head (FR-022, FR-044). A
+// broken locks file is not one: it is fixed in the repo, not on a card per PR.
+function lockStop(pr, j, rules = {}) {
+	if (j?.pr?.head !== pr.head || j.pr.auto !== true || rules.errors?.length) return null;
+	const g = gatesOf(pr, j, { rules });
+	return g.find((x) => (x.name === "Locks" || x.name === "Evidence") && x.state === "fail") ?? null;
+}
+
+// The reasons of contracts/cli.md. No delay is built in: an item comes back to the agents at its
+// judgment's revisitAt, which the agent sets from the project's rules. Items of repos without
+// rules never appear (FR-024).
+export function todoOf({ live, judgment, rules = {}, now = Date.now() }) {
+	const acting = actingRepos(rules);
 	const items = judgment.items ?? {};
 	const out = [];
 	const open = new Map(
@@ -263,9 +268,18 @@ export function todoOf({ live, judgment, acting, now = Date.now() }) {
 		if (!acting.has(pr.repo)) continue;
 		const item = keyOf(pr);
 		const j = items[item];
+		const stop = hasOpenCard(j) ? null : lockStop(pr, j, rules[pr.repo]);
 		if (!j) out.push({ item, type: "pr", reason: "unjudged" });
 		else if (j.pr?.head !== pr.head)
 			out.push({ item, type: "pr", reason: "new-commit", head: pr.head });
+		else if (stop)
+			out.push({
+				item,
+				type: "pr",
+				reason: "lock-blocked",
+				head: pr.head,
+				lock: `${stop.name}: ${stop.detail}`,
+			});
 		if (pr.ci.state === "action_required")
 			out.push({
 				item,
@@ -281,7 +295,7 @@ export function todoOf({ live, judgment, acting, now = Date.now() }) {
 			out.push({ item: keyOf(is), type: "issue", reason: "unjudged" });
 	for (const [item, j] of Object.entries(items)) {
 		if (!open.has(item)) continue;
-		if (isPerson(j.owner) && !(j.decision && !j.decision.resolvedAt))
+		if (isPerson(j.owner) && !hasOpenCard(j))
 			out.push({ item, type: j.type, reason: "missing-card" });
 		if (ROLES.includes(j.owner) && !(Date.parse(j.revisitAt) > now))
 			out.push({ item, type: j.type, reason: "revisit-due", revisitAt: j.revisitAt ?? null });
@@ -690,6 +704,7 @@ export function buildModel({
 	journal = [],
 	runs = [],
 	armed = false,
+	shadow = false,
 	me = null,
 	now = Date.now(),
 }) {
@@ -736,7 +751,7 @@ export function buildModel({
 	const nodes = [];
 	for (const pr of live.prs) {
 		const j = items[keyOf(pr)];
-		const gates = gatesOf(pr, j, { rules: rules[pr.repo], armed });
+		const gates = gatesOf(pr, j, { rules: rules[pr.repo], armed, shadow });
 		const n = node("pr", pr, j);
 		const first =
 			gates.find((g) => g.state === "fail") ??
@@ -762,13 +777,18 @@ export function buildModel({
 	const ready = flow.filter((n) =>
 		n.gates.every((g) => g.name === "Switch" || g.state === "ok" || g.state === "na"),
 	);
+	const readyLabel = shadow
+		? "ready, shadow mode"
+		: armed
+			? "merges next cycle"
+			: "ready, merges paused";
 	for (const n of flow)
 		edges.push({
 			from: n.id,
 			to: "main",
 			kind: "main",
 			live: n.eligible,
-			label: ready.includes(n) ? (armed ? "merges next cycle" : "ready, merges paused") : null,
+			label: ready.includes(n) ? readyLabel : null,
 		});
 
 	const mergedByServer = new Set(

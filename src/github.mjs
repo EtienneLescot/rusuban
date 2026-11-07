@@ -72,14 +72,22 @@ const STATUS = {
 	FAILURE: "failure",
 	ERROR: "failure",
 };
+// Any other conclusion (failure, cancelled, timed out, stale, startup failure) is a failure.
 const CONCLUSION = {
 	SUCCESS: "success",
 	NEUTRAL: "skipped",
 	SKIPPED: "skipped",
-	ACTION_REQUIRED: "pending",
+	ACTION_REQUIRED: "waiting",
 };
+const runState = (c) =>
+	c.status === "COMPLETED"
+		? (CONCLUSION[c.conclusion] ?? "failure")
+		: c.status === "WAITING"
+			? "waiting"
+			: "pending";
 
-// Every check on the head commit: check runs (with their workflow) and commit statuses.
+// Every check on the head commit: check runs (with their workflow) and commit statuses. A state is
+// success, skipped (neutral too), pending, waiting (for an approval) or failure.
 export const checksOf = (contexts) =>
 	contexts.map((c) =>
 		c.__typename === "StatusContext"
@@ -87,15 +95,15 @@ export const checksOf = (contexts) =>
 			: {
 					name: c.name,
 					workflow: c.checkSuite?.workflowRun?.workflow?.name ?? null,
-					state: c.status === "COMPLETED" ? (CONCLUSION[c.conclusion] ?? "failure") : "pending",
+					state: runState(c),
 				},
 	);
 
+// As FR-021 reads CI: no check is "none"; a head whose checks all succeeded or were skipped is green.
 export function summarize(checks) {
-	const real = checks.filter((c) => c.state !== "skipped");
-	if (!real.length) return "none";
-	if (real.some((c) => c.state === "failure")) return "failure";
-	if (real.some((c) => c.state === "pending")) return "pending";
+	if (!checks.length) return "none";
+	if (checks.some((c) => c.state === "failure")) return "failure";
+	if (checks.some((c) => c.state === "pending" || c.state === "waiting")) return "pending";
 	return "success";
 }
 

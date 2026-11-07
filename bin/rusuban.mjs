@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 // The rusuban command. Agent commands run inside a run, which sets RUSUBAN_RUN and RUSUBAN_PROJECT;
-// they are the only writers of a project's judgment file, and each validates against the live state
-// and takes a short lock before writing (specs/001-autopilot/contracts/cli.md).
+// they are the only writers of a project's judgment file and agent log, and each validates against the
+// live state and takes a short lock before writing (specs/001-autopilot/contracts/cli.md).
 import fs from "node:fs";
 import { executeRun } from "../src/agents.mjs";
-import { homePath, journal, loadConfig, read, readJsonl, write } from "../src/home.mjs";
+import { agentLog, homePath, loadConfig, read, readJsonl, write } from "../src/home.mjs";
 import {
-	actingRepos,
 	applyEvidence,
 	applyJudgment,
 	closeCard,
@@ -83,13 +82,7 @@ function withLock(p, fn) {
 const commands = {
 	todo() {
 		const p = project();
-		out(
-			todoOf({
-				live: p.live(),
-				judgment: p.judgment(),
-				acting: actingRepos(read(`${p.dir}/rules.json`, {})),
-			}),
-		);
+		out(todoOf({ live: p.live(), judgment: p.judgment(), rules: read(`${p.dir}/rules.json`, {}) }));
 	},
 	show([ref]) {
 		const p = project();
@@ -139,13 +132,9 @@ const commands = {
 	log([kind, ref, text, href]) {
 		if (!kind || !ref || !text) throw new Error("usage: log <kind> <item|-> <text> [url]");
 		const p = project();
-		journal(p.id, {
-			kind,
-			item: ref === "-" ? null : parseItem(ref, p.repos),
-			text,
-			href: href ?? null,
-			by: p.by,
-		});
+		const item = ref === "-" ? null : parseItem(ref, p.repos);
+		// The agent CLI's own journal file, written under the judgment lock like every agent write.
+		withLock(p, () => agentLog(p.id, { kind, item, text, href: href ?? null, by: p.by }));
 	},
 	answers() {
 		const p = project();

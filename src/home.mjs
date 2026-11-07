@@ -47,15 +47,25 @@ export function append(name, entry) {
 	fs.appendFileSync(target, `${JSON.stringify(entry)}\n`);
 }
 
-// The journal's one append function, shared by the daemon and the agent CLI.
+// The journal is two files, one writer each (principle I): the daemon's, and the agent CLI's, which
+// writes under the judgment lock. The page shows them as one, in time order.
+const stamp = (entry) => ({ at: new Date().toISOString(), ...entry });
 export const journal = (project, entry) =>
-	append(`projects/${project}/journal.jsonl`, { at: new Date().toISOString(), ...entry });
+	append(`projects/${project}/journal.jsonl`, stamp(entry));
+export const agentLog = (project, entry) =>
+	append(`projects/${project}/agent-log.jsonl`, stamp(entry));
+export const readJournal = (project) =>
+	[
+		...readJsonl(`projects/${project}/journal.jsonl`),
+		...readJsonl(`projects/${project}/agent-log.jsonl`),
+	].sort((a, b) => String(a.at).localeCompare(String(b.at)));
 
 // ── Instance config ───────────────────────────────────────────────────────────────────────────
 const LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 const PROJECT_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const SLUG = /^[\w.-]+\/[\w.-]+$/;
 const MODES = ["bypass", "allowlist"];
+const PROJECT_MODES = ["live", "shadow"];
 
 const isStrings = (v) => Array.isArray(v) && v.every((x) => typeof x === "string" && x.length > 0);
 
@@ -63,8 +73,8 @@ export const CONFIG_VERSION = 1; // migrations key off it
 const isCount = (v) => Number.isInteger(v) && v > 0;
 
 // Checks config.json and fills the defaults that are not policy (port, refresh interval, empty
-// lists). The host permission mode and the limits have no default: the owner's config states them
-// (FR-025; `init` writes the limits explicitly).
+// lists). The host permission mode, the limits and each project's mode have no default: the owner's
+// config states them (FR-025, FR-028; `init` writes the limits explicitly).
 export function validateConfig(raw) {
 	const c = raw && typeof raw === "object" ? raw : {};
 	const errors = [];
@@ -75,8 +85,10 @@ export function validateConfig(raw) {
 				: `version must be ${CONFIG_VERSION}`,
 		);
 	if (!LOGIN.test(c.owner?.login ?? "")) errors.push("owner.login must be a GitHub login");
-	if (c.owner?.tailscale !== undefined && typeof c.owner.tailscale !== "string")
-		errors.push("owner.tailscale must be a Tailscale login");
+	// Written by `remote enable` from `tailscale status --json`; it may differ from the GitHub login.
+	const tsLogin = c.owner?.tailscaleLogin;
+	if (tsLogin !== undefined && (typeof tsLogin !== "string" || !tsLogin.trim()))
+		errors.push("owner.tailscaleLogin must be a Tailscale login");
 	const port = c.port ?? 8788;
 	if (!Number.isInteger(port) || port < 0 || port > 65535)
 		errors.push("port must be an integer from 0 to 65535");
@@ -99,6 +111,10 @@ export function validateConfig(raw) {
 			errors.push(`${at}.id must be lowercase letters, digits and dashes`);
 		else if (ids.has(p.id)) errors.push(`${at}.id "${p.id}" is used twice`);
 		else ids.add(p.id);
+		if (!PROJECT_MODES.includes(p?.mode))
+			errors.push(
+				`${at}.mode must be "live" or "shadow" (judge only, no GitHub write, no merge): there is no default`,
+			);
 		if (!Array.isArray(p?.repos) || !p.repos.length)
 			errors.push(`${at}.repos must list at least one repo`);
 		for (const r of Array.isArray(p?.repos) ? p.repos : []) {
@@ -118,13 +134,14 @@ export function validateConfig(raw) {
 	if (errors.length) throw new Error(`invalid config.json:\n- ${errors.join("\n- ")}`);
 	return {
 		version: CONFIG_VERSION,
-		owner: { login: c.owner.login, ...(c.owner.tailscale ? { tailscale: c.owner.tailscale } : {}) },
+		owner: { login: c.owner.login, ...(tsLogin ? { tailscaleLogin: tsLogin } : {}) },
 		port,
 		permissions: { mode: perm.mode, allow: perm.allow ?? [], deny: perm.deny ?? [] },
 		limits: { maxWorkers: c.limits.maxWorkers, maxRunMinutes: c.limits.maxRunMinutes },
 		projects: projects.map((p) => ({
 			id: p.id,
 			title: p.title || p.id,
+			mode: p.mode,
 			repos: p.repos.map((r) => ({ slug: r.slug, checkout: r.checkout ?? null })),
 			folders: p.folders ?? [],
 			refreshSec: p.refreshSec ?? 90,
