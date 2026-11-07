@@ -1,0 +1,13 @@
+# Machine-local Spec Kit state — not meant to be shared.
+# Managed by the Specify CLI; safe to edit (your changes are preserved on refresh).
+
+# feature.json, the pointer to the current feature directory, is committed on purpose:
+# this repo has one feature, specs/001-autopilot, and a fresh clone or worktree must find it.
+
+# Per-machine extension config overrides.
+extensions/*/local-config.yml
+
+# Executable adapter packages and their per-checkout provenance registry.
+# Execution consent is stored separately in the user's local trust registry.
+integrations/packages/
+integrations/packages.json

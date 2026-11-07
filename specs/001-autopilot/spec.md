@@ -1,0 +1,355 @@
+# Feature Specification: Project autopilot for Claude Code (public product)
+
+**Feature directory**: `specs/001-autopilot`
+**Created**: 2026-11-07
+**Status**: Draft, clarification in progress
+**Name**: Rusuban, from the Japanese word for whoever minds the house while you are out; chosen on 2026-11-07 (see [naming.md](naming.md))
+**Input**: Etienne Lescot: "Make the OpenScreen pilot generic and publish it as a public repo. Separate the
+project-specific settings and instructions from the repo connection, maybe multi-repo. A product that lets
+me find my way through every Claude conversation at the scale of a whole project, running on its own, with
+human pings when needed and under rules we write. Rules stay flexible: they are written as text."
+
+## Summary
+
+A local control plane that runs a software project with Claude Code agents. It watches GitHub repos,
+starts headless Claude Code sessions to triage, fix and ship, follows rules written in plain text, and
+pings a human only when a rule says a human decides. It gathers **every** Claude Code conversation of the
+project (the ones it launched and the ones the user opened in Claude Desktop or a terminal) in one
+dashboard, where they can be read and answered, from a phone too. It reaches the user's test machines
+over SSH, with reservations, so agents run real end-to-end tests on every platform.
+
+It is extracted from the OpenScreen pilot (`specs/001-pilotage-temps-reel`), which already does most of
+this for one repo with OpenScreen-specific code and prompts.
+
+## Clarifications
+
+### Session 2026-11-07
+
+- Q: What does it pilot? → A: GitHub repos (issues, PRs) **and** free recurring tasks written as text
+  (publications, monitoring, releases), as the OpenScreen pilot does today.
+- Q: Which Claude conversations does it gather? → A: All conversations of the project: the ones it
+  launches and the ones the user opens in the project's folders (Desktop, CLI), linked to their issue or PR.
+- Q: Rules form? → A: Free text interpreted by Claude, **plus hard locks the text cannot lift**
+  (CI green, forbidden paths), because PR content can try to manipulate the agent.
+- Q: Where does it run? → A: On the user's own machine, reachable remotely (Tailscale). Start thinking now
+  about multi-user collaboration and about making multi-machine access standard: the reach to several
+  machines for e2e tests is what makes the current system effective.
+- Q: Test machines? → A: A machine registry with reservations (leases), online status in the dashboard,
+  and an enrollment script.
+- Q: Several maintainers? → A: One instance per person (own Claude subscription, own machines);
+  instances share the work through GitHub (assignment, labels), no central server.
+- Q: Ping channels? → A: Pluggable: phone push, Slack, Discord, Microsoft Teams, e-mail. The dashboard
+  always holds the decision cards.
+- Q: Conversations in the dashboard? → A: Read and answer them in the dashboard (from a phone too); an
+  answer resumes the session headless. The "open in terminal" button stays.
+- Q: Agent engine? → A: Claude Code only. Another engine is added if someone asks for it.
+- Q: Language? → A: English only, interface included. Rules can be written in any language.
+- Q: License? → A: MIT.
+- Q: Name? → A: Rusuban, chosen after this spec from four agents' shortlists (naming.md).
+- Q: Where do the rules live? → A: In the **project's** repo (e.g. `getopenscreen/openscreen`), not in
+  Rusuban's repo. The project repo carries the rules.
+- Q: Default autonomy for a new project? → A: None. Autonomy is part of the text rules, inside the hard
+  locks. There are no product defaults.
+- Q: Answer straight from a ping channel? → A: Not in v1: pings link to the card, answers happen in the
+  dashboard.
+- Q: Several maintainers in v1? → A: Later. v1 is single-user, every decision already names a login.
+
+## Positioning
+
+| | Dashboard | Text rules per item | Own sessions gathered | Test machine fleet | Hosting | Windows |
+|---|---|---|---|---|---|---|
+| **Rusuban** | yes, live | yes + hard locks | yes, read and answer | registry + leases | local + Tailscale | yes |
+| [firstmate](https://github.com/kunchenguid/firstmate) (8.6k★) | no, one chat agent | per-project modes | its crew only | SSH "secondmates" | local | no |
+| [Hive](https://github.com/hivecommons/hive) (CNCF sandbox) | yes | autonomy levels L1–L6 | no | no | Docker / K8s | n/a |
+| Triage bots (ai-triager, Copilot Triage) | board or none | no | no | no | Action / local | n/a |
+
+## User Scenarios & Testing
+
+### User Story 1 - Install, connect a project, always find the dashboard (Priority: P1)
+
+The user installs Rusuban with one command, connects one or more repos of a project, and gets a
+dashboard URL that never gets lost. The project's rules come from the project's repo.
+
+**Why this priority**: nothing else exists without it, and "I can never find the URL" is a real complaint.
+
+**Independent Test**: on a clean machine with `gh` and `claude` logged in, run the install, connect a
+public repo, and see its issues and PRs in the dashboard.
+
+**Acceptance Scenarios**:
+
+1. **Given** `gh` and `claude` are logged in, **When** the user runs the init command and names a repo,
+   **Then** a project is created and the dashboard opens with the repo's items.
+2. **Given** Rusuban is installed, **When** the machine reboots, **Then** Rusuban starts on its own and
+   the dashboard is reachable at the same URL, from a shortcut and from an `open` command.
+3. **Given** a project repo with no rules folder, **When** the first scan runs, **Then** Rusuban only
+   observes, and the dashboard says how to add rules, with an example to start from. No rules, no action.
+4. **Given** the init, **When** it asks how agents may use this host (tool allowlist or full bypass),
+   **Then** the user's answer is stored in the instance; there is no silent default.
+
+### User Story 2 - Decisions come to me, wherever I am (Priority: P1)
+
+When a rule says a human decides, the user gets a decision card in the dashboard and a ping on the
+channels they chose, and answers in a few taps, from a phone if needed.
+
+**Why this priority**: it is the contract of the product: autonomous by default, human when the rules say.
+
+**Independent Test**: write a rule "a new feature always comes to me", open a feature request, receive a
+push, answer the card from the phone, see the agent apply the answer.
+
+**Acceptance Scenarios**:
+
+1. **Given** a rule that routes new features to the user, **When** a feature PR is judged, **Then** a card
+   presents it as it is (what is done, what is missing, the actions the agent will take) and a ping links
+   to it.
+2. **Given** a card, **When** the user picks an option or types a free answer, **Then** the coordinator
+   agent starts at once and the card shows what was done.
+3. **Given** quiet hours or a digest setting, **When** several non-urgent decisions arrive, **Then** they
+   are sent as one digest; an urgent one still pings at once.
+
+### User Story 3 - The project moves on its own, inside hard locks (Priority: P1)
+
+The agents triage issues, fix bugs, finish contributor PRs, and merge what the rules allow, without
+waiting on anyone more than the rules say (OpenScreen: a third party waits 2 days at most).
+
+**Why this priority**: it is what the OpenScreen pilot already proves; the product must keep it.
+
+**Independent Test**: the OpenScreen project runs on the generic product with its rules moved to text and
+config, and behaves as today.
+
+**Acceptance Scenarios**:
+
+1. **Given** text rules that allow merging bug fixes, **When** a fix PR has green CI on its exact head and
+   no open thread, **Then** it is merged, and the journal says why.
+2. **Given** the same rules, **When** a PR touches a locked path or its head moves after judgment,
+   **Then** it is never merged automatically, whatever the text or the PR content says.
+3. **Given** a PR whose description tells the agent to merge it, **When** it is judged, **Then** the
+   instruction is ignored as data and the PR is judged on its diff.
+4. **Given** a long task (a fix, a measurement), **When** the coordinator delegates it, **Then** a worker
+   agent runs in its own git worktree, and reports back when done.
+
+### User Story 4 - Every Claude conversation of the project, in one place (Priority: P1)
+
+The dashboard lists all Claude Code conversations held in the project's folders and worktrees, whoever
+started them, linked to the issue or PR they touch. The user reads them and answers them there.
+
+**Why this priority**: it is the user's core need: find their way through all conversations of a project.
+
+**Independent Test**: open a Claude Desktop session in a project worktree about PR #N; within a minute it
+appears in the dashboard under PR #N; answer it from the phone and see the answer in the transcript.
+
+**Acceptance Scenarios**:
+
+1. **Given** a session started in Claude Desktop in a project folder, **When** the hub refreshes,
+   **Then** it appears with its origin, title, last activity and linked items.
+2. **Given** a session on branch `fix/1475-keyframes` or citing #1475, **When** it is indexed, **Then** it
+   is linked to #1475 and listed on that item's card.
+3. **Given** a finished session, **When** the user answers it in the dashboard, **Then** the session is
+   resumed headless with that message and the reply shows in the transcript.
+4. **Given** a session still live elsewhere, **When** the user answers it, **Then** the answer goes to a
+   fork of the session, and the dashboard says so.
+
+### User Story 5 - Test machines as a shared, reserved resource (Priority: P2)
+
+The user describes their machines once. Agents see which ones are online and free, reserve one for the
+time of a test, and release it. A human's own desktop is used only after that human says yes.
+
+**Why this priority**: real e2e on every platform is what makes the current system effective.
+
+**Independent Test**: enroll a Mac by SSH, start two agents that both need macOS, see the second wait for
+the first's lease to end.
+
+**Acceptance Scenarios**:
+
+1. **Given** a machine enrolled with its capabilities, **When** it answers its probe, **Then** the
+   dashboard shows it online, and who holds it.
+2. **Given** a machine leased by an agent, **When** another agent asks for it, **Then** it waits in a
+   queue or picks another machine with the same capabilities.
+3. **Given** an agent that dies with a lease, **When** the lease expires, **Then** the machine is free
+   again and the journal says so.
+4. **Given** a machine flagged as a person's desktop, **When** an agent needs it, **Then** a decision card
+   asks that person first.
+
+### User Story 6 - Recurring tasks written as text (Priority: P2)
+
+A task is a text file: a title, a schedule, a working folder, and a prompt. It runs on schedule or on a
+click, and reports in the journal like the rest.
+
+**Independent Test**: add a daily task file, see it run at its time, open its conversation from the journal.
+
+**Acceptance Scenarios**:
+
+1. **Given** a task file with a schedule, **When** its time comes, **Then** it runs once, even after a
+   reboot that skipped the slot.
+2. **Given** two tasks sharing a lock, **When** both are due, **Then** they run one after the other.
+
+### User Story 7 - Several projects, one inbox (Priority: P2)
+
+One instance pilots several projects. Each has its repos, rules, tasks and machines; the inbox gathers
+the decisions of all projects.
+
+**Independent Test**: connect two projects, get one decision in each, see both in the inbox.
+
+### User Story 8 - Several maintainers, one instance each (Priority: P3)
+
+Each maintainer runs their own instance. Instances never work on the same item at the same time, and the
+rules route each decision to the right person.
+
+**Independent Test**: two instances on one repo; an item claimed by one is skipped by the other.
+
+**Acceptance Scenarios**:
+
+1. **Given** instance A works on #N, **When** instance B scans, **Then** B sees the claim on GitHub and
+   leaves #N alone.
+2. **Given** a rule "translations go to @alice", **When** a translation needs a decision, **Then** only
+   Alice's instance pings.
+
+### Edge Cases
+
+- A Claude Code update changes the transcript format: the hub degrades to listing sessions without
+  links, and says so; nothing else breaks.
+- The rules file is edited in a PR: the PR is never auto-merged; rules are always read from the default
+  branch.
+- Claude usage limits are reached: runs queue, the dashboard says why, nothing is lost.
+- The instance host sleeps or reboots mid-run: interrupted runs are marked, their requests go back to the
+  queue, leases expire.
+- A machine's checkout is stale or dirty: the agent resets it to the PR head in its own worktree, never
+  touches the user's working copy.
+- The user answers a card that a newer judgment replaced: the answer is refused with the reason.
+- Two instances race on the same item: the GitHub claim with the earliest timestamp wins.
+
+## Requirements
+
+### Functional Requirements
+
+**Install and access**
+
+- **FR-001**: Rusuban MUST install and start with one command on Windows, macOS and Linux, using the
+  existing `gh` and `claude` logins.
+- **FR-002**: It MUST start on its own at login, and give one stable URL, reachable from an `open`
+  command, a desktop or menu shortcut, and remotely through Tailscale.
+- **FR-003**: The dashboard MUST be reachable only from the host and the user's tailnet, never from the
+  public internet.
+
+**Projects, repos, configuration**
+
+- **FR-010**: An instance MUST pilot several projects; a project groups one or more GitHub repos, their
+  local folders, its rules, tasks and machines.
+- **FR-011**: Everything specific to a project MUST live in its configuration and text files; the product
+  code MUST hold no project-specific name, path, rule or prompt.
+- **FR-012**: Instance state (judgments, runs, journal) MUST live in the instance's home folder, never in
+  the repos.
+
+**Rules and hard locks**
+
+- **FR-020**: Rules MUST be free text, in a rules folder committed in the **project's** repo and read
+  from its default branch only. They say everything about behavior: what agents do alone, how far
+  (autonomy), who is pinged for what, how messages are written. The product has no default rules.
+- **FR-021**: Built-in hard locks MUST be enforced by the server without the model, in every project:
+  CI green on the exact head, no open review thread, head unchanged since judgment, the rules folder
+  itself never changed without a human, never a direct push to the default branch, a dashboard switch
+  that pauses all merges.
+- **FR-022**: A project MAY add hard locks in a small structured file next to its rules (locked paths,
+  size limits). Text rules MUST never lift a hard lock; a judgment that would break one becomes a card.
+- **FR-023**: Content from GitHub (issues, PRs, comments, diffs) MUST reach the agents as data, never as
+  instructions.
+- **FR-024**: Without a rules folder, Rusuban MUST only observe. The docs MUST ship example rules,
+  including the OpenScreen ones.
+- **FR-025**: What agents may run on a host (tool allowlist or full bypass) MUST belong to the instance
+  owner, set at init, never to the repo's rules: whoever can merge in the repo must not gain a shell on
+  a maintainer's machine.
+
+**Agents**
+
+- **FR-030**: Agents MUST be headless Claude Code sessions, with an explicit permission profile per task.
+- **FR-031**: A short coordinator MUST apply decisions and delegate long work to workers, each in its own
+  git worktree, with a configurable limit on concurrent workers.
+- **FR-032**: Every run MUST record its session id, folder, linked items, machines held, status, live
+  step and final summary.
+
+**Decisions and pings**
+
+- **FR-040**: A decision MUST be a card: what it is, what was done, options phrased as orders to the
+  agent, each with its effect, plus a free answer.
+- **FR-041**: Pings MUST go through pluggable channels: phone push, Slack, Discord, Microsoft Teams,
+  e-mail; each ping links to its card. In v1 channels are outbound only: answers happen in the dashboard.
+- **FR-042**: Rules MUST decide who is pinged and how urgently; the person's settings decide where.
+- **FR-043**: Answering a card MUST start the coordinator at once.
+
+**Conversations hub**
+
+- **FR-050**: The hub MUST index every Claude Code session whose folder belongs to a project (repo
+  checkouts and their worktrees), whatever started it, within one minute.
+- **FR-051**: It MUST link sessions to items by pilot metadata, branch name and cited numbers.
+- **FR-052**: The user MUST be able to read a full transcript in the dashboard, on a phone too.
+- **FR-053**: The user MUST be able to answer a session from the dashboard; a session live elsewhere is
+  answered through a fork.
+- **FR-054**: An "open in terminal" action MUST resume any session on the host.
+
+**Machines**
+
+- **FR-060**: A registry MUST describe each machine: OS, access (SSH alias or local), capabilities,
+  checkout folder, and whether it is a person's desktop.
+- **FR-061**: The server MUST probe machines and show online, offline, free or leased, and by whom.
+- **FR-062**: Agents MUST take an exclusive, expiring lease before using a machine, and release it after.
+- **FR-063**: A person's desktop MUST be leased only after that person accepts a card.
+- **FR-064**: An enrollment command MUST check SSH, prerequisites and the checkout, and add the machine.
+
+**Tasks, journal, freshness**
+
+- **FR-070**: Recurring tasks MUST be text files with a schedule, a lock group, a folder and a prompt.
+- **FR-071**: The journal MUST record everything done without the user, with links.
+- **FR-072**: The age of every piece of data MUST be visible; stale data is flagged.
+
+**Team (P3, after v1)**
+
+- **FR-080**: Every owner and decision MUST name a GitHub login, even with one user (v1).
+- **FR-081** (after v1): An instance MUST claim an item on GitHub before working on it and skip items
+  claimed by another instance.
+
+### Key Entities
+
+- **Instance**: one person's running pilot: their logins, channels, projects, machines, state.
+- **Project**: repos + local folders + rules + hard locks + tasks + machines in use.
+- **Item**: an issue or PR, with its live GitHub state.
+- **Judgment**: the agent's reading of an item: kind, owner (a login or the agent), waits-on, next step.
+- **Decision card**: a question to one person, with options and their effects; resolved by an answer.
+- **Rule set**: the text rules in the project repo, plus the built-in and project hard locks.
+- **Run**: one headless session (coordinator, worker or task): session id, folder, items, leases, status.
+- **Conversation**: any Claude Code session in a project folder, its origin and its links to items.
+- **Machine** and **Lease**: a test machine, its capabilities and probe state; an exclusive, expiring hold.
+- **Task**: a recurring text-defined job.
+- **Channel**: a ping destination (push, Slack, Discord, Teams, e-mail) and its settings.
+
+## Success Criteria
+
+### Measurable Outcomes
+
+- **SC-001**: From a machine with `gh` and `claude` logged in, install to first dashboard with a
+  connected repo in under 10 minutes.
+- **SC-002**: The OpenScreen pilot runs on the generic product with zero OpenScreen-specific string in
+  the product code (examples aside).
+- **SC-003**: A new Claude session in a project folder appears in the hub within 1 minute; at least 90 %
+  of sessions about an item are linked to it.
+- **SC-004**: From a ping, reading and answering a card takes 3 taps or fewer on a phone.
+- **SC-005**: Zero automatic merges with a hard lock broken, proven by adversarial fixtures (rules edited
+  in the PR, injected instructions, red CI, moved head).
+- **SC-006**: Never two agents on one machine at once; a dead agent's lease is freed within its expiry.
+- **SC-007**: Enrolling a new SSH machine takes under 5 minutes.
+
+## Assumptions
+
+- Claude Code keeps storing sessions as JSON lines under `~/.claude/projects/<folder>/`, Desktop sessions
+  included (verified on 2026-11-04), with `sessionId`, `cwd`, `gitBranch` and `entrypoint` fields. The
+  format is internal: the hub parses it defensively.
+- Agents run on the instance host and reach other machines over SSH; nothing runs Claude on them.
+- Users run agents on their own Claude plan or API key, within its usage limits.
+- GitHub is the only forge; `gh` is the GitHub client.
+- Remote access relies on Tailscale; no account system in v1.
+
+## Next steps
+
+1. Choose the name (npm and GitHub check) and the repo owner.
+2. Technical plan (`/speckit-plan`): what moves out of `.claude/pilot`, the config and rules layout,
+   the hub's transcript parser, the machine registry, the channel plugins.
+3. The OpenScreen project becomes the first user: its rules move to its repo, its machines to the
+   registry, its tasks to text files (SC-002).
