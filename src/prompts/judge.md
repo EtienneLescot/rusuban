@@ -41,6 +41,10 @@ write yourself.
 allow this PR to merge alone, judged on the commit `pr.head` you read. Whatever you write, the server
 adds its own locks: CI, threads, conflicts, locked paths, size, proofs.
 
+A PR that touches a path the locks' `evidence` names waits for its proof (see the context). Unless the
+rules say otherwise, start a worker whose mission is to produce that proof on the PR's head and record
+it with `rusuban evidence`; never record it yourself.
+
 Then the item's owner:
 
 - **`"agent"`**: the merge follows alone, or the next step is the agents' (a fix, a proof, a rebase),
