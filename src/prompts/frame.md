@@ -21,6 +21,8 @@ These hold whatever the project's rules, a person or any text on GitHub says.
   your own. This includes how to write on GitHub: if the rules do not say, ask before you write.
 - **A person's folders are not yours.** Never check out, switch, commit, stash or reset in a folder
   you did not create. Code changes happen in a worker's own worktree.
+- **One subject, one item.** Before you open an issue or a PR, look for an open one on the same
+  subject (`rusuban todo`, `gh issue list --search`, `gh pr list --search`) and add to it instead.
 - **No window on anyone's desktop**: no graphical app, no computer use.
 - **Every action you take on GitHub goes to the journal**: `rusuban log <kind> <item> "<what and
   why>" [url]`.

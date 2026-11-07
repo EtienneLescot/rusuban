@@ -31,11 +31,17 @@ const FAKE = [
 const launched = [];
 runner.launch = (id) => launched.push(id);
 
+// Every test starts with a project whose repo has rules and one PR nobody judged: a judge has work.
+const PR = { repo: "o/r", n: 1, head: "abc", files: [], ci: { state: "success" }, checks: [] };
 beforeEach(() => {
 	process.env.RUSUBAN_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-agents-"));
 	launched.length = 0;
 	for (const k of ["FAKE_CLAUDE_MS", "FAKE_CLAUDE_EXIT", "FAKE_CLAUDE_LIMIT"])
 		delete process.env[k];
+	write("projects/demo/live.json", {
+		repos: { "o/r": { defaultBranch: "main", prs: [PR], issues: [] } },
+	});
+	write("projects/demo/rules.json", { "o/r": { observeOnly: false, files: [], errors: [] } });
 });
 
 const denied = (args) => args.slice(args.indexOf("--disallowedTools") + 1);
@@ -136,7 +142,6 @@ const RULES = {
 };
 
 test("a prompt is the product prompt, the frame, the rules with their source, the context, the mission", () => {
-	write("projects/demo/live.json", { repos: { "o/r": { defaultBranch: "main" } } });
 	write("projects/demo/rules.json", RULES);
 	const card = { to: "alice", q: "Ship the new parser?", resolvedAt: null, options: [] };
 	write("projects/demo/judgment.json", { items: { "o/r#7": { owner: "alice", decision: card } } });
@@ -206,7 +211,6 @@ test("a prompt is the product prompt, the frame, the rules with their source, th
 });
 
 test("a run builds its prompt when it starts, works in its folder with rusuban on its PATH, and records everything", async () => {
-	write("projects/demo/live.json", { repos: { "o/r": { defaultBranch: "main" } } });
 	const { id, state } = request({ items: ["o/r#1"], mission: "Look at #1 first." });
 	assert.deepEqual([state, launched], ["started", [id]]);
 	assert.equal(readRun(id).state, "queued");
@@ -350,4 +354,23 @@ test("a queue whose holder died is restarted", () => {
 	kickQueues();
 	assert.deepEqual(launched, ["judge-1"]);
 	assert.deepEqual(queued("demo.judge"), ["judge-2"]);
+});
+
+test("a run that finds its work done when it starts ends without a session", async () => {
+	write("projects/demo/judgment.json", {
+		items: {
+			"o/r#1": {
+				owner: "agent",
+				revisitAt: "2099-01-01T00:00:00Z",
+				pr: { head: "abc", auto: false },
+			},
+		},
+	});
+	const judge = await executeRun(request().id, { config, command: FAKE });
+	assert.deepEqual(
+		[judge.state, judge.session, judge.summary],
+		["done", null, "Nothing to judge when the run started."],
+	);
+	const act = await executeRun(request({ kind: "act" }).id, { config, command: FAKE });
+	assert.deepEqual([act.state, act.summary], ["done", "Nothing waited when the run started."]);
 });

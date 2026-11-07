@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { append, homeDir, homePath, loadConfig, read, readJsonl, write } from "./home.mjs";
-import { pendingAnswers } from "./model.mjs";
+import { flatten, pendingAnswers, todoOf } from "./model.mjs";
 import { prepareWorktree, removeWorktree } from "./workers.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
@@ -663,6 +663,23 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			status.cwd ??= scratchOf(s.project);
 			fs.mkdirSync(status.cwd, { recursive: true });
 			if (s.kind === "act") pending = pendingOf(s.project);
+			// A run asked for while another worked may find its work done: it ends without a session.
+			const dir = `projects/${s.project}`;
+			const idle =
+				s.kind === "act"
+					? !(pending.answers.length || pending.asks.length || pending.reports.length)
+					: s.kind === "judge" &&
+						!todoOf({
+							live: flatten(live),
+							judgment: read(`${dir}/judgment.json`, { items: {} }),
+							rules: read(`${dir}/rules.json`, {}),
+						}).length;
+			if (idle)
+				return end({
+					state: "done",
+					exitCode: 0,
+					summary: `Nothing ${s.kind === "act" ? "waited" : "to judge"} when the run started.`,
+				});
 			prompt = assemblePrompt({
 				kind: s.kind,
 				project: s.project,

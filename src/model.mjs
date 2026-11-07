@@ -261,9 +261,16 @@ function lockStop(pr, j, rules = {}) {
 	return g.find((x) => (x.name === "Locks" || x.name === "Evidence") && x.state === "fail") ?? null;
 }
 
-// The reasons of contracts/cli.md. No delay is built in: an item comes back to the agents at its
-// judgment's revisitAt, which the agent sets from the project's rules. Items of repos without
-// rules never appear (FR-024).
+// A PR judged mergeable alone that its base moved under: it conflicts, or cannot be rebased for a
+// rebase merge. An agent rebases it; nothing else would until its revisitAt.
+function conflicts(pr, j, rules = {}) {
+	if (j?.pr?.head !== pr.head || j.pr.auto !== true || pr.draft) return false;
+	return mergeableGate(pr, rules.locks?.mergeMethod).state === "fail";
+}
+
+// The reasons of contracts/cli.md, plus `conflict`. No delay is built in: an item comes back to the
+// agents at its judgment's revisitAt, which the agent sets from the project's rules. Items of repos
+// without rules never appear (FR-024).
 export function todoOf({ live, judgment, rules = {}, now = Date.now() }) {
 	const acting = actingRepos(rules);
 	const items = judgment.items ?? {};
@@ -287,6 +294,8 @@ export function todoOf({ live, judgment, rules = {}, now = Date.now() }) {
 				head: pr.head,
 				lock: `${stop.name}: ${stop.detail}`,
 			});
+		else if (!hasOpenCard(j) && conflicts(pr, j, rules[pr.repo]))
+			out.push({ item, type: "pr", reason: "conflict", head: pr.head, base: pr.base });
 		if (pr.ci.state === "action_required")
 			out.push({
 				item,

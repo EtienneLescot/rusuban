@@ -31,6 +31,10 @@ live state and its judgment. An item is `owner/repo#n`, or `#n` when the project
 - **`lock-blocked`**: judged mergeable alone, but a project lock or the `.rusuban/` lock stops it (the
   entry names it). Only a person can lift it: write a card whose options include the merge order
   (`"merge": true`).
+- **`conflict`**: judged mergeable alone, but its base moved and it now conflicts, or cannot be
+  rebased. Start a worker to rebase it on its base, keeping its author's commits. When agents cannot
+  push to its branch (a fork that refuses maintainer edits), ask its author on GitHub (`owner:
+  "third"`).
 
 More than five items to read: hand the reading to subagents, read-only and in parallel, then judge and
 write yourself.
