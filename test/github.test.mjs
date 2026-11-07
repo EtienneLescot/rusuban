@@ -18,7 +18,7 @@ const run = (name, workflow, status, conclusion) => ({
 	checkSuite: { workflowRun: workflow ? { workflow: { name: workflow } } : null },
 });
 
-test("checks: runs carry their workflow, statuses their context, and skips do not count as CI", () => {
+test("checks: runs carry their workflow, statuses their context", () => {
 	const checks = checksOf([
 		run("test", "CI", "COMPLETED", "SUCCESS"),
 		run("lint", "CI", "IN_PROGRESS", null),
@@ -28,8 +28,33 @@ test("checks: runs carry their workflow, statuses their context, and skips do no
 		checks.map((c) => `${c.workflow}/${c.name}:${c.state}`),
 		["CI/test:success", "CI/lint:pending", "null/CodeRabbit:success"],
 	);
-	assert.equal(ciOf(checksOf([run("x", "CI", "COMPLETED", "SKIPPED")]), []).state, "none");
-	assert.equal(ciOf(checksOf([run("x", "CI", "COMPLETED", "TIMED_OUT")]), []).state, "failure");
+});
+
+test("check states as FR-021 reads them: only success, neutral and skipped pass", () => {
+	const state = (status, conclusion) => checksOf([run("x", "CI", status, conclusion)])[0].state;
+	assert.equal(state("COMPLETED", "SUCCESS"), "success");
+	assert.equal(state("COMPLETED", "NEUTRAL"), "skipped");
+	assert.equal(state("COMPLETED", "SKIPPED"), "skipped");
+	for (const c of ["FAILURE", "CANCELLED", "TIMED_OUT", "STALE", "STARTUP_FAILURE"])
+		assert.equal(state("COMPLETED", c), "failure", c);
+	assert.equal(state("COMPLETED", "ACTION_REQUIRED"), "waiting");
+	assert.equal(state("WAITING", null), "waiting");
+	for (const s of ["QUEUED", "IN_PROGRESS", "PENDING", "REQUESTED"])
+		assert.equal(state(s, null), "pending");
+	const status = (s) =>
+		checksOf([{ __typename: "StatusContext", context: "x", state: s }])[0].state;
+	assert.deepEqual(["SUCCESS", "PENDING", "EXPECTED", "FAILURE", "ERROR"].map(status), [
+		"success",
+		"pending",
+		"pending",
+		"failure",
+		"failure",
+	]);
+	const ci = (...checks) => ciOf(checksOf(checks), []).state;
+	assert.equal(ci(), "none");
+	assert.equal(ci(run("x", "CI", "COMPLETED", "SKIPPED")), "success");
+	assert.equal(ci(run("x", "CI", "COMPLETED", "TIMED_OUT")), "failure");
+	assert.equal(ci(run("x", "CI", "WAITING", null)), "pending");
 });
 
 test("a fork's workflow awaiting approval wins over a green rollup, and is named", () => {

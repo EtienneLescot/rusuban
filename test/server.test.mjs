@@ -4,46 +4,53 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { read, saveConfig } from "../src/home.mjs";
+import { agentLog, read, saveConfig } from "../src/home.mjs";
 import { checkPost, checkRequest, startServer } from "../src/server.mjs";
 
-const OWNER = { login: "alice" };
-const at = (headers) =>
-	checkRequest({ host: "127.0.0.1:8788", ...headers }, { port: 8788, owner: OWNER });
+const OWNER = { login: "alice", tailscaleLogin: "alice@example.com" };
+const TAILNET = "box.tail1234.ts.net";
+const at = (headers, owner = OWNER, tailnet = TAILNET) =>
+	checkRequest({ host: "127.0.0.1:8788", ...headers }, { port: 8788, owner, tailnet });
+const remote = (login, host = TAILNET) => at({ host, "tailscale-user-login": login });
 const write = (headers) =>
 	checkPost(
 		{ origin: "http://127.0.0.1:8788", "x-rusuban": "1", "content-length": "20", ...headers },
-		{ port: 8788 },
+		{ port: 8788, tailnet: TAILNET },
 	);
 
-test("a request must name this server as its host", () => {
+test("a request must name this server as its host: loopback or its own tailnet name", () => {
 	assert.equal(at({}), null);
 	assert.equal(at({ host: "localhost:8788" }), null);
 	assert.equal(at({ host: "evil.example:8788" }).status, 403);
 	assert.equal(at({ host: "127.0.0.1:9999" }).status, 403);
+	assert.equal(remote("alice@example.com", "other.tail9999.ts.net").error, "unknown host");
+	assert.equal(
+		at({ host: TAILNET, "tailscale-user-login": "alice@example.com" }, OWNER, null).error,
+		"unknown host",
+	);
 });
 
-test("a tailnet caller must be the owner", () => {
-	assert.equal(at({ host: "box.tail1234.ts.net", "tailscale-user-login": "alice@github" }), null);
-	assert.equal(at({ host: "box.tail1234.ts.net", "tailscale-user-login": "Alice" }), null);
+test("on the tailnet name, the caller must be the owner's Tailscale login", () => {
+	assert.equal(remote("alice@example.com"), null);
+	assert.equal(remote("Alice@Example.com"), null);
+	assert.equal(remote("alice@example.com", `${TAILNET}:8443`), null);
+	// The GitHub login is not the Tailscale login.
+	assert.equal(remote("alice").error, "not the owner");
+	assert.equal(remote("alice@github").error, "not the owner");
+	assert.equal(remote("mallory@example.com").error, "not the owner");
+	assert.equal(at({ host: TAILNET }).error, "no tailnet identity");
+	assert.equal(at({ "tailscale-user-login": "mallory@example.com" }).status, 403);
+	// Without a stored Tailscale login, nobody comes in from the tailnet.
 	assert.equal(
-		at({ host: "box.tail1234.ts.net", "tailscale-user-login": "mallory@github" }).error,
+		at({ host: TAILNET, "tailscale-user-login": "alice@example.com" }, { login: "alice" }).error,
 		"not the owner",
-	);
-	assert.equal(at({ "tailscale-user-login": "mallory@github" }).status, 403);
-	assert.equal(at({ host: "box.tail1234.ts.net" }).error, "no tailnet identity");
-	assert.equal(
-		checkRequest(
-			{ host: "box.ts.net", "tailscale-user-login": "a@b.c" },
-			{ port: 1, owner: { login: "alice", tailscale: "a@b.c" } },
-		),
-		null,
 	);
 });
 
 test("a write needs our origin, the x-rusuban header and a small body", () => {
 	assert.equal(write({}), null);
-	assert.equal(write({ origin: "https://box.tail1234.ts.net" }), null);
+	assert.equal(write({ origin: `https://${TAILNET}` }), null);
+	assert.equal(write({ origin: "https://other.tail9999.ts.net" }).error, "origin refused");
 	assert.equal(write({ origin: "https://evil.example" }).error, "origin refused");
 	assert.equal(write({ origin: undefined }).error, "origin refused");
 	assert.equal(write({ "x-rusuban": undefined }).error, "missing x-rusuban header");
@@ -59,9 +66,9 @@ before(async () => {
 		owner: OWNER,
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
-		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
+		projects: [{ id: "demo", mode: "shadow", repos: [{ slug: "o/r" }] }],
 	});
-	srv = await startServer({ port: 0, polling: false, quiet: true });
+	srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: TAILNET });
 });
 after(() => srv.close());
 
@@ -95,23 +102,38 @@ test("the state and its live stream are served on loopback, merges paused until 
 	assert.equal(res.status, 200);
 	const state = JSON.parse(res.text);
 	assert.deepEqual(
-		[state.me, state.armed, state.project.id, state.project.observeOnly],
-		["alice", false, "demo", true],
+		[state.me, state.armed, state.project.id, state.project.mode, state.project.observeOnly],
+		["alice", false, "demo", "shadow", true],
 	);
 	const events = await call("GET", "/api/events?project=demo");
 	assert.match(events.text, /^event: state\ndata: \{/);
 });
 
-test("the merge switch takes a proper write and journals it", async () => {
+test("reads from the tailnet need its name as Host and the owner's Tailscale login", async () => {
+	const get = (host, login) =>
+		call("GET", "/api/state?project=demo", { headers: { host, "tailscale-user-login": login } });
+	assert.equal((await get(TAILNET, "alice@example.com")).status, 200);
+	assert.equal((await get(TAILNET, "alice")).status, 403);
+	assert.equal((await get("other.tail9999.ts.net", "alice@example.com")).status, 403);
+});
+
+test("the merge switch takes a proper write and journals it; the agents' log shows in the same journal", async () => {
 	const ok = await call("POST", "/api/automerge", {
 		headers: ours(),
 		body: JSON.stringify({ armed: true }),
 	});
 	assert.deepEqual([ok.status, JSON.parse(ok.text)], [200, { armed: true }]);
-	assert.equal(read("automerge.json").armed, true);
+	const saved = read("automerge.json");
+	assert.deepEqual([saved.armed, saved.by, Date.parse(saved.at) > 0], [true, "alice", true]);
 	assert.match(
 		fs.readFileSync(path.join(process.env.RUSUBAN_HOME, "projects/demo/journal.jsonl"), "utf8"),
 		/Merges armed/,
+	);
+	agentLog("demo", { kind: "note", item: null, text: "Judged 3 PRs", by: "agent:judge-1" });
+	const { journal } = JSON.parse((await call("GET", "/api/state?project=demo")).text);
+	assert.deepEqual(
+		journal.map((e) => e.text),
+		["Judged 3 PRs", "Merges armed"],
 	);
 });
 

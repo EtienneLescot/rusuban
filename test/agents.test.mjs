@@ -16,6 +16,7 @@ import {
 	readRun,
 	requestRun,
 	runner,
+	SHADOW_DENY,
 } from "../src/agents.mjs";
 import { homePath, write } from "../src/home.mjs";
 
@@ -82,7 +83,7 @@ const config = {
 	port: 0,
 	permissions: { mode: "bypass", allow: [], deny: [] },
 	limits: { maxWorkers: 3, maxRunMinutes: 150 },
-	projects: [],
+	projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
 	machines: [],
 	channels: [],
 };
@@ -109,6 +110,34 @@ test("a run records its session, steps, denials and summary, with the deny rules
 	assert.match(log, /denied: Bash gh pr merge 1/);
 	assert.deepEqual(readRun(id), done);
 	assert.equal(holder("demo.judge"), null);
+});
+
+test("a shadow project's runs are denied every GitHub write, a live project's are not", async () => {
+	for (const rule of [
+		"Bash(gh pr comment*)",
+		"Bash(gh pr review*)",
+		"Bash(gh issue close*)",
+		"Bash(gh pr edit*)",
+		"Bash(gh api* -X*)",
+		"Bash(gh api* --method*)",
+		"Bash(gh api* -f*)",
+		"Bash(git push*)",
+	])
+		assert.ok(SHADOW_DENY.includes(rule), rule);
+	assert.ok(!builtInDeny({ home: HOME }).some((r) => SHADOW_DENY.includes(r)));
+	assert.deepEqual(
+		builtInDeny({ home: HOME, shadow: true }).slice(-SHADOW_DENY.length),
+		SHADOW_DENY,
+	);
+	const argsOf = async (projects) => {
+		const { id } = request();
+		const done = await executeRun(id, { config: { ...config, projects }, command: FAKE });
+		return JSON.parse(done.summary).args;
+	};
+	assert.ok(!(await argsOf(config.projects)).includes("Bash(git push*)"));
+	assert.ok((await argsOf([{ id: "demo", mode: "shadow" }])).includes("Bash(git push*)"));
+	// A run whose project is no longer configured gets the shadow rules too.
+	assert.ok((await argsOf([])).includes("Bash(gh pr comment*)"));
 });
 
 test("runs of one lock group go one after the other, in order of request", async () => {

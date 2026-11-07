@@ -1,14 +1,15 @@
 // The daemon. It reads every project's repos and rules on their own clock, computes the model, and
 // serves the dashboard with its live stream, on 127.0.0.1 only. Remote access goes through Tailscale
-// Serve, whose identity header must be the owner's (research R7). It reads GitHub and never writes
-// to it here; `dry` marks a run that must never write to GitHub nor start an agent, the promise
-// the merge gate and the judge trigger will keep once they exist.
+// Serve, whose identity header must be the owner's Tailscale login (research R7). It reads GitHub and
+// never writes to it here; `dry` marks a run that must never write to GitHub nor start an agent, the
+// promise the merge gate and the judge trigger will keep once they exist.
+import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import { kickQueues, listRuns } from "./agents.mjs";
 import { poll } from "./github.mjs";
-import { homePath, journal, loadConfig, read, readJsonl, write } from "./home.mjs";
+import { homePath, journal, loadConfig, read, readJournal, readJsonl, write } from "./home.mjs";
 import { buildModel, flatten, keyOf } from "./model.mjs";
 import { loadRules } from "./rules.mjs";
 
@@ -29,32 +30,47 @@ const firstLine = (e) =>
 		.split("\n")[0];
 
 // ── Who may ask ───────────────────────────────────────────────────────────────────────────────
-const TAILNET = /^[a-z0-9-]+(\.[a-z0-9-]+)*\.ts\.net$/;
 const localHosts = (port) => [`127.0.0.1:${port}`, `localhost:${port}`];
+const onName = (host, name) => !!name && (host === name || host.startsWith(`${name}:`));
 
-// Every request: the Host must be this server's (a page cannot reach it by DNS rebinding), and a
-// caller from the tailnet must be the owner. A loopback request without the header is the local user.
-export function checkRequest(headers, { port, owner }) {
+// The machine's tailnet name, the Host that Tailscale Serve forwards; null when Tailscale is not
+// installed or not logged in.
+export function tailnetName() {
+	return new Promise((resolve) =>
+		execFile("tailscale", ["status", "--json"], { timeout: 5000, windowsHide: true }, (e, out) => {
+			try {
+				const name = e ? null : JSON.parse(out).Self?.DNSName;
+				resolve(name ? name.replace(/\.$/, "").toLowerCase() : null);
+			} catch {
+				resolve(null);
+			}
+		}),
+	);
+}
+
+// Every request, GET included (transcripts are private): the Host must be this server's, on loopback
+// or on its tailnet name, so a page cannot reach it by DNS rebinding. On the tailnet name, Tailscale
+// Serve's identity header must be the owner's Tailscale login (research R7). A loopback request
+// without that header is the local user.
+export function checkRequest(headers, { port, owner, tailnet = null }) {
 	const host = String(headers.host ?? "").toLowerCase();
-	const tailnet = TAILNET.test(host);
-	if (!tailnet && !localHosts(port).includes(host)) return { status: 403, error: "unknown host" };
+	const remote = onName(host, tailnet);
+	if (!remote && !localHosts(port).includes(host)) return { status: 403, error: "unknown host" };
 	const login = headers["tailscale-user-login"];
-	if (login === undefined) return tailnet ? { status: 403, error: "no tailnet identity" } : null;
-	const allowed = [owner.tailscale, owner.login, `${owner.login}@github`]
-		.filter(Boolean)
-		.map((s) => s.toLowerCase());
-	return allowed.includes(String(login).toLowerCase())
+	if (login === undefined) return remote ? { status: 403, error: "no tailnet identity" } : null;
+	const mine = owner.tailscaleLogin?.toLowerCase();
+	return mine && String(login).toLowerCase() === mine
 		? null
 		: { status: 403, error: "not the owner" };
 }
 
 // Every write also needs the dashboard's own origin, the x-rusuban header (another site cannot send
 // it without a CORS preflight this server never answers) and a body under 8 KB.
-export function checkPost(headers, { port }) {
+export function checkPost(headers, { port, tailnet = null }) {
 	const origin = String(headers.origin ?? "").toLowerCase();
 	const ours =
 		localHosts(port).some((h) => origin === `http://${h}`) ||
-		(origin.startsWith("https://") && TAILNET.test(origin.slice(8)));
+		(origin.startsWith("https://") && onName(origin.slice(8), tailnet));
 	if (!ours) return { status: 403, error: "origin refused" };
 	if (headers["x-rusuban"] !== "1") return { status: 403, error: "missing x-rusuban header" };
 	if (Number(headers["content-length"] ?? 0) > MAX_BODY)
@@ -140,7 +156,7 @@ export function stateOf(ctx, projectId) {
 	const liveFile = read(`${dir}/live.json`, { repos: {} });
 	const live = flatten(liveFile);
 	const rules = read(`${dir}/rules.json`, {});
-	const journalAll = readJsonl(`${dir}/journal.jsonl`);
+	const journalAll = readJournal(p.id);
 	const runs = listRuns(p.id)
 		.slice(0, 30)
 		.map((r) => ({ ...r, focus: focusOf(r, live) }));
@@ -155,6 +171,7 @@ export function stateOf(ctx, projectId) {
 		project: {
 			id: p.id,
 			title: p.title,
+			mode: p.mode,
 			repos,
 			observeOnly: repos.every((s) => rules[s]?.observeOnly !== false),
 		},
@@ -166,6 +183,7 @@ export function stateOf(ctx, projectId) {
 			journal: journalAll,
 			runs,
 			armed,
+			shadow: p.mode === "shadow",
 			me,
 		}),
 		freshness: {
@@ -351,14 +369,21 @@ async function handle(ctx, req, res) {
 }
 
 // Starts the daemon. `polling: false` serves without reading GitHub (tests); `port` overrides the
-// config's (0 picks a free one).
-export async function startServer({ dry = false, port, polling = true, quiet = false } = {}) {
+// config's (0 picks a free one); `tailnet` sets the tailnet name instead of asking Tailscale.
+export async function startServer({
+	dry = false,
+	port,
+	polling = true,
+	quiet = false,
+	tailnet,
+} = {}) {
 	const config = loadConfig();
 	const ctx = {
 		config,
 		dry,
 		port: port ?? config.port,
 		owner: config.owner,
+		tailnet: tailnet === undefined ? await tailnetName() : tailnet,
 		loops: new Map(),
 		errors: new Map(),
 		clients: new Set(),
@@ -394,6 +419,13 @@ export async function startServer({ dry = false, port, polling = true, quiet = f
 			for (const c of ctx.clients) c.res.write(": ping\n\n");
 		}, 15000),
 	];
+	// Tailscale may come up after the daemon, at logon: its name is asked again every 5 minutes.
+	if (tailnet === undefined)
+		timers.push(
+			setInterval(async () => {
+				ctx.tailnet = (await tailnetName()) ?? ctx.tailnet;
+			}, 300_000),
+		);
 	if (polling) for (const p of config.projects) startLoop(ctx, p);
 	ctx.say(
 		`rusuban ${version} on http://127.0.0.1:${ctx.port}/${dry ? " (dry: no GitHub write, no agent)" : ""}`,

@@ -21,6 +21,8 @@ const T = {
 	observeOnly:
 		"Observe only: no repo of this project has rules in .rusuban/rules/ yet. Agents read it and never act.",
 	dry: "Dry mode: the server starts no agent and writes nothing on GitHub.",
+	shadow:
+		"Shadow mode: agents judge and propose, nothing is written on GitHub and nothing is merged.",
 	offline: "Server unreachable: the display is frozen.",
 	filters: "Filters",
 	areaFrames: "Area frames",
@@ -63,6 +65,7 @@ const T = {
 	waitsForYou: "Waits for your answer",
 	readyNext: "Ready: merges at the next read",
 	readyPaused: "Ready, auto-merge paused",
+	readyShadow: "Ready, shadow mode",
 	observedOnly: "Observed only: this repo has no rules",
 	yoursToDecide: (kind) => `${kind} · yours to decide`,
 	waitsFor: (kind, who) => `${kind} · waits for ${who}`,
@@ -263,7 +266,7 @@ function subOf(n) {
 		// The switch is a banner of its own: the line under a PR names what else stops it.
 		const gates = n.gates.filter((g) => g.name !== "Switch");
 		if (gates.every((g) => g.state === "ok" || g.state === "na"))
-			return { t: T.readyPaused, c: "#fbbf24" };
+			return { t: S.project?.mode === "shadow" ? T.readyShadow : T.readyPaused, c: "#fbbf24" };
 		const g =
 			gates.find((x) => x.state === "fail") ??
 			gates.find((x) => x.state === "wait") ??
@@ -818,6 +821,7 @@ function render() {
 	$("paused").hidden = S.armed;
 	$("observe").hidden = !S.project?.observeOnly;
 	$("dry").hidden = !S.dry;
+	$("shadow").hidden = S.project?.mode !== "shadow";
 	for (const b of document.querySelectorAll(".tabs button"))
 		b.setAttribute("aria-selected", String(b.dataset.view === ui.view));
 	$("vp").hidden = ui.view !== "graph";
