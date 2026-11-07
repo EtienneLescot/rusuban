@@ -113,11 +113,12 @@ OpenScreen's.
 | **M2** Conversations | The hub: index, links, reading, answering | US4 |
 | **M3** Pings | Five channels, routing, digest, quiet hours | US2 |
 | **M4** Machines | Registry, probes, leases, enrollment, a person's desktop by card | US5 |
-| **M5** Release | `init`, the service per OS, Tailscale, docs, npm v0.1, public repo | US1 |
+| **M5** Release | `init`, the service per OS, Tailscale, docs, npm v0.1 | US1 |
 | After v1 | Team claims, answers from channels, an agent-only GitHub token | US8 |
 
-Decided on 2026-11-07: parity first (M1 before M2); the repo stays private until v0.1 (M5) and lives
-under Etienne's personal account (`EtienneLescot/rusuban`).
+Decided on 2026-11-07: parity first (M1 before M2); the repo lives under Etienne's personal account
+(`EtienneLescot/rusuban`) and is public since M0: made public on 2026-11-07 so that CI runs free on the
+three OSes.
 
 ## Complexity Tracking
 

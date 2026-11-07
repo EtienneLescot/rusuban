@@ -193,7 +193,7 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 - [ ] T080 [P] Generic rule examples in `examples/rules/` next to OpenScreen's
 - [ ] T081 [P] Playwright tests in `test/e2e/`: answer a card, answer a conversation, release a machine
 - [ ] T082 Run every check of quickstart.md (SC-001 to SC-007) and record the results in `specs/001-autopilot/validation.md`
-- [ ] T083 Publish v0.1.0 on npm, make the repo public, write the release notes
+- [ ] T083 Publish v0.1.0 on npm and write the release notes (the repo is public since M0)
 
 **After v1, not scheduled**: team claims (US8, FR-081), answers from the channels, an agent-only
 GitHub token with a repository ruleset.
@@ -222,4 +222,4 @@ GitHub token with a repository ruleset.
   the generic product from its own rules. Parity first was chosen on 2026-11-07, before the
   conversations hub, which comes right after (Phase 7).
 - Each later phase ships alone, tested on OpenScreen before moving on.
-- The repo stays private until Phase 11, which publishes v0.1.
+- The repo is public since M0 (free CI on the three OSes); Phase 11 publishes v0.1 on npm.
