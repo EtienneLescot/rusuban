@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title data-t="brand"></title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="top">
+	<div class="brand"><strong data-t="brand"></strong><span id="project-name"></span><select id="project" data-t-label="project" hidden></select></div>
+	<div class="status">
+		<button type="button" class="pill" id="fresh" data-t-title="refreshNow"><span class="dot"></span><b data-t="github"></b><span class="mono" id="fresh-label">…</span></button>
+		<button type="button" class="pill" id="agents" aria-expanded="false" aria-controls="drawer"><span class="pill-crab"><svg class="crab-svg" viewBox="0 0 16 12" aria-hidden="true" shape-rendering="crispEdges"><rect x="2" y="1" width="12" height="7" fill="#d97757"/><rect x="0" y="3" width="2" height="3" fill="#d97757"/><rect x="14" y="3" width="2" height="3" fill="#d97757"/><rect x="5" y="3" width="1" height="2" fill="#1a0f0b"/><rect x="10" y="3" width="1" height="2" fill="#1a0f0b"/><rect x="3" y="8" width="1" height="3" fill="#d97757"/><rect x="5" y="8" width="1" height="3" fill="#d97757"/><rect x="10" y="8" width="1" height="3" fill="#d97757"/><rect x="12" y="8" width="1" height="3" fill="#d97757"/></svg></span><b data-t="agents"></b><span id="agents-label" class="ellipsis">…</span><span class="mono" id="agents-time"></span></button>
+		<div class="pill switch-pill">
+			<span id="auto-label" data-t="autoMerge"></span>
+			<button type="button" id="auto" role="switch" aria-checked="false" aria-labelledby="auto-label" class="switch"><span></span></button>
+		</div>
+	</div>
+	<div class="actions">
+		<button type="button" id="mine" aria-pressed="false"><span class="mono" id="mine-count">0</span> <span data-t="forYou"></span></button>
+		<div class="tabs" role="tablist" data-t-label="view">
+			<button type="button" role="tab" data-view="graph" aria-selected="true" data-t="graph"></button>
+			<button type="button" role="tab" data-view="kanban" aria-selected="false" data-t="kanban"></button>
+		</div>
+	</div>
+</header>
+<div class="banner" id="paused" hidden><span class="dot"></span><span data-t="paused"></span></div>
+<div class="banner info" id="observe" hidden><span class="dot"></span><span data-t="observeOnly"></span></div>
+<div class="banner info" id="dry" hidden><span class="dot"></span><span data-t="dry"></span></div>
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+<div class="banner error" id="offline" hidden><span class="dot"></span><span data-t="offline"></span></div>
+<nav class="filters" data-t-label="filters">
+	<div class="chips" id="own-chips"></div>
+	<div class="chips" id="kind-chips"></div>
+	<button type="button" class="chip" id="themes" aria-pressed="true" data-t="areaFrames"></button>
+	<div class="legend">
+		<span class="ttag"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg><span data-t="issue"></span></span>
+		<span class="ttag"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><path d="M6 9v12"/></svg><span data-t="pr"></span></span>
+		<span><span class="pill-crab legend-crab"><svg class="crab-svg" viewBox="0 0 16 12" aria-hidden="true" shape-rendering="crispEdges"><rect x="2" y="1" width="12" height="7" fill="#d97757"/><rect x="0" y="3" width="2" height="3" fill="#d97757"/><rect x="14" y="3" width="2" height="3" fill="#d97757"/><rect x="5" y="3" width="1" height="2" fill="#1a0f0b"/><rect x="10" y="3" width="1" height="2" fill="#1a0f0b"/><rect x="3" y="8" width="1" height="3" fill="#d97757"/><rect x="5" y="8" width="1" height="3" fill="#d97757"/><rect x="10" y="8" width="1" height="3" fill="#d97757"/><rect x="12" y="8" width="1" height="3" fill="#d97757"/></svg></span><span data-t="agentOnIt"></span></span>
+		<span><i class="ln addresses"></i><span data-t="edgeAddresses"></span></span>
+		<span><i class="ln before"></i><span data-t="edgeBefore"></span></span>
+		<span><i class="ln files"></i><span data-t="edgeFiles"></span></span>
+		<span><i class="ln main"></i><span data-t="edgeMain"></span></span>
+	</div>
+</nav>
+<div class="stage">
+	<div class="vp" id="vp">
+		<div class="world" id="world">
+			<div id="frames"></div>
+			<svg id="edges" width="1" height="1" aria-hidden="true"></svg>
+			<div id="main-node"></div>
+			<div id="nodes"></div>
+			<div id="labels"></div>
+		</div>
+		<div class="zoom">
+			<button type="button" id="zoom-out" data-t-label="zoomOut"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+			<span class="mono" id="zoom-pct"></span>
+			<button type="button" id="zoom-in" data-t-label="zoomIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
+			<button type="button" id="fit" data-t="fit"></button>
+			<button type="button" id="collapse" data-t="collapse" hidden></button>
+		</div>
+		<div class="minimap" id="minimap" data-t-label="minimap"><div id="mini"></div><span id="mini-view"></span></div>
+	</div>
+	<main class="kanban" id="kanban" hidden></main>
+	<aside class="drawer" id="drawer" hidden data-t-label="agentsDrawer"></aside>
+</div>
+<footer class="bottom">
+	<div class="feed"><button type="button" id="feed-open" data-t="doneWithoutYou"></button><span id="feed"></span></div>
+</footer>
+<script type="module" src="/app.js"></script>
+</body>
+</html>
