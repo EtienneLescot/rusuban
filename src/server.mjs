@@ -193,6 +193,7 @@ export function stateOf(ctx, projectId) {
 					r
 						? {
 								observeOnly: r.observeOnly,
+								ref: r.ref ?? null,
 								treeSha: r.treeSha,
 								files: (r.files ?? []).map((f) => f.name),
 								locks: r.locks,
