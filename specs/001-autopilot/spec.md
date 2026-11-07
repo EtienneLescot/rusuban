@@ -74,6 +74,8 @@ this for one repo with OpenScreen-specific code and prompts.
   still start agents.
 - Q: The OpenScreen pilot's history? → A: Not imported; the old pilot is archived read-only (default
   taken during the analysis, open to change).
+- Q: Checks that should not block a merge (OpenScreen's Nix build, fork workflows awaiting approval)?
+  → A: The project's locks file names them in `ignoredChecks`, never all of them.
 
 ## Positioning
 
@@ -272,7 +274,8 @@ rules route each decision to the right person.
   direct push to the default branch, a switch that pauses all merges. **CI green** means: at least one
   check on the head; every check run and status on it is `success`, `neutral` or `skipped`; none is
   pending, failed, cancelled, timed out or waiting for approval; every name in `requiredChecks` is
-  present and `success`.
+  present and `success`. A project's locks file may name checks that do not count
+  (`ignoredChecks`), never all of them.
 - **FR-022**: A project MAY add hard locks in a small structured file next to its rules (locked paths,
   size limits, required checks, evidence). Text rules MUST never lift a hard lock; a judgment that would
   break one becomes a card, and a person's merge order on that card is carried out under FR-044.

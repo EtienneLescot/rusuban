@@ -69,7 +69,7 @@ file has **one writer**. `rusuban` is the product name.
   "lockedPaths": [".github/**", "package-lock.json"],
   "maxLines": 300, "maxFiles": 15,
   "sizeExempt": ["**/*.test.*", "docs/**"],
-  "requiredChecks": [], "requiredReviewers": ["coderabbitai"],
+  "requiredChecks": [], "requiredReviewers": ["coderabbitai"], "ignoredChecks": ["nix build"],
   "evidence": [{ "paths": ["crates/compositor/**"], "what": "pixel-identical export and ±5 % timing" }]
 }
 ```
@@ -78,6 +78,8 @@ file has **one writer**. `rusuban` is the product name.
   thread, head unchanged since judgment, the `.rusuban/` folder itself, never a push to the default
   branch, the global merge switch.
 - `evidence` generalizes OpenScreen's R4 measure: a PR touching these paths needs a recorded proof.
+- `ignoredChecks`: check names that never block a merge (a slow optional build, a fork notification);
+  never all of them. A head whose only checks are ignored is not green.
 
 ### Item (live)
 

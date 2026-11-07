@@ -82,7 +82,8 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
   `localhost:<port>` or the instance's tailnet name, which stops DNS rebinding. A request on the tailnet
   name must carry `Tailscale-User-Login` equal to `owner.tailscaleLogin`, read by `remote enable` from
   `tailscale status --json`; it may differ from the GitHub login. GET requests are checked too: the
-  transcripts are private.
+  transcripts are private. The tailnet name is read from `tailscale status --json` at start and every
+  5 minutes.
 - **Alternatives**: own login system (rejected for v1); binding to the LAN (rejected: unauthenticated).
 
 ## R8. Ping channels

@@ -1,4 +1,7 @@
 <!--
+Sync Impact Report, 1.2.0 (2026-11-07)
+- Principle IV: a project may name checks that do not count toward CI green (`ignoredChecks`), never all
+
 Sync Impact Report, 1.1.0 (2026-11-07, after the spec analysis)
 - Principle III extended: without rules nothing is autonomous but the owner's explicit requests run;
   a rules change applies at once and is journaled; silent rules mean a card, never a default
@@ -61,7 +64,7 @@ own instance, on their own machine.
 
 - Only the server merges, a merge a person orders on a card included, through gates computed on live
   state, never from memory: CI green on the exact head, no open review thread, head unchanged since
-  judgment, no conflict.
+  judgment, no conflict. A project's locks file may name checks that do not count, never all of them.
 - A judgment is tied to the commit it read. A new commit invalidates it.
 - Built-in locks hold in every project and no configuration lifts them: the rules folder never changes
   without a person, no direct push to the default branch, one switch pauses every merge. A project may
@@ -113,4 +116,4 @@ own instance, on their own machine.
 - Every plan checks its compliance with the six principles before implementation; a justified
   exception goes in its Complexity Tracking table.
 
-**Version**: 1.1.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-07
+**Version**: 1.2.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-07
