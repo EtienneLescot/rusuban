@@ -19,7 +19,7 @@
 	},
 	"scripts": {
 		"lint": "biome check .",
-		"test": "node --test",
+		"test": "node --test \"test/*.test.mjs\"",
 		"test:e2e": "echo No e2e tests yet && exit 1"
 	},
 	"devDependencies": {
