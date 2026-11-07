@@ -17,13 +17,7 @@
 			<button type="button" id="auto" role="switch" aria-checked="false" aria-labelledby="auto-label" class="switch"><span></span></button>
 		</div>
 	</div>
-	<div class="actions">
-		<button type="button" id="mine" aria-pressed="false"><span class="mono" id="mine-count">0</span> <span data-t="forYou"></span></button>
-		<div class="tabs" role="tablist" data-t-label="view">
-			<button type="button" role="tab" data-view="graph" aria-selected="true" data-t="graph"></button>
-			<button type="button" role="tab" data-view="kanban" aria-selected="false" data-t="kanban"></button>
-		</div>
-	</div>
+	<button type="button" class="menu" id="menu" aria-expanded="false" data-t-label="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
 </header>
 <div class="banner" id="paused" hidden><span class="dot"></span><span data-t="paused"></span></div>
 <div class="banner info" id="observe" hidden><span class="dot"></span><span data-t="observeOnly"></span></div>
@@ -32,6 +26,11 @@
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 <div class="banner error" id="offline" hidden><span class="dot"></span><span data-t="offline"></span></div>
 <nav class="filters" data-t-label="filters">
+	<div class="views" role="tablist" data-t-label="view">
+		<button type="button" role="tab" data-view="graph" aria-selected="true" data-t="graph"></button>
+		<button type="button" role="tab" data-view="kanban" aria-selected="false" data-t="kanban"></button>
+		<button type="button" role="tab" data-view="conversations" aria-selected="false" data-t="conversations"></button>
+	</div>
 	<div class="chips" id="own-chips"></div>
 	<div class="chips" id="kind-chips"></div>
 	<button type="button" class="chip" id="themes" aria-pressed="true" data-t="areaFrames"></button>
@@ -46,29 +45,39 @@
 	</div>
 </nav>
 <div class="stage">
-	<div class="vp" id="vp">
-		<div class="world" id="world">
-			<div id="frames"></div>
-			<svg id="edges" width="1" height="1" aria-hidden="true"></svg>
-			<div id="main-node"></div>
-			<div id="nodes"></div>
-			<div id="labels"></div>
+	<div class="main-area">
+		<div class="vp" id="vp">
+			<div class="world" id="world">
+				<div id="frames"></div>
+				<svg id="edges" width="1" height="1" aria-hidden="true"></svg>
+				<div id="main-node"></div>
+				<div id="nodes"></div>
+				<div id="labels"></div>
+			</div>
+			<div class="zoom">
+				<button type="button" id="zoom-out" data-t-label="zoomOut"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
+				<span class="mono" id="zoom-pct"></span>
+				<button type="button" id="zoom-in" data-t-label="zoomIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
+				<button type="button" id="fit" data-t="fit"></button>
+				<button type="button" id="collapse" data-t="collapse" hidden></button>
+			</div>
+			<div class="minimap" id="minimap" data-t-label="minimap"><div id="mini"></div><span id="mini-view"></span></div>
 		</div>
-		<div class="zoom">
-			<button type="button" id="zoom-out" data-t-label="zoomOut"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg></button>
-			<span class="mono" id="zoom-pct"></span>
-			<button type="button" id="zoom-in" data-t-label="zoomIn"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg></button>
-			<button type="button" id="fit" data-t="fit"></button>
-			<button type="button" id="collapse" data-t="collapse" hidden></button>
-		</div>
-		<div class="minimap" id="minimap" data-t-label="minimap"><div id="mini"></div><span id="mini-view"></span></div>
+		<main class="kanban" id="kanban" hidden></main>
+		<main class="conversations" id="conversations" hidden><p data-t="conversationsSoon"></p></main>
+		<aside class="drawer" id="drawer" hidden data-t-label="agentsDrawer"></aside>
 	</div>
-	<main class="kanban" id="kanban" hidden></main>
-	<aside class="drawer" id="drawer" hidden data-t-label="agentsDrawer"></aside>
+	<aside class="inbox" id="inbox" data-t-label="inbox"></aside>
 </div>
 <footer class="bottom">
 	<div class="feed"><button type="button" id="feed-open" data-t="doneWithoutYou"></button><span id="feed"></span></div>
 </footer>
+<nav class="tabbar" id="tabbar" data-t-label="view">
+	<button type="button" data-tab="inbox"><span data-t="inbox"></span><b class="mono" id="tab-count"></b></button>
+	<button type="button" data-tab="graph" data-t="graph"></button>
+	<button type="button" data-tab="conversations" data-t="conversations"></button>
+	<button type="button" data-tab="agents" data-t="agents"></button>
+</nav>
 <script type="module" src="/app.js"></script>
 </body>
 </html>
