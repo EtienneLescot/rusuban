@@ -107,7 +107,7 @@ a:hover {
 }
 
 /* Header */
-.top {
+header.top {
 	flex: 0 0 auto;
 	display: flex;
 	flex-wrap: wrap;
@@ -2649,7 +2649,7 @@ body[data-showing="conversations"] .filters > :not(.views) {
 
 /* Phone: one screen at a time, picked in the tab bar; an open card covers them all. */
 @media (max-width: 720px) {
-	.top {
+	header.top {
 		flex-wrap: wrap;
 		gap: 8px;
 		padding: 6px 8px 6px 16px;
