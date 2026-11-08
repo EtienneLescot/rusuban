@@ -128,6 +128,12 @@ test("size counts code, not exempt tests or docs", () => {
 test("evidence paths need a proof recorded on the current head", () => {
 	const files = [file("crates/compositor/src/scene.rs", 5)];
 	assert.match(by(gates(pr(1, { files }), fix(1)), "Evidence").detail, /pixel-identical/);
+	// Tests and docs under a zone change no behavior to prove: sizeExempt leaves them out.
+	const tests = [
+		file("crates/compositor/src/scene.test.rs", 5),
+		file("crates/compositor/README.md"),
+	];
+	assert.equal(by(gates(pr(1, { files: tests }), fix(1)), "Evidence").state, "na");
 	const proved = fix(1, {
 		pr: { head: "sha1", auto: true, evidence: { state: "ok", head: "sha1" } },
 	});

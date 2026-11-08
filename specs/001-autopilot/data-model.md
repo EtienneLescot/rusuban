@@ -86,6 +86,8 @@ file has **one writer**. `rusuban` is the product name.
   thread, head unchanged since judgment, the `.rusuban/` folder itself, never a push to the default
   branch, the global merge switch.
 - `evidence` generalizes OpenScreen's R4 measure: a PR touching these paths needs a recorded proof.
+- `sizeExempt` files count toward neither the size locks nor an `evidence` zone: a PR that touches only
+  tests or docs under a zone needs no proof.
 - `ignoredChecks`: check names that never block a merge (a slow optional build, a fork notification);
   never all of them. A head whose only checks are ignored is not green.
 

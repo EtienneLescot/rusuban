@@ -49,8 +49,9 @@ A card reads in three voices, with no doubt about who speaks:
   as duplicate"). Never a statement they would make, never a question.
 - **`effect`**: what you will do, in the first person.
 - **`message`**: the exact text posted on GitHub if this option is chosen.
-- **`urgency`**: `now` or `digest`, as the rules say who is pinged how urgently; `digest` when they do
-  not say.
+- **`urgency`**: `now` or `digest`, as the rules say who is pinged how urgently. Never pick one they
+  do not give: where they are silent, the silence is for the owner to fill, so the card is `now` and
+  its `ctx` ends by saying the rules do not set its urgency.
 - **`"merge": true`**: choosing this option orders the server to merge the PR on the head the card was
   written on. CI, threads and conflicts are still checked; the project's locks are lifted for that
   head only. PR cards only.

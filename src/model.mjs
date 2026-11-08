@@ -186,7 +186,8 @@ function locksGate(pr, rules) {
 	return gate("ok", "Within the locks");
 }
 
-// Evidence: a PR touching the paths a lock names needs a proof recorded on its head.
+// Evidence: a PR touching the paths a lock names needs a proof recorded on its head. Files the size
+// locks exempt (tests, docs) do not count: they change no behavior to prove.
 function evidenceGate(pr, j, locks) {
 	const exempt = matcher(locks.sizeExempt);
 	const zones = (locks.evidence ?? []).filter((e) => {
