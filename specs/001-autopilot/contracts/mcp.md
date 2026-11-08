@@ -41,12 +41,13 @@ Settings. Each one returns `{ state, text }`, where `state` is:
 | `owner { login }` | always |
 | `task_write { id, title, project, schedule?, lock?, cwd?, prompt }` | always: its card shows the task, or the diff of its file |
 | `task_remove { id }` | never: the task stops, its file is kept as `<id>.md.removed` |
+| `channel_add { type, target, urgency?, quietHours?, digestAt?, smtp?, from? }` | always: data leaves to its target |
+| `channel_remove { id }` | never |
 
 These arrive with their phases, through the same module:
 
 | Tool | Phase | Widens when |
 |---|---|---|
-| `channel_add { type, target, urgency? }`, `channel_remove { id }` | 8 (T065) | add: always, since data leaves to its target; remove: never |
 | `machine_add { alias, os, caps?, workspace?, owner? }`, `machine_remove { name }` | 9 | add: always; remove: never |
 | `remote { enabled }` | 10 (T076) | `enabled` is true |
 

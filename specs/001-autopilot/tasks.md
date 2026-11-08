@@ -268,7 +268,9 @@ an answer from the phone appears in its transcript.
   - Functions with their effects injected: `dispatch({ config, cards, state, now, port, tailnet }, { send, journal })`, one message per channel. The daemon keeps the state between calls (a `pings.json` of its own, not yet in data-model.md) and never runs two at once; that wiring is left for T065.
   - Quiet hours hold only what can wait: an urgent card pings at once (US2 scenario 3). A digest card waits for a `digestAt` passed since it came; without one it goes as it comes, outside quiet hours. A new channel does not replay the inbox. Three tries (at once, 1 then 5 minutes later), then a `ping-failed` entry with `notify`.
   - Only cards ping: the journal's `notify` flags (T031, T092, T094) have no urgency to route them by.
-- [ ] T065 [US2] `channel add|test|list` in `bin/rusuban.mjs`; secrets only in `config.json` (mode 600)
+- [x] T065 [US2] `channel add|test|list` in `bin/rusuban.mjs`; secrets only in `config.json` (mode 600)
+  - Through the settings module: adding a channel sends data out, so it waits for the owner's card or a typed confirmation; removing one applies at once. `channel remove`, and `channel_add`, `channel_remove` in the MCP. A target shows only its host, an e-mail channel its address; `channel test` really sends.
+  - The daemon calls the dispatcher every minute (never two at once), its state in `pings.json`; a dry daemon pings no one. A setting waiting for the owner pings like any `now` card.
 - [x] T107 [US2] Ping links straight to the card (`/#card/<id>`), on the tailnet address when remote access is on; in v1 every card goes to the owner (FR-045)
   - Remote access counts as on when `owner.tailscaleLogin` is stored and Tailscale names the machine, so `remote disable` (T076) must remove that login. A digest links each card on its own line and opens the inbox.
 - [ ] T108 [US2] Live proof of M3: a real card pings a phone and is answered in three taps (SC-004)

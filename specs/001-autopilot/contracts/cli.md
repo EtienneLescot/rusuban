@@ -17,7 +17,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `permissions <bypass\|allowlist>` | The host profile (FR-025): what agents may run on this machine. `bypass` widens it. |
 | `machine add <alias> [--os] [--caps a,b] [--workspace <path>] [--owner <login>]` | Checks SSH, the `rusuban` account, git and the workspace, creates the bare mirror, then registers the machine. `--owner` marks a person's desktop. |
 | `machine list` / `machine probe [<machine>]` / `machine doctor <machine>` | `doctor` rechecks SSH, the account, the workspace and the project's toolchain. |
-| `channel add <ntfy\|slack\|discord\|teams\|email> <target>` / `channel test <id>` / `channel list` | |
+| `channel add <ntfy\|slack\|discord\|teams\|email> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM] [--smtp <url>] [--from <address>]` / `channel test <id>` / `channel list` / `channel remove <id>` | Adding one sends data out (FR-092): confirmed. A target shows only its host. |
 | `task list` / `task run <id>` | The catalog with each task's slots, state and last runs; starts a task now, refused while one of its runs waits or works. |
 | `task add <file.md>` / `task remove <id>` | Writes a task into the instance (it widens: confirmed, FR-092), or sets one aside, its file kept as `<id>.md.removed`. |
 | `mcp` | Rusuban's MCP server on stdio (`contracts/mcp.md`). |

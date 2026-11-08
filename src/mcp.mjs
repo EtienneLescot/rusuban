@@ -5,7 +5,7 @@ import fs from "node:fs";
 import readline from "node:readline";
 import { loadConfig, read, readJournal } from "./home.mjs";
 import { runsOf, stateOf } from "./server.mjs";
-import { changeSetting, pendingRequests } from "./settings.mjs";
+import { changeSetting, maskTarget, pendingRequests } from "./settings.mjs";
 import { tasksState } from "./tasks.mjs";
 
 const { version } = JSON.parse(
@@ -41,6 +41,12 @@ export const TOOLS = [
 				hostProfile: c.permissions.mode,
 				limits: c.limits,
 				mergesArmed: read("automerge.json", { armed: false }).armed === true,
+				channels: c.channels.map((ch) => ({
+					id: ch.id,
+					type: ch.type,
+					target: maskTarget(ch),
+					urgency: ch.urgency,
+				})),
 				projects: c.projects.map(({ id, title, mode, bypassApproval, repos }) => ({
 					id,
 					title,
@@ -166,6 +172,30 @@ export const TOOLS = [
 			["id", "title", "project", "prompt"],
 		),
 		run: (a) => set({ kind: "task.write", id: a.id, text: frontMatter(a) }),
+	},
+	{
+		name: "channel_add",
+		description:
+			"Adds a channel cards ping (ntfy, slack, discord, teams or email, its target a URL or an address). It sends data out, so it waits for the owner.",
+		inputSchema: obj(
+			{
+				type: { type: "string", enum: ["ntfy", "slack", "discord", "teams", "email"] },
+				target: text,
+				urgency: { type: "array", items: { type: "string", enum: ["now", "digest"] } },
+				quietHours: text,
+				digestAt: text,
+				smtp: text,
+				from: text,
+			},
+			["type", "target"],
+		),
+		run: (a) => set({ kind: "channel.add", ...a }),
+	},
+	{
+		name: "channel_remove",
+		description: "Removes a channel: it applies at once.",
+		inputSchema: obj({ id: text }, ["id"]),
+		run: ({ id }) => set({ kind: "channel.remove", id }),
 	},
 	{
 		name: "task_remove",
