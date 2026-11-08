@@ -18,7 +18,7 @@ file has **one writer**. `rusuban` is the product name.
 | `projects/<p>/journal.jsonl` | daemon | `{ at, kind, item?, text, href?, by }` |
 | `projects/<p>/agent-log.jsonl` | agent CLI, under the judgment lock | same shape; the dashboard shows both files as one journal |
 | `pings.json` | daemon | the pings' state between two calls of the dispatcher: per channel, since when it pings and what it sent or retries |
-| `automerge.json` | daemon | the merge switch: `{ armed, at, by }`; `init` asks whether to arm it |
+| `automerge.json` | the settings module (the dashboard's switch, the MCP) | the merge switch: `{ armed, at, by }`; `init` asks whether to arm it; arming it from Claude waits for the owner (FR-092) |
 | `runs/<run>/status.json` | the run's launcher | Run |
 | `runs/<run>/<ts>.log` | the run's launcher | readable live steps |
 | `hub/index.json` | daemon | `{ version, scannedAt, sessions: { "<id>": Conversation }, files: { "<path>": { size, offset, mtime } } }`; an index of another version is read again from scratch |
