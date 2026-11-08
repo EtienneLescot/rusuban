@@ -97,7 +97,7 @@ const BRANCH = {
 			},
 		},
 	],
-	classic: { enabled: false },
+	classic: null,
 };
 const run = (id, name, app, conclusion, status = "completed") => ({
 	id,
@@ -231,10 +231,7 @@ test("the guard: every required check on the head, from its app, in its latest r
 		}),
 		["deploy is pending on the head"],
 	);
-	const classic = {
-		enabled: true,
-		required_status_checks: { checks: [{ context: "Build", app_id: ACTIONS }] },
-	};
+	const classic = { required_status_checks: { checks: [{ context: "Build", app_id: ACTIONS }] } };
 	assert.deepEqual(requiredChecksOf({ rules: [], classic }), [{ name: "Build", app: ACTIONS }]);
 });
 
@@ -263,6 +260,61 @@ test("the guard: a rule the bypass would skip, or one it does not know, stops it
 		}),
 		["the branch requires PRs up to date with it, which the bypass cannot check"],
 	);
+});
+
+test("the guard: classic protection read in full, its approval and push-only settings pass, the rest stops it", () => {
+	const off = { enabled: false };
+	const passes = {
+		url: "https://api.github.com/repos/o/r/branches/main/protection",
+		required_status_checks: { strict: false, contexts: [], checks: [] },
+		required_pull_request_reviews: {
+			required_approving_review_count: 1,
+			dismiss_stale_reviews: true,
+			require_last_push_approval: true,
+			require_code_owner_reviews: false,
+		},
+		required_linear_history: { enabled: true },
+		required_conversation_resolution: { enabled: true },
+		required_signatures: off,
+		enforce_admins: off,
+		lock_branch: off,
+		allow_force_pushes: off,
+		allow_deletions: off,
+		block_creations: off,
+		allow_fork_syncing: off,
+	};
+	const classic = (over) => stopsOf({ classic: { ...passes, ...over } });
+	assert.deepEqual(classic({}), []);
+	assert.deepEqual(classic({ required_status_checks: { strict: true } }), [
+		"the branch requires PRs up to date with it, which the bypass cannot check",
+	]);
+	assert.deepEqual(
+		classic({ required_pull_request_reviews: { require_code_owner_reviews: true } }),
+		["the branch requires a code owner's review"],
+	);
+	assert.deepEqual(classic({ required_signatures: { enabled: true } }), [
+		"the branch requires signed commits, which the bypass cannot check",
+	]);
+	assert.deepEqual(classic({ enforce_admins: { enabled: true } }), [
+		"the branch's protection binds administrators too",
+	]);
+	assert.deepEqual(classic({ restrictions: { users: [], teams: [], apps: [] } }), [
+		"the branch restricts who can push to it",
+	]);
+	assert.deepEqual(classic({ lock_branch: { enabled: true } }), ["the branch is locked"]);
+	assert.deepEqual(classic({ merge_queue: { enabled: true } }), [
+		"the branch's protection has merge_queue",
+	]);
+	assert.deepEqual(classic({ required_pull_request_reviews: { require_review_from_bots: true } }), [
+		"the branch's protection has require_review_from_bots",
+	]);
+	// What a ruleset and classic protection both require is said once.
+	assert.deepEqual(stopsOf({ classic: passes, method: "merge" }), [
+		"the branch requires a linear history, and the merge method is merge",
+	]);
+	assert.deepEqual(stopsOf({ classic: passes, pr: pr(1, { threadsOpen: 1 }) }), [
+		"a review thread is open",
+	]);
 });
 
 test("off, the server never merges with --admin; on, it does only what it merges anyway, rules met", async () => {

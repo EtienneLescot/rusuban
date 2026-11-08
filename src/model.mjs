@@ -250,6 +250,58 @@ const PR_RULE_KEYS = [
 	"required_review_thread_resolution",
 ];
 
+// Classic branch protection, as `GET /branches/{b}/protection` returns it (null: none), read like the
+// rulesets: approval and push-only settings pass, a setting `--admin` would skip stops the bypass, and
+// so does one this code does not know.
+const CLASSIC_KNOWN = [
+	"url",
+	"required_status_checks",
+	"required_pull_request_reviews",
+	"required_linear_history",
+	"required_conversation_resolution",
+	"required_signatures",
+	"enforce_admins",
+	"restrictions",
+	"lock_branch",
+	"allow_force_pushes",
+	"allow_deletions",
+	"block_creations",
+	"allow_fork_syncing",
+];
+const CLASSIC_REVIEWS = [
+	"url",
+	"dismissal_restrictions",
+	"dismiss_stale_reviews",
+	"required_approving_review_count",
+	"require_last_push_approval",
+	"bypass_pull_request_allowances",
+	"require_code_owner_reviews",
+];
+const on = (setting) => setting?.enabled === true;
+function classicStops(c, method, pr) {
+	if (!c) return [];
+	const stops = [];
+	const reviews = c.required_pull_request_reviews ?? {};
+	if (c.required_status_checks?.strict)
+		stops.push("the branch requires PRs up to date with it, which the bypass cannot check");
+	if (reviews.require_code_owner_reviews) stops.push("the branch requires a code owner's review");
+	if (on(c.required_linear_history) && method === "merge")
+		stops.push("the branch requires a linear history, and the merge method is merge");
+	if (on(c.required_conversation_resolution) && pr.threadsOpen > 0)
+		stops.push("a review thread is open");
+	if (on(c.required_signatures))
+		stops.push("the branch requires signed commits, which the bypass cannot check");
+	if (on(c.enforce_admins)) stops.push("the branch's protection binds administrators too");
+	if (c.restrictions) stops.push("the branch restricts who can push to it");
+	if (on(c.lock_branch)) stops.push("the branch is locked");
+	const unknown = [
+		...Object.keys(c).filter((k) => !CLASSIC_KNOWN.includes(k)),
+		...Object.keys(reviews).filter((k) => !CLASSIC_REVIEWS.includes(k)),
+	];
+	if (unknown.length) stops.push(`the branch's protection has ${unknown.join(", ")}`);
+	return stops;
+}
+
 // Every check the branch requires, with the app that must report it (null: any).
 export function requiredChecksOf({ rules = [], classic = null }) {
 	const out = rules
@@ -260,7 +312,7 @@ export function requiredChecksOf({ rules = [], classic = null }) {
 				app: c.integration_id ?? null,
 			})),
 		);
-	if (classic?.enabled) {
+	if (classic) {
 		const c = classic.required_status_checks ?? {};
 		out.push(
 			...(c.checks?.length
@@ -295,6 +347,7 @@ export function bypassStops({ rules = [], classic = null, runs = [], statuses = 
 			if (unknown.length) stops.push(`the branch's pull request rule has ${unknown.join(", ")}`);
 		} else stops.push(`the branch has a ${r.type} rule, which the bypass cannot check`);
 	}
+	stops.push(...classicStops(classic, method, pr));
 	for (const { name, app } of requiredChecksOf({ rules, classic })) {
 		const latest = runs
 			.filter((x) => x.name === name && (app === null || x.app === app))
@@ -307,7 +360,7 @@ export function bypassStops({ rules = [], classic = null, runs = [], statuses = 
 			: status?.state;
 		if (state !== "success") stops.push(`${name} is ${state ?? "missing"} on the head`);
 	}
-	return stops;
+	return [...new Set(stops)]; // a ruleset and classic protection may require the same thing
 }
 
 // ── State helpers ─────────────────────────────────────────────────────────────────────────────

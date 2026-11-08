@@ -99,14 +99,18 @@ export const mergePr = ({ slug, n, method, head, admin = false }) =>
 	]);
 
 // What the approval bypass needs to know before it merges, read only: the base branch's rules (its
-// rulesets, and its classic protection when that is on), and every check run and status of the head.
+// rulesets, and its classic protection in full, null when there is none), and every check run and
+// status of the head. Reading classic protection takes an admin's token, which `--admin` needs anyway.
 const api = async (endpoint, jq) => (await gh(["api", "--paginate", endpoint, "--jq", jq])).trim();
 const lines = (text) => (text ? text.split("\n").map((l) => JSON.parse(l)) : []);
 export async function branchRules(slug, branch) {
 	const b = encodeURIComponent(branch);
 	return {
 		rules: lines(await api(`repos/${slug}/rules/branches/${b}`, ".[]")),
-		classic: JSON.parse(await api(`repos/${slug}/branches/${b}`, ".protection")),
+		classic: await api(`repos/${slug}/branches/${b}/protection`, ".").then(JSON.parse, (e) => {
+			if (/Branch not protected/.test(`${e.stderr ?? ""} ${e.message}`)) return null;
+			throw e;
+		}),
 	};
 }
 export async function headChecks(slug, sha) {
