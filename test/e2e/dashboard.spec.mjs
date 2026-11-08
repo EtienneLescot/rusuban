@@ -199,3 +199,27 @@ test("Conversations: by item, filtered by origin; the reader shows one and answe
 		.poll(() => readJsonl("projects/acme/journal.jsonl").map((e) => e.text))
 		.toContain("Answered the conversation “Fix the crash on save” in a fork");
 });
+
+test("a project without rules says so under the view tabs, with how to add rules", async ({
+	page,
+	isMobile,
+}) => {
+	test.skip(isMobile, "the project switcher is the desktop's");
+	await expect(page.locator("#observe")).toBeHidden(); // acme has its rules
+	await page.selectOption("#project", "orbit");
+	const banner = page.locator("#observe");
+	await expect(banner).toBeVisible();
+	await expect(banner.locator("b")).toHaveText("Observe only");
+	await expect(page.locator(".main-card")).toContainText("people merge");
+	await expect(page.locator("#observe-text")).toHaveText(
+		"No rules in .rusuban/rules/ on main: agents read this project and never act.",
+	);
+	await expect(banner.getByRole("link", { name: "Rule examples ↗" })).toHaveAttribute(
+		"href",
+		/\/examples\/rules$/,
+	);
+	await expect(banner.getByRole("link", { name: "How rules work ↗" })).toHaveAttribute(
+		"href",
+		/\/docs\/writing-rules\.md$/,
+	);
+});

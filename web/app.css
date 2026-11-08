@@ -296,6 +296,36 @@ button.pill:hover {
 .banner.info .dot {
 	background: var(--blue);
 }
+/* A project without rules (mockups/observe-only): under the view tabs, with its two links. */
+.observe {
+	flex: 0 0 auto;
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 16px;
+	margin: 8px 20px 0;
+	padding: 12px 16px;
+	border-radius: 12px;
+	border: 1px solid rgba(96, 165, 250, 0.35);
+	background: rgba(96, 165, 250, 0.08);
+	color: #d9e2ee;
+}
+.observe[hidden] {
+	display: none;
+}
+.observe b {
+	color: var(--text-hi);
+}
+.observe span {
+	flex: 1 1 280px;
+}
+.observe a {
+	flex: none;
+	color: #60a5fa;
+}
+.observe a:hover {
+	color: #93c5fd;
+}
 .banner.error {
 	background: rgba(239, 68, 68, 0.12);
 	border-color: rgba(239, 68, 68, 0.4);
