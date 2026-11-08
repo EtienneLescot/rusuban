@@ -1,0 +1,7 @@
+{
+	"mergeMethod": "squash",
+	"lockedPaths": [".github/**", "LICENSE", "package.json", "*.lock", "*-lock.json", "*-lock.yaml"],
+	"maxLines": 200,
+	"maxFiles": 10,
+	"sizeExempt": ["*.test.*", "**/test/**", "**/tests/**", "*.md", "docs/**"]
+}
