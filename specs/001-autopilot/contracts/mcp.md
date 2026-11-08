@@ -1,7 +1,8 @@
 # Contract: the MCP server (`rusuban mcp`)
 
 Every setting from Claude (US9, FR-090 to FR-095). A stdio MCP server, started by Claude Code as
-`rusuban mcp`; `init` registers it with `claude mcp add --scope user rusuban -- rusuban mcp`. Its tools
+`rusuban mcp`; `init` registers it with `claude mcp add --scope user rusuban -- <node> <bin> mcp`, absolute
+paths that no shell's PATH or Windows `.cmd` shim changes. Its tools
 call the same settings module as the owner's commands (`src/settings.mjs`): one implementation.
 
 ## Refusals
