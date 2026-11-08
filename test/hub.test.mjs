@@ -481,3 +481,34 @@ test("a terminal opens on the session's folder, a quote in its path kept", () =>
 		["-d", "C:\\w", "cmd", "/k", "claude --resume abc"],
 	]);
 });
+
+test("a compaction's summary is Claude's: no title, no citation, nothing in the reader", async () => {
+	live([], [issue(7), issue(8)]);
+	const checkout = path.join(work, "widgets");
+	const summary = {
+		type: "user",
+		isCompactSummary: true,
+		isVisibleInTranscriptOnly: true,
+		message: { role: "user", content: "Summary: we fixed #7, then looked at #8." },
+		timestamp: "2026-11-05T11:00:00.000Z",
+		cwd: checkout,
+		sessionId: "long",
+		entrypoint: "cli",
+	};
+	place(
+		"long",
+		checkout,
+		said("long", checkout, "Fix #7") +
+			`${JSON.stringify(summary)}\n` +
+			said("long", checkout, "Go on", "2026-11-05T11:01:00.000Z"),
+	);
+	const index = await scanHub({ config, root });
+	assert.equal(index.version, 2);
+	assert.equal(index.sessions.long.title, "Fix #7");
+	assert.deepEqual(index.sessions.long.items, ["acme/widgets#7"]);
+	const { entries } = await readPage(index, "long");
+	assert.deepEqual(
+		entries.map((e) => e.text),
+		["Fix #7", "Go on"],
+	);
+});

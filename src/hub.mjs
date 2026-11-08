@@ -14,7 +14,7 @@ import { read, write } from "./home.mjs";
 import { flatten, keyOf } from "./model.mjs";
 
 const INDEX = "hub/index.json";
-const VERSION = 1; // an index of another version is read again from scratch
+const VERSION = 2; // an index of another version is read again from scratch
 const LIVE_MS = 120_000; // a transcript written in the last two minutes is a live session
 const CHUNK = 1 << 20; // read 1 MB at a time: a transcript can pass 100 MB
 const RESULT_MAX = 2048; // a tool result is cut to 2 KB in a page
@@ -230,7 +230,8 @@ function take(s, line) {
 	if (o.type === "pr-link" && repo && Number.isInteger(o.prNumber))
 		if (!s.prs.some((p) => p.repo === repo && p.n === o.prNumber))
 			s.prs.push({ repo, n: o.prNumber, url: str(o.prUrl) });
-	if (o.type === "user" && !o.isMeta && !o.isSidechain)
+	// A compaction's summary is Claude's own text: neither the person's words nor their citations.
+	if (o.type === "user" && !o.isMeta && !o.isSidechain && !o.isCompactSummary)
 		for (const p of partsOf(o.message)) {
 			const text = p?.type === "text" && humanText(p.text);
 			if (!text) continue;
@@ -424,7 +425,8 @@ const resultText = (c) =>
 			: "";
 
 // What one line shows in the reader: a person's text, Claude's text, its tool calls with a short
-// input, their results cut to 2 KB. Injected messages and subagents' lines show nothing.
+// input, their results cut to 2 KB. Injected messages, subagents' lines and a compaction's summary
+// show nothing.
 function entriesOf(line) {
 	let o;
 	try {
@@ -432,7 +434,7 @@ function entriesOf(line) {
 	} catch {
 		return [];
 	}
-	if (!o || typeof o !== "object" || o.isMeta || o.isSidechain) return [];
+	if (!o || typeof o !== "object" || o.isMeta || o.isSidechain || o.isCompactSummary) return [];
 	const at = str(o.timestamp);
 	const out = [];
 	for (const p of partsOf(o.message)) {

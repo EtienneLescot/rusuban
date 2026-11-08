@@ -73,7 +73,8 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
 - **Linking order**: pilot run metadata → `pr-link` → `gitBranch` equal to a PR head ref → `#N` and
   GitHub URLs in the title and user messages. A run's session takes no citation: its prompt cites every
   open card. A bare `#N` links only to an item the live state knows. The `<system-reminder>` blocks
-  Claude Code adds to a message are neither title nor citation. A fork's PR from its default branch
+  Claude Code adds to a message are neither title nor citation, nor is a compaction's summary
+  (`isCompactSummary`), which the reader does not show either. A fork's PR from its default branch
   never matches a session on `main`.
 - **Missed, accepted**: a session that moves into a project folder after it started elsewhere is missed
   while its transcript stays in its first folder: only the folders a project folder's slug starts are
