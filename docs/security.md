@@ -88,13 +88,15 @@ the agents' PRs, pushed under your account, cannot get your approval. The approv
 - **It merges only what the server merges anyway**: in a live project, with the merge switch armed,
   every gate green or your merge order given. It then merges with `gh pr merge --admin`.
 - **`--admin` skips every rule of the branch**, so the server first reads the base branch's rulesets,
-  the required checks of its classic protection, and the head's checks. It merges only if:
+  its classic protection in full, and the head's checks. It merges only if:
   - every check the branch requires is on the head, from the app the rule names if it names one, and
     `success` in its latest run, checks the locks ignore included;
   - the merge method is one the branch allows, and not `merge` under a linear-history rule;
   - the branch requires neither a code owner's review nor PRs up to date with it, and no thread is
     open where it requires them resolved;
-  - the branch holds no rule the server does not know.
+  - classic protection requires no signed commits, does not bind administrators, restrict who can
+    push or lock the branch;
+  - the branch holds no rule or protection setting the server does not know.
 - **Journaled.** What stops the bypass is journaled once per head and flagged. Turning it on is
   journaled and flagged; turning it off is journaled.
 
@@ -129,9 +131,6 @@ These go to the journal and to your inbox's "Flagged for you", for 7 days:
   and an agent past the deny rules has every right your token has.
 - **A merge order overrides the project's locks for its head**; a paused switch still holds it. An
   agent wrote the card: read it before you pick its merge option.
-- **The approval bypass reads classic branch protection for its required checks only.** `--admin`
-  also skips the classic settings it does not read, such as an up-to-date requirement, signed commits
-  or a code owner's review. Rulesets are what it checks.
 
 ## Tests
 
