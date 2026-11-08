@@ -272,3 +272,17 @@ test("a desktop a run asks for: a card in the inbox, lent or not, never answered
 	await expect(item).toHaveCount(0);
 	expect(answerOf("worker-20261108-1100-cd34", "desk")?.yes).toBe(true);
 });
+
+test("a node's top row takes nothing from the page's header: no square corner past its rounding", async ({
+	page,
+	isMobile,
+}) => {
+	await goTo(page, "graph", isMobile);
+	const row = page.locator(".node .row.top").first();
+	await expect(row).toBeVisible();
+	const style = await row.evaluate((e) => {
+		const s = getComputedStyle(e);
+		return { bg: s.backgroundColor, border: s.borderBottomStyle };
+	});
+	expect(style).toEqual({ bg: "rgba(0, 0, 0, 0)", border: "none" });
+});
