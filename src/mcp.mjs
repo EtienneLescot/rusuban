@@ -186,6 +186,7 @@ export const TOOLS = [
 				digestAt: text,
 				smtp: text,
 				from: text,
+				token: text,
 			},
 			["type", "target"],
 		),

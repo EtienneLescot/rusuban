@@ -44,13 +44,13 @@ export function messageOf(entries, { base, owner }) {
 			.join(" · ");
 	if (entries.length === 1) {
 		const [e] = entries;
-		const href = cardUrl(base, e.card.id);
+		const href = e.href ?? cardUrl(base, e.card.id);
 		return { title: short(e.card.q), href, lines: [{ text: short(about(e)), href }] };
 	}
 	const inbox = `${base}/`;
 	const lines = entries.map((e) => ({
 		text: short(`${e.card.q} (${about(e)})`),
-		href: cardUrl(base, e.card.id),
+		href: e.href ?? cardUrl(base, e.card.id),
 	}));
 	if (lines.length > MAX_LINES)
 		lines.splice(MAX_LINES - 1, Number.POSITIVE_INFINITY, {
@@ -81,6 +81,8 @@ export const PAYLOADS = {
 				? m.title
 				: `=?UTF-8?B?${Buffer.from(m.title).toString("base64")}?=`,
 			Click: m.href,
+			// A protected topic (an ntfy server of one's own, or a reserved topic) takes a token.
+			...(c.token ? { Authorization: `Bearer ${c.token}` } : {}),
 		},
 		body: plain(m),
 	}),

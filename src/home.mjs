@@ -159,6 +159,8 @@ export function validateConfig(raw) {
 			errors.push(`${at}.urgency must list now, digest or both`);
 		if (ch?.type === "email" && !ch.smtp)
 			errors.push(`${at}: an e-mail channel needs its smtp server`);
+		if (ch?.token !== undefined && (typeof ch.token !== "string" || !ch.token))
+			errors.push(`${at}.token must be the topic's access token`);
 	}
 	if (errors.length) throw new Error(`invalid config.json:\n- ${errors.join("\n- ")}`);
 	return {

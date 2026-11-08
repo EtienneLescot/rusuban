@@ -240,15 +240,16 @@ async function projectCommand([sub, ...args]) {
 // ── Channels (T065): where pings go. Adding one widens where data goes: a typed confirmation, or a
 // card. Their targets hold secrets: shown masked, kept only in config.json (mode 600).
 const CHANNEL_USAGE =
-	"usage: channel add <ntfy|slack|discord|teams|email> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM] [--smtp <url>] [--from <address>] | channel list | channel test <id> | channel remove <id>";
+	"usage: channel add <ntfy|slack|discord|teams|email> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM] [--smtp <url>] [--from <address>] [--token <token>] | channel list | channel test <id> | channel remove <id>";
 async function channelCommand([sub, ...args]) {
 	const config = loadConfig();
 	if (sub === "list" && !args.length)
 		return out(
-			config.channels.map(({ smtp, ...c }) => ({
+			config.channels.map(({ smtp, token, ...c }) => ({
 				...c,
 				target: maskTarget(c),
 				...(smtp ? { smtp: "…" } : {}),
+				...(token ? { token: "…" } : {}),
 			})),
 		);
 	if (sub === "add") {
@@ -260,6 +261,7 @@ async function channelCommand([sub, ...args]) {
 				digest: { type: "string" },
 				smtp: { type: "string" },
 				from: { type: "string" },
+				token: { type: "string" },
 			},
 			allowPositionals: true,
 		});
@@ -274,6 +276,7 @@ async function channelCommand([sub, ...args]) {
 			digestAt: values.digest,
 			smtp: values.smtp,
 			from: values.from,
+			token: values.token,
 		};
 		return setting(change, type, () => true);
 	}

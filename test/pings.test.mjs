@@ -68,6 +68,10 @@ test("ntfy: a POST to the topic, the question as Title, the card as Click", () =
 		message([entry(1, { q: FRENCH })]),
 	);
 	assert.equal(accents.headers.Title, encoded(FRENCH));
+	// A protected topic: its access token goes as a bearer, and only when there is one.
+	const locked = PAYLOADS.ntfy({ target: "https://ntfy.sh/topic", token: "tk_1" }, ONE);
+	assert.equal(locked.headers.Authorization, "Bearer tk_1");
+	assert.ok(!("Authorization" in p.headers));
 });
 
 test("Slack: blocks whose link opens the card, the card's text escaped", () => {
