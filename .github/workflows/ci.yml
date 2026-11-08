@@ -29,3 +29,23 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+
+  # Click tests of the dashboard (test/e2e), in headless Chromium at a desktop and a phone width.
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps --only-shell chromium
+      - run: npm run test:e2e
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-traces
+          path: test-results/
+          retention-days: 7
