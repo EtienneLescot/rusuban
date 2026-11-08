@@ -199,7 +199,8 @@ allowed in the dashboard it applies; from inside a run, both are refused.
 - [x] T122 [US9] `rusuban mcp`: a stdio MCP server with the tools of `contracts/mcp.md`, refused inside a run, no card answers
 - [x] T123 [P] [US9] MCP tests in `test/mcp.test.mjs`: each tool; widening waits, narrowing applies; refused inside a run
   - JSON-RPC on stdio with no dependency. Reading: `state`, `project_state`, `runs`, `tasks`, `journal`. Settings: projects, modes, the bypass, the host profile, the merge switch, limits, the owner, tasks; channels, machines and remote access come with their phases. The dashboard's switch now goes through the settings module too, so `automerge.json` has one writer again. `task add|remove` on the command line.
-- [ ] T124 [US9] `init` registers the MCP server (`claude mcp add --scope user`), with T073
+- [x] T124 [US9] `init` registers the MCP server (`claude mcp add --scope user`), with T073
+  - `claude mcp add --scope user rusuban -- <node> <bin> mcp`, an earlier registration removed first.
 - [ ] T125 [US9] A `config.json` changed outside the settings module is flagged in the journal (the residual risk of `security.md` made visible)
 
 ---
@@ -309,7 +310,8 @@ frees the Mac at expiry.
 **Independent test**: on clean Windows, macOS and Linux machines with `gh` and `claude` logged in, the
 dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 
-- [ ] T073 [US1] `init` in `bin/rusuban.mjs`: checks the `gh` and `claude` logins, owner login from `gh`, asks the host permission mode and whether to arm automatic merges (no default for either), writes `limits` explicitly, adds a first project, installs the service, prints and opens the URL
+- [x] T073 [US1] `init` in `bin/rusuban.mjs`: checks the `gh` and `claude` logins, owner login from `gh`, asks the host permission mode and whether to arm automatic merges (no default for either), writes `limits` explicitly, adds a first project, installs the service, prints and opens the URL
+  - The config is written by the settings module (`initInstance`), journaled from the terminal; limits 3 agents and 150 minutes, written out. Refused without a terminal, on a set-up instance, and from npx's cache (`npm i -g rusuban`); the port is the first free one from 8788. Run for real by T078 only: it installs a service.
 - [x] T074 [P] [US1] Service installers in `src/service.mjs`: Task Scheduler at logon with restart on failure (Windows), launchd agent with `KeepAlive` (macOS), `systemd --user` unit with `Restart=on-failure` (Linux); `service install|uninstall`
   - `installService` and `uninstallService`; the `service` command that calls them came with T075. On Windows a trigger every minute, ignored while the daemon runs, does the restarting: Task Scheduler's restart on failure only covers a task that fails to start.
 - [x] T075 [P] [US1] `start`, `open`, `status`, and a desktop or menu shortcut per OS, in `bin/rusuban.mjs` and `src/service.mjs`

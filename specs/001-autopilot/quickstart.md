@@ -5,13 +5,16 @@ How a first user gets going, then how each success criterion of the spec is chec
 ## First run
 
 ```bash
-npx rusuban init
+npm i -g rusuban
+rusuban init
 ```
 
 1. `init` finds the `gh` and `claude` logins, takes the owner login from `gh`, and asks how agents may
-   use this machine: a tool allowlist or full bypass.
-2. It asks for a first repo (`owner/repo`) and its local checkout, installs the service, and opens the
-   dashboard at `http://127.0.0.1:8788`.
+   use this machine (a tool allowlist or full bypass) and whether to arm automatic merges. Neither has
+   a default. It refuses to run from npx's cache, which npm empties under the service.
+2. It asks for a first repo (`owner/repo`) and its local checkout, writes the limits out, installs the
+   service, registers its MCP server for Claude Code, and opens the dashboard at
+   `http://127.0.0.1:8788`, or the first free port after it.
 3. With no `.rusuban/rules/` in the repo, the dashboard shows the items and the conversations, and says
    how to add rules. Nothing is written on GitHub.
 4. Optional: `rusuban remote enable` (Tailscale), `rusuban channel add ntfy <topic>`,
@@ -21,7 +24,7 @@ npx rusuban init
 
 | Criterion | How it is checked |
 |---|---|
-| SC-001 install under 10 min | A clean VM per OS (Windows, macOS, Linux) with `gh` and `claude` logged in: time from `npx` to the dashboard showing a public repo. |
+| SC-001 install under 10 min | A clean VM per OS (Windows, macOS, Linux) with `gh` and `claude` logged in: time from `npm i -g rusuban` to the dashboard showing a public repo. |
 | SC-002 OpenScreen with no specific code | `grep -ri openscreen src/ web/ bin/` finds nothing; the OpenScreen project runs from its rules, locks, machines and tasks only, and matches the old pilot's judgments during the shadow week. |
 | SC-003 conversations within 1 min, 90 % linked | Open sessions in Desktop and the terminal on 10 known items; measure the time until they appear and count the correct links. |
 | SC-004 3 taps from a ping | On a phone over Tailscale: notification → card → option. |

@@ -2,12 +2,15 @@
 // The rusuban command. Agent commands run inside a run, which sets RUSUBAN_RUN and RUSUBAN_PROJECT;
 // they are the only writers of a project's judgment file and agent log, and each validates against the
 // live state and takes a short lock before writing (specs/001-autopilot/contracts/cli.md).
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import path from "node:path";
 import readline from "node:readline/promises";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { executeRun, listRuns, OWNER_COMMANDS, readRun } from "../src/agents.mjs";
-import { agentLog, homePath, loadConfig, read, readJsonl, write } from "../src/home.mjs";
+import { agentLog, homePath, loadConfig, read, readJsonl, SLUG, write } from "../src/home.mjs";
 import {
 	applyEvidence,
 	applyJudgment,
@@ -22,12 +25,20 @@ import {
 } from "../src/model.mjs";
 import { dashboardUrl, messageOf, sendPing } from "../src/pings.mjs";
 import {
+	inNpxCache,
 	installService,
 	openUrl,
 	dashboardUrl as serviceUrl,
 	uninstallService,
 } from "../src/service.mjs";
-import { changeSetting, MODE_SAYS, maskTarget, planOf } from "../src/settings.mjs";
+import {
+	changeSetting,
+	FIRST_LIMITS,
+	initInstance,
+	MODE_SAYS,
+	maskTarget,
+	planOf,
+} from "../src/settings.mjs";
 import { busyRun, listTasks, readTask, startTask, tasksState } from "../src/tasks.mjs";
 import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
 
@@ -35,6 +46,30 @@ const { version } = JSON.parse(
 	fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
 const out = (v) => console.log(JSON.stringify(v, null, 1));
+// A command init needs, and what to do when it does not answer.
+const asked = (cmd, args, fix) => {
+	try {
+		return execFileSync(cmd, args, {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+			windowsHide: true,
+		}).trim();
+	} catch {
+		throw new Error(`${fix}, then rusuban init again`);
+	}
+};
+// The first port from `from` nothing listens on: the dashboard's, written in config.json.
+async function freePort(from) {
+	for (let port = from; port < from + 20; port++) {
+		const free = await new Promise((resolve) => {
+			const s = net.createServer();
+			s.once("error", () => resolve(false));
+			s.listen(port, "127.0.0.1", () => s.close(() => resolve(true)));
+		});
+		if (free) return port;
+	}
+	throw new Error(`no free port from ${from} to ${from + 19}`);
+}
 const minutes = (ms) => {
 	const m = Math.max(0, Math.round(ms / 60e3));
 	return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
@@ -63,6 +98,8 @@ function logTo(file) {
 
 const USAGE = `rusuban ${version}
 
+  init                          sets this machine up: asks what has no default, adds a first repo,
+                                installs the service, registers the MCP server, opens the dashboard
   start [--dry] [--log]         runs the daemon and its dashboard in the foreground; --log also
                                 writes what it says to daemon.log (what the service runs)
   status                        the dashboard's URL, the daemon's uptime, projects, agents at work
@@ -517,6 +554,82 @@ const commands = {
 		const url = serviceUrl(config.port);
 		openUrl(url);
 		console.log(url);
+	},
+	// The first setup (T073, T124): what has no default is asked, then the service, Rusuban's MCP server
+	// for Claude, and the dashboard.
+	async init(args) {
+		if (args.length) throw new Error("usage: init");
+		const bin = fileURLToPath(import.meta.url);
+		if (inNpxCache(bin))
+			throw new Error(
+				"npx runs rusuban from a cache npm empties: npm i -g rusuban, then rusuban init",
+			);
+		if (!(process.stdin.isTTY && process.stdout.isTTY))
+			throw new Error("init asks you questions: run it in a terminal");
+		if (fs.existsSync(homePath("config.json")))
+			throw new Error(
+				`this instance is set up already (${homePath("config.json")}): rusuban status`,
+			);
+		const owner = asked(
+			"gh",
+			["api", "user", "--jq", ".login"],
+			"gh is not logged in: gh auth login",
+		);
+		const auth = asked("claude", ["auth", "status"], "Claude Code does not answer: install it");
+		if (!JSON.parse(auth).loggedIn)
+			throw new Error("Claude Code is not logged in: claude auth login");
+		console.log(`Owner: @${owner}, from gh.`);
+		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+		const ask = async (q, ok) => {
+			for (;;) {
+				const a = (await rl.question(q)).trim();
+				if (ok(a)) return a;
+			}
+		};
+		let answers;
+		try {
+			answers = {
+				mode: await ask(
+					"What may agents run on this machine? bypass (anything the deny rules allow) or allowlist (what you list): ",
+					(a) => ["bypass", "allowlist"].includes(a),
+				),
+				armed:
+					(await ask(
+						"Arm automatic merges? The server then merges alone what a live project's rules and locks allow. yes or no: ",
+						(a) => ["yes", "no"].includes(a),
+					)) === "yes",
+				slug: await ask(
+					"A first repo, owner/repo (in shadow mode: nothing is written on GitHub): ",
+					(a) => SLUG.test(a),
+				),
+				checkout:
+					(await ask(
+						"Its checkout on this machine, if you have one (Enter for none): ",
+						(a) => !a || fs.statSync(path.resolve(a), { throwIfNoEntry: false })?.isDirectory(),
+					)) || null,
+			};
+		} finally {
+			rl.close();
+		}
+		const config = initInstance({ owner, port: await freePort(8788), ...answers });
+		console.log(
+			`Limits: ${FIRST_LIMITS.maxWorkers} agents at once, ${FIRST_LIMITS.maxRunMinutes} minutes a run, in ${homePath("config.json")}.`,
+		);
+		const { service } = installService({ port: config.port });
+		console.log(`Service: ${service}, started.`);
+		// T124: Claude can set Rusuban up through its MCP server, what widens waiting for the owner.
+		try {
+			execFileSync("claude", ["mcp", "remove", "--scope", "user", "rusuban"], { stdio: "ignore" });
+		} catch {}
+		execFileSync(
+			"claude",
+			["mcp", "add", "--scope", "user", "rusuban", "--", process.execPath, bin, "mcp"],
+			{ stdio: "ignore", windowsHide: true },
+		);
+		console.log("MCP server: rusuban, for Claude Code.");
+		const url = serviceUrl(config.port);
+		console.log(`Rusuban runs: ${url}`);
+		openUrl(url);
 	},
 	service([sub, ...rest]) {
 		if (rest.length || !["install", "uninstall"].includes(sub))

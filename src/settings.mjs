@@ -11,6 +11,7 @@ import { listRuns } from "./agents.mjs";
 import {
 	append,
 	CHANNEL_TYPES,
+	CONFIG_VERSION,
 	homePath,
 	loadConfig,
 	PROJECT_ID,
@@ -18,6 +19,7 @@ import {
 	readJsonl,
 	SLUG,
 	saveConfig,
+	validateConfig,
 	write,
 } from "./home.mjs";
 import { lineDiff } from "./rules.mjs";
@@ -495,6 +497,39 @@ export function changeSetting(change, { origin, by, confirmed = false }) {
 		if (plan.config !== false) saveConfig(config);
 		log({ ...base, state: "applied", text: plan.said, ...(plan.widens ? { notify: true } : {}) });
 		return { state: "applied", text: plan.said };
+	});
+}
+
+// `init` (T073): the instance's first config, from the owner's answers in a terminal, so what widens
+// in it (the host profile, the switch) is the person's own word. The limits are written out, for the
+// owner to see and change; the first project starts in shadow mode, like any.
+export const FIRST_LIMITS = { maxWorkers: 3, maxRunMinutes: 150 };
+export function initInstance({ owner, mode, armed, port, slug, checkout = null }) {
+	return withLock(() => {
+		if (fs.existsSync(homePath("config.json")))
+			throw new Error(`this instance is set up already: ${homePath("config.json")}`);
+		const config = validateConfig({
+			version: CONFIG_VERSION,
+			owner: { login: owner },
+			port,
+			permissions: { mode, allow: [], deny: [] },
+			limits: { ...FIRST_LIMITS },
+			projects: [],
+		});
+		const plan = planOf(config, { kind: "project.add", slug, checkout });
+		plan.apply(config, { by: owner });
+		saveConfig(config);
+		write("automerge.json", { armed: armed === true, at: new Date().toISOString(), by: owner });
+		log({
+			project: plan.project,
+			setting: "init",
+			origin: "terminal",
+			by: owner,
+			state: "applied",
+			text: `Set up by @${owner}: host profile ${mode}, merges ${armed ? "armed" : "paused"}; ${plan.said}`,
+			...(mode === "bypass" || armed ? { notify: true } : {}),
+		});
+		return loadConfig();
 	});
 }
 

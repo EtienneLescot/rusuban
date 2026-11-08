@@ -6,7 +6,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 
 | Command | Effect |
 |---|---|
-| `init` | Checks `gh` and `claude` logins, takes the owner login from `gh`, asks the host permission mode and whether to arm automatic merges (no default for either), adds a first project, installs the service, prints and opens the URL. |
+| `init` | Checks `gh` and `claude` logins, takes the owner login from `gh`, asks the host permission mode and whether to arm automatic merges (no default for either), adds a first project, writes the limits out, installs the service, registers the MCP server (`claude mcp add --scope user rusuban`), prints and opens the URL. In a terminal only, once per instance, never from npx's cache; the port is the first free one from 8788. |
 | `start [--dry] [--log]` | Runs the daemon in the foreground. The service calls it with `--log`: what the daemon says, and a crash, also go to `daemon.log` in the instance home. |
 | `status` | URL (local and tailnet), uptime, the switch, projects, running agents, the log's path; exit 1 when the daemon does not answer. |
 | `open` | Opens the dashboard. |
