@@ -227,6 +227,28 @@ rules route each decision to the right person.
 2. **Given** a rule "translations go to @alice", **When** a translation needs a decision, **Then** only
    Alice's instance pings.
 
+### User Story 9 - Every setting from Claude, widening ones confirmed by a person (Priority: P2)
+
+The owner sets Rusuban up by asking Claude: projects, modes, the approval bypass, tasks, channels,
+machines, remote access, the merge switch, limits, the host profile. Claude can also read the state.
+Claude thereby configures software that gives agents rights, so a change that widens those rights, or
+where data goes, waits for the owner's confirmation outside Claude.
+
+**Independent Test**: ask Claude to add a project, make it live and turn its bypass on; the project is
+added at once, the two others wait as cards; confirm them in the dashboard and see them applied, each
+journaled with its origin. From inside a Rusuban run, the same asks are refused.
+
+**Acceptance Scenarios**:
+
+1. **Given** Rusuban's MCP server registered in Claude, **When** the owner asks Claude to put a project
+   in shadow mode or remove a channel, **Then** it applies at once, journaled with "MCP" as its origin.
+2. **Given** the same, **When** Claude asks to make a project live, **Then** nothing changes until the
+   owner allows it on a card in the dashboard; declined, nothing changes and Claude is told.
+3. **Given** a terminal, **When** the owner types `rusuban project mode <id> live`, **Then** a typed
+   confirmation applies it.
+4. **Given** an agent run, **When** it calls the MCP server or an owner's command, **Then** it is
+   refused, and no card answer is ever possible through the MCP.
+
 ### Edge Cases
 
 - A Claude Code update changes the transcript format: the hub degrades to listing sessions without
@@ -294,7 +316,7 @@ rules route each decision to the right person.
 - **FR-028**: A project MUST have a mode: `live`, or `shadow`, where agents judge and propose but every
   GitHub write is denied and nothing is merged (used for the switch from the OpenScreen pilot).
 - **FR-029**: A project MAY have an approval bypass: a setting of the instance's config, off by default,
-  that only the owner's command turns on, never a repo, a PR, a rule or an agent. It applies only to a
+  that only the owner turns on (confirmed outside Claude, FR-092), never a repo, a PR, a rule or an agent. It applies only to a
   merge the server would make anyway (a live project, the switch armed, FR-021 and FR-044 met): the
   server then merges with GitHub's admin bypass, the head pinned. It skips the approval and nothing
   else: the server first reads the base branch's rules from GitHub and merges only if every check they
@@ -362,6 +384,27 @@ rules route each decision to the right person.
   dashboard; an interrupted run gives its requests back to the queue.
 - **FR-074**: The instance config and state files MUST carry a version; an update of the package
   migrates them on load.
+
+**Settings from Claude**
+
+- **FR-090**: Every setting the owner's commands change (projects and their repos, modes, the approval
+  bypass, tasks, channels, machines, remote access, the merge switch, limits, the host profile) MUST be
+  reachable from Claude through Rusuban's MCP server (`rusuban mcp`, stdio, registered by `init`), which
+  also reads the state. One implementation of the settings serves the command line and the MCP.
+- **FR-091**: A card MUST NOT be answered through the MCP: an agent would approve its own proposals.
+- **FR-092**: A change that widens what agents may do, or where data goes, MUST NOT apply from a
+  non-interactive context: the MCP, or a command without a terminal (which covers Claude's shell). It
+  waits as a card the owner allows in the dashboard; in a terminal, a typed confirmation is enough.
+  Widening: a project live, the approval bypass on, the merge switch armed, the host profile to bypass,
+  a repo added to a live project, a machine, a channel (data leaves to its target), remote access, a new
+  owner, a task created or its prompt or schedule changed (the card shows the diff).
+- **FR-093**: A change that narrows MUST apply at once: shadow mode, the bypass off, the switch disarmed,
+  a project, a channel or a machine removed.
+- **FR-094**: Every change, either way, MUST be journaled with its origin: a terminal, the command line
+  without one, the MCP, or the owner's confirmation in the dashboard.
+- **FR-095**: Rusuban's runs MUST NOT reach the settings: the MCP server is in every run's disallowed
+  tools, the owner's commands in its deny rules, and both refuse to run inside a run. The security model
+  (`security.md`) states what this stops and what it does not.
 
 **Team (P3, after v1)**
 
