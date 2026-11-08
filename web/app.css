@@ -1546,6 +1546,10 @@ a.num:hover .ext {
 	line-height: 1.5;
 	color: var(--text-2);
 }
+/* A setting's card keeps its lines: a task's prompt, the diff of its file. */
+.cv.setting .cv-ctx {
+	white-space: pre-wrap;
+}
 .cv-ctx .missing {
 	color: var(--amber-text);
 }

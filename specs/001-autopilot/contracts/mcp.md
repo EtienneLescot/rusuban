@@ -38,12 +38,17 @@ Settings. Each one returns `{ state, text }`, where `state` is:
 | `host_profile { mode }` | `mode` is `bypass` |
 | `merge_switch { armed }` | `armed` is true |
 | `limits { maxWorkers?, maxRunMinutes? }` | either one goes up |
-| `remote { enabled }` | `enabled` is true |
 | `owner { login }` | always |
-| `task_write { id, title, project, schedule?, lock?, cwd?, prompt }` | always: its card shows the diff |
-| `task_remove { id }` | never |
-| `channel_add { type, target, urgency? }` / `channel_remove { id }` | add: always; remove: never |
-| `machine_add { alias, os, caps?, workspace?, owner? }` / `machine_remove { name }` | add: always; remove: never |
+| `task_write { id, title, project, schedule?, lock?, cwd?, prompt }` | always: its card shows the task, or the diff of its file |
+| `task_remove { id }` | never: the task stops, its file is kept as `<id>.md.removed` |
+
+These arrive with their phases, through the same module:
+
+| Tool | Phase | Widens when |
+|---|---|---|
+| `channel_add { type, target, urgency? }`, `channel_remove { id }` | 8 (T065) | add: always, since data leaves to its target; remove: never |
+| `machine_add { alias, os, caps?, workspace?, owner? }`, `machine_remove { name }` | 9 | add: always; remove: never |
+| `remote { enabled }` | 10 (T076) | `enabled` is true |
 
 A setting waiting for a confirmation is listed by `state`. Once the owner allows or declines it, the
 journal says so, and the next call to `state` shows the outcome.

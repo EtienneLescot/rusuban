@@ -4,7 +4,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { agentLog, read, saveConfig } from "../src/home.mjs";
+import { agentLog, read, readJsonl, saveConfig } from "../src/home.mjs";
 import { checkPost, checkRequest, startServer } from "../src/server.mjs";
 
 const OWNER = { login: "alice", tailscaleLogin: "alice@example.com" };
@@ -125,9 +125,11 @@ test("the merge switch takes a proper write and journals it; the agents' log sho
 	assert.deepEqual([ok.status, JSON.parse(ok.text)], [200, { armed: true }]);
 	const saved = read("automerge.json");
 	assert.deepEqual([saved.armed, saved.by, Date.parse(saved.at) > 0], [true, "alice", true]);
-	assert.match(
-		fs.readFileSync(path.join(process.env.RUSUBAN_HOME, "projects/demo/journal.jsonl"), "utf8"),
-		/Merges armed/,
+	// The settings module writes the switch and journals it, with the dashboard as its origin.
+	const [entry] = readJsonl("settings.jsonl");
+	assert.deepEqual(
+		[entry.setting, entry.origin, entry.state, entry.text],
+		["switch", "dashboard", "applied", "Merges armed"],
 	);
 	agentLog("demo", { kind: "note", item: null, text: "Judged 3 PRs", by: "agent:judge-1" });
 	const { journal } = JSON.parse((await call("GET", "/api/state?project=demo")).text);
