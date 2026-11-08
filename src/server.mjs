@@ -182,6 +182,7 @@ export function stateOf(ctx, projectId) {
 	const p = config.projects.find((x) => x.id === projectId) ?? config.projects[0] ?? null;
 	const base = {
 		version,
+		startedAt: ctx.startedAt,
 		dry: ctx.dry,
 		me,
 		armed,
@@ -1113,6 +1114,7 @@ export async function startServer({
 		polling,
 		deps,
 		port: port ?? config.port,
+		startedAt: new Date().toISOString(),
 		owner: config.owner,
 		tailnet: tailnet === undefined ? await tailnetName() : tailnet,
 		loops: new Map(),
