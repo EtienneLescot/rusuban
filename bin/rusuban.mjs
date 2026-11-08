@@ -12,6 +12,17 @@ import { parseArgs } from "node:util";
 import { executeRun, listRuns, OWNER_COMMANDS, readRun } from "../src/agents.mjs";
 import { agentLog, homePath, loadConfig, read, readJsonl, SLUG, write } from "../src/home.mjs";
 import {
+	answerOf,
+	askDesktop,
+	checkMachine,
+	detectOs,
+	enrollMachine,
+	probeMachines,
+	releaseLease,
+	validateMachines,
+	waitLease,
+} from "../src/machines.mjs";
+import {
 	applyEvidence,
 	applyJudgment,
 	closeCard,
@@ -130,6 +141,10 @@ const USAGE = `rusuban ${version}
   remote enable | remote disable
                                 the dashboard on your tailnet, through Tailscale Serve, so a phone
                                 can answer cards; or this machine only
+  machine add <alias> [--os <os>] [--caps a,b] [--workspace <path>] [--owner <login>]
+          | machine list | machine probe [<machine>] | machine doctor <machine>
+                                the test machines agents lease, reached over SSH as their own
+                                account; add checks one and makes its bare mirrors (it widens)
 A change that widens what agents may do is confirmed by typing its target in a terminal; without a
 terminal (Claude's shell, a script) it waits as a card in the dashboard's inbox.
   task list | task run <id>     the recurring tasks (tasks/<id>.md in the instance home), or one
@@ -146,7 +161,11 @@ Agent commands, inside a run (an item is owner/repo#n, or #n when the project ha
                                 records a proof for the live head; a worker run only
   log <kind> <item|-> <text> [url]
   answers | asks                answers and requests not handled yet
-  worker start <name> <item> <mission.md> | worker stop <name> | worker list`;
+  worker start <name> <item> <mission.md> | worker stop <name> | worker list
+  lease <machine> | --os <os> [--caps a,b]  [--repo <owner/repo>] [--wait 20m] --reason <text>
+                                takes a test machine for the run, alone, until release or the end
+                                of the run; --repo makes the run a worktree there
+  release <machine>             gives it back`;
 
 function project() {
 	const config = loadConfig();
@@ -388,8 +407,77 @@ async function permissionsCommand([mode, ...rest]) {
 	return setting({ kind: "permissions.mode", mode }, mode, () => true);
 }
 
+// `--wait 20m`: a number of minutes, or of seconds, minutes or hours with s, m or h.
+const UNIT_MS = { s: 1e3, m: 60e3, min: 60e3, h: 3600e3 };
+function durationMs(text) {
+	const m = /^(\d+)\s*(s|m|min|h)?$/.exec(String(text).trim());
+	if (!m) throw new Error(`${text} is not a duration: 90s, 20m or 1h`);
+	return Number(m[1]) * UNIT_MS[m[2] ?? "m"];
+}
+const checked = (checks) => {
+	for (const c of checks) console.log(`${c.ok ? "ok  " : "FAIL"} ${c.check}: ${c.said}`);
+	return checks.every((c) => c.ok);
+};
+
+const MACHINE_USAGE =
+	"usage: machine add <alias> [--os <os>] [--caps a,b] [--workspace <path>] [--owner <login>] | machine list | machine probe [<machine>] | machine doctor <machine>";
+// The owner's test machines (T066, T109). Adding one widens where agents run: it is checked over SSH
+// first, then confirmed like any widening setting.
+async function machineCommand([sub, ...args]) {
+	const config = loadConfig();
+	const named = (name) => {
+		const m = config.machines.find((x) => x.name === name);
+		if (!m) throw new Error(`no machine named ${name}: rusuban machine list`);
+		return m;
+	};
+	if (sub === "list" && !args.length) return out(config.machines);
+	if (sub === "probe" && args.length <= 1) {
+		const machines = args.length ? [named(args[0])] : config.machines;
+		return out(await probeMachines({ ...config, machines }));
+	}
+	if (sub === "doctor" && args.length === 1) {
+		if (!checked(await checkMachine(named(args[0])))) process.exitCode = 1;
+		return;
+	}
+	if (sub !== "add") throw new Error(MACHINE_USAGE);
+	const { values, positionals } = parseArgs({
+		args,
+		options: {
+			os: { type: "string" },
+			caps: { type: "string" },
+			workspace: { type: "string" },
+			owner: { type: "string" },
+		},
+		allowPositionals: true,
+	});
+	const [alias, extra] = positionals;
+	if (!alias || extra) throw new Error(MACHINE_USAGE);
+	const machine = validateMachines([
+		...config.machines,
+		{
+			name: alias
+				.toLowerCase()
+				.replace(/[^a-z0-9-]+/g, "-")
+				.replace(/^-+|-+$/g, "")
+				.slice(0, 40),
+			os: values.os ?? (await detectOs({ ssh: alias })),
+			ssh: alias,
+			caps: values.caps?.split(",").map((c) => c.trim()) ?? [],
+			...(values.workspace ? { workspace: values.workspace } : {}),
+			...(values.owner ? { owner: values.owner } : {}),
+		},
+	]).at(-1);
+	const { checks } = await enrollMachine(machine, config);
+	if (!checked(checks))
+		throw new Error(`${machine.name} is not added: fix what failed, then again`);
+	return setting({ kind: "machine.add", machine }, machine.name, () => true);
+}
+
+const LEASE_USAGE =
+	"usage: lease <machine> | --os <os> [--caps a,b]  [--repo <owner/repo>] [--wait 20m] --reason <text>";
 const commands = {
 	project: projectCommand,
+	machine: machineCommand,
 	permissions: permissionsCommand,
 	channel: channelCommand,
 	// Remote access (T076): Tailscale Serve, never Funnel. On widens where the dashboard answers.
@@ -462,6 +550,76 @@ const commands = {
 			write(`${p.dir}/judgment.json`, judgment);
 			console.log(`evidence of ${key}: ${state} on ${e.head.slice(0, 7)}`);
 		});
+	},
+	// T068: a test machine for the run, held on the machine itself while the run lives. A person's
+	// desktop waits for that person's yes in the dashboard (T070); a no ends the wait.
+	async lease(args) {
+		const { values, positionals } = parseArgs({
+			args,
+			options: {
+				os: { type: "string" },
+				caps: { type: "string" },
+				repo: { type: "string" },
+				wait: { type: "string" },
+				reason: { type: "string" },
+			},
+			allowPositionals: true,
+		});
+		const run = process.env.RUSUBAN_RUN;
+		if (!run) throw new Error("lease is a run's command: RUSUBAN_RUN is not set");
+		const [machine, extra] = positionals;
+		if (extra || !machine === !values.os) throw new Error(LEASE_USAGE);
+		const p = project();
+		const config = loadConfig();
+		const request = {
+			run,
+			project: p.id,
+			reason: values.reason,
+			...(machine
+				? { machine }
+				: { os: values.os, caps: values.caps?.split(",").map((c) => c.trim()) ?? [] }),
+			...(values.repo ? { slug: values.repo } : {}),
+			waitMs: values.wait ? durationMs(values.wait) : 0,
+		};
+		let asks = []; // the desktops asked for, once only desktops fit
+		let said = "";
+		const r = await waitLease(config, request, {
+			approved: (name, id) => answerOf(id, name)?.yes === true,
+			onState: (st) => {
+				if (st.state === "requested") {
+					asks = st.asks;
+					askDesktop({ ...st, project: p.id }).catch(() => {});
+				}
+				const line =
+					st.state === "queued"
+						? `queued: number ${st.position} for ${st.machines.join(", ")}`
+						: st.state === "requested"
+							? `waiting for ${[...new Set(st.asks.map((a) => a.owner))].join(", ")} to say yes in the dashboard`
+							: "";
+				if (!line || line === said) return;
+				said = line;
+				console.log(line);
+			},
+			pause: async (ms) => {
+				if (asks.length && asks.every((a) => answerOf(run, a.machine)?.yes === false))
+					throw new Error("the owner said no: no machine for this run");
+				await new Promise((resolve) => setTimeout(resolve, ms));
+			},
+		});
+		if (r.state !== "held")
+			throw new Error(`no machine after ${values.wait ?? "one try"}: the run left the queue`);
+		const m = config.machines.find((x) => x.name === r.machine);
+		console.log(
+			`leased ${m.name} until ${new Date(r.lease.expires).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}: ssh -l ${m.agentUser} ${m.ssh ?? "(this host)"}`,
+		);
+		if (r.worktree) console.log(`worktree: ${r.worktree}`);
+	},
+	// The run's own lease; from the owner's terminal (no run), whoever holds the machine.
+	async release([name, ...rest]) {
+		if (!name || rest.length) throw new Error("usage: release <machine>");
+		const run = process.env.RUSUBAN_RUN ?? null;
+		const done = await releaseLease(loadConfig(), name, run);
+		console.log(done ? `released ${name}` : `${name}: no lease of ${run ?? "anyone"} to end`);
 	},
 	worker([sub, name, ref, file]) {
 		const p = project();

@@ -2,6 +2,7 @@
 // go through the page's own hit-testing, which is what let the view tabs of #7 ship dead.
 import { expect } from "@playwright/test";
 import { read, readJsonl } from "../../src/home.mjs";
+import { answerOf, askDesktop } from "../../src/machines.mjs";
 import { changeSetting } from "../../src/settings.mjs";
 import { test } from "./app.mjs";
 
@@ -222,4 +223,52 @@ test("a project without rules says so under the view tabs, with how to add rules
 		"href",
 		/\/docs\/writing-rules\.md$/,
 	);
+});
+
+test("Machines: a card each, its state said; Release, pressed twice, ends a lease", async ({
+	page,
+	isMobile,
+}) => {
+	await goTo(page, "agents", isMobile);
+	const machines = page.locator('section[aria-label="Machines"]');
+	await expect(machines.locator(".mc")).toHaveCount(3);
+	await expect(machines.locator("#machine-mac .mc-state")).toContainText(
+		"Held by worker-20261108-1000-ab12",
+	);
+	await expect(machines.locator("#machine-desk .mc-desk")).toHaveText("alice's desktop");
+	await expect(machines.locator("#machine-desk .mc-state")).toHaveText(
+		"Free · each lease asks alice first.",
+	);
+	await expect(machines.locator("#machine-ci .mc-state")).toHaveText(
+		"Offline: ssh: connect to host ci port 22: Connection timed out.",
+	);
+	await expect(machines.locator("[data-release]")).toHaveCount(1);
+	const release = machines.locator('[data-release="mac"]');
+	await press(release, isMobile);
+	await expect(release).toHaveText("Release it?");
+	await press(release, isMobile);
+	await expect(page.locator("#toast")).toHaveText("mac released");
+});
+
+test("a desktop a run asks for: a card in the inbox, lent or not, never answered in words", async ({
+	page,
+	isMobile,
+}) => {
+	await askDesktop({
+		run: "worker-20261108-1100-cd34",
+		project: "acme",
+		reason: "Measure the export on a real screen",
+		asks: [{ machine: "desk", owner: "alice" }],
+	});
+	const item = page.locator(".ibx-item", { hasText: "Can a run take your desktop desk?" });
+	await press(item, isMobile);
+	await expect(page.locator(".cv-chips")).toContainText("Machine");
+	await expect(page.locator(".cv-ctx")).toContainText("Measure the export on a real screen");
+	await expect(page.locator("#cv-free")).toHaveCount(0);
+	await expect(page.locator(".cv-opt b")).toHaveText(["Lend it", "Not now"]);
+	await press(page.locator('[data-option="allow"]'), isMobile);
+	await press(page.locator("[data-send]"), isMobile);
+	await expect(page.locator("#toast")).toHaveText("Answer sent");
+	await expect(item).toHaveCount(0);
+	expect(answerOf("worker-20261108-1100-cd34", "desk")?.yes).toBe(true);
 });

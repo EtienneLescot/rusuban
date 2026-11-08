@@ -15,6 +15,11 @@ it.
   <todo|running|ok|fail> [url]` when your mission is a proof, and `rusuban log`. The coordinator
   integrates the rest from your final answer: judgments, cards, the next step.
 - One mission: do not start other workers.
+- A test machine (the context lists them) is yours only once leased: `rusuban lease <machine> |
+  --os <os> [--caps a,b] --repo <owner/repo> --wait 20m --reason <why>` waits for it and prints how
+  to reach it and your worktree there. Your Bash stops at 2 minutes: run a long wait in the
+  background and read its output. Work in that worktree only, then `rusuban release <machine>`; your
+  leases also end with your run. A person's desktop waits for their yes, and a no is final.
 
 ## Your final answer
 

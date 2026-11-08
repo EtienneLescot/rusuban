@@ -12,6 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { append, homeDir, homePath, loadConfig, read, readJsonl, write } from "./home.mjs";
+import { lastProbes, releaseRun } from "./machines.mjs";
 import { flatten, pendingAnswers, refusedOf, todoOf } from "./model.mjs";
 import { prepareWorktree, removeWorktree } from "./workers.mjs";
 
@@ -194,6 +195,30 @@ const STARTED = {
 	retry: "again, its last run having been cut short",
 };
 
+// The machines as the daemon last probed them (T072): the copy the page shows, not a second one.
+const OS_NAME = { windows: "Windows", macos: "macOS", linux: "Linux" };
+function machinesContext(config) {
+	if (!config.machines?.length) return ["- Machines: none registered."];
+	const probes = new Map((lastProbes()?.probes ?? []).map((p) => [p.name, p]));
+	const stateOf = (p) =>
+		!p
+			? "not probed yet"
+			: p.state === "offline"
+				? "offline"
+				: p.lease
+					? `held by run \`${p.lease.run}\` until ${p.lease.expires}`
+					: "free";
+	return [
+		"- Machines, each taken with `rusuban lease` (see your prompt), as last probed:",
+		...config.machines.map((m) => {
+			const reach = m.ssh ? `\`ssh -l ${m.agentUser} ${m.ssh}\`` : "this host";
+			const caps = m.caps.length ? `, ${m.caps.join(", ")}` : "";
+			const desk = m.owner ? `, @${m.owner}'s desktop: a lease asks them first` : "";
+			return `  - ${m.name}: ${OS_NAME[m.os]}, ${reach}, workspace \`${m.workspace}\`${caps}${desk}; ${stateOf(probes.get(m.name))}.`;
+		}),
+	];
+}
+
 function contextOf({ p, kind, run, config, pending, task }) {
 	const dir = `projects/${p.id}`;
 	const live = read(`${dir}/live.json`, { repos: {} });
@@ -215,7 +240,7 @@ function contextOf({ p, kind, run, config, pending, task }) {
 			const own = r?.files?.length ? `rules ${r.files.map((f) => f.name).join(", ")}` : "no rules";
 			return `- Repo ${slug}: default branch \`${live.repos?.[slug]?.defaultBranch ?? "unknown"}\`, ${own}, ${locks}.`;
 		}),
-		`- Machines: ${config.machines?.length ? config.machines.map((m) => m.name).join(", ") : "none registered"}.`,
+		...machinesContext(config),
 		`- This run: \`${run}\`, a ${kind} run${task ? ` of the task \`${task.id}\` (“${task.title}”), started ${STARTED[task.trigger] ?? task.trigger}` : ""}. The agent CLI is \`rusuban\` (also \`node "${BIN}"\`).`,
 		"",
 		"## Open cards",
@@ -708,7 +733,15 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			if (status.worktree) removeWorktree(status.worktree, slugOf(s));
 			releaseLock(s.lock, id);
 			startNext(s.lock);
-			resolve(status);
+			// A run's leases end with it (FR-062), whatever it did not release itself.
+			resolve(
+				config.machines?.length
+					? releaseRun(config, id).then(
+							() => status,
+							() => status,
+						)
+					: status,
+			);
 		};
 		let prompt;
 		let pending = null;

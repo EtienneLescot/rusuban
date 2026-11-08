@@ -303,3 +303,34 @@ test("the dashboard: the card in the inbox, allowed by the owner, never answered
 		await srv.close();
 	}
 });
+
+test("a machine widens where agents run: a card, then the registry; a desktop is the owner's only", () => {
+	const mac = { name: "mac", os: "macos", ssh: "mac", caps: ["gpu"] };
+	const asked = changeSetting({ kind: "machine.add", machine: mac }, as);
+	assert.equal(asked.state, "pending");
+	assert.equal(asked.text, "Let the agents work on mac (macOS, mac)?");
+	assert.deepEqual(loadConfig().machines, []);
+	assert.equal(confirmRequest(asked.id, { allow: true, by: "alice" }).state, "confirmed");
+	assert.deepEqual(loadConfig().machines, [
+		{ ...mac, workspace: "~/rusuban", agentUser: "rusuban", maxLeaseMin: 60 },
+	]);
+	assert.throws(
+		() => changeSetting({ kind: "machine.add", machine: { ...mac, ssh: "mac-2" } }, as),
+		/"mac" is used twice/,
+	);
+	assert.throws(
+		() =>
+			changeSetting(
+				{
+					kind: "machine.add",
+					machine: { name: "desk", os: "windows", ssh: "desk", owner: "bob" },
+				},
+				as,
+			),
+		/bob has no dashboard/,
+	);
+	assert.throws(
+		() => saveConfig({ ...loadConfig(), machines: [{ name: "Bad Name", os: "beos", ssh: "x" }] }),
+		/machines\[0\]\.name must be lowercase[\s\S]*machines\[0\]\.os must be windows, macos, linux/,
+	);
+});

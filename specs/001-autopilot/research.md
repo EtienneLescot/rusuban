@@ -115,6 +115,8 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
   renewed while the run lives. A dead holder or a passed expiry frees the machine; a FIFO queue serves
   waiters. Machines are matched by OS and capability tags.
 - **Person's desktop**: a machine with an `owner` login is leased only after that person accepts a card.
+  It is asked for only when the run names it, or when nothing else fits: a request another machine
+  fits queues there. In v1 the owner is the instance's own, the one person with a dashboard.
 - **Enrollment**: `rusuban machine add <alias>` checks SSH, git and the checkout folder, then writes the
   entry.
 

@@ -1,15 +1,21 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
-import { read, readJournal } from "../src/home.mjs";
+import { read, readJournal, saveConfig, write } from "../src/home.mjs";
 import {
+	answerDesktop,
+	answerOf,
+	askDesktop,
 	checkMachine,
+	desktopAsks,
 	detectOs,
 	enrollMachine,
 	probeMachines,
+	pruneAsks,
 	releaseLease,
 	releaseRun,
 	sshArgs,
@@ -19,6 +25,7 @@ import {
 	validateMachines,
 	waitLease,
 } from "../src/machines.mjs";
+import { startServer } from "../src/server.mjs";
 
 const T0 = Date.parse("2026-11-08T10:00:00.000Z");
 const MIN = 60_000;
@@ -581,3 +588,130 @@ test(
 	{ skip: process.platform !== "win32" && "Windows PowerShell is on Windows only" },
 	() => holdInFolder("windows"),
 );
+
+test("a desktop's ask waits for its answer, and goes once its run has ended", async () => {
+	write("runs/w-1/status.json", { id: "w-1", state: "running", pid: process.pid });
+	write("runs/w-2/status.json", { id: "w-2", state: "done", pid: 999999 });
+	const asks = [{ machine: "desk", owner: "alice" }];
+	await askDesktop({ run: "w-1", project: "demo", reason: "measure", asks });
+	await askDesktop({ run: "w-2", project: "demo", reason: "old", asks });
+	assert.deepEqual(Object.keys(desktopAsks()), ["w-1", "w-2"]);
+	assert.equal(answerOf("w-1", "desk"), null);
+	await answerDesktop("w-1", "desk", true, "alice");
+	await answerDesktop("w-2", "desk", false, "alice");
+	assert.deepEqual([answerOf("w-1", "desk").yes, answerOf("w-1", "desk").by], [true, "alice"]);
+	await pruneAsks();
+	assert.deepEqual(Object.keys(desktopAsks()), ["w-1"]);
+	assert.equal(answerOf("w-2", "desk"), null);
+	assert.equal(answerOf("w-1", "desk").yes, true);
+});
+
+test("the daemon tends, then probes; the page gets each machine, Release ends a lease, a desktop's card answers its run", async () => {
+	saveConfig({
+		version: 1,
+		owner: { login: "alice" },
+		permissions: { mode: "allowlist" },
+		limits: { maxWorkers: 3, maxRunMinutes: 150 },
+		projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
+		machines: [mac("mac"), { name: "desk", os: "windows", ssh: "desk", owner: "alice" }],
+	});
+	const calls = [];
+	const srv = await startServer({
+		port: 0,
+		polling: false,
+		quiet: true,
+		tailnet: null,
+		deps: {
+			tendLeases: async () => calls.push("tend"),
+			probeMachines: async (c) => {
+				calls.push("probe");
+				return c.machines.map((m) => ({
+					name: m.name,
+					state: "online",
+					checkedAt: iso(T0),
+					lease: m.name === "mac" ? { run: "w-1", expires: iso(T0 + 30 * MIN) } : null,
+					tailnet: null,
+				}));
+			},
+			releaseLease: async (_, name, run, { log }) => {
+				calls.push(["release", name, run]);
+				log("demo", { kind: "lease", item: null, text: `Released ${name}` });
+				return true;
+			},
+		},
+	});
+	const call = (method, url, body) =>
+		new Promise((resolve, reject) => {
+			const req = http.request(
+				{
+					host: "127.0.0.1",
+					port: srv.port,
+					method,
+					path: url,
+					headers: {
+						origin: `http://127.0.0.1:${srv.port}`,
+						"x-rusuban": "1",
+						"content-type": "application/json",
+					},
+				},
+				(res) => {
+					let text = "";
+					res.on("data", (c) => {
+						text += c;
+					});
+					res.on("end", () => resolve({ status: res.statusCode, body: JSON.parse(text) }));
+				},
+			);
+			req.on("error", reject);
+			req.end(body ? JSON.stringify(body) : undefined);
+		});
+	try {
+		await srv.ctx.passMachines();
+		assert.deepEqual(calls, ["tend", "probe"]);
+		const { body: state } = await call("GET", "/api/machines");
+		assert.deepEqual(
+			state.machines.map((m) => [m.name, m.probe.lease?.run ?? null, m.queue]),
+			[
+				["mac", "w-1", []],
+				["desk", null, []],
+			],
+		);
+		assert.equal(read("leases/probes.json").probes.length, 2); // the agents' context reads it too
+
+		assert.deepEqual((await call("POST", "/api/machines/mac/release")).body, { released: true });
+		assert.deepEqual(calls[2], ["release", "mac", null]); // then a fresh probe
+		assert.equal((await call("POST", "/api/machines/nope/release")).status, 404);
+
+		write("runs/w-2/status.json", { id: "w-2", state: "running", pid: process.pid });
+		await askDesktop({
+			run: "w-2",
+			project: "demo",
+			reason: "measure the export",
+			asks: [{ machine: "desk", owner: "alice" }],
+		});
+		const cards = (await call("GET", "/api/inbox")).body.cards.filter((c) => c.type === "lease");
+		assert.deepEqual(
+			cards.map((c) => [c.card.id, c.card.q, c.card.to, c.card.urgency]),
+			[["lease:w-2:desk", "Can a run take your desktop desk?", "alice", "now"]],
+		);
+		const answer = (option) =>
+			call("POST", "/api/answer", { project: "demo", card: "lease:w-2:desk", option });
+		assert.equal((await answer("maybe")).status, 400);
+		assert.equal((await answer("allow")).status, 200);
+		assert.equal(answerOf("w-2", "desk").yes, true);
+		assert.equal((await answer("deny")).status, 409); // answered already
+		assert.equal(
+			(await call("GET", "/api/inbox")).body.cards.filter((c) => c.type === "lease").length,
+			0,
+		);
+		assert.deepEqual(
+			readJournal("demo").map((e) => [e.text, e.by]),
+			[
+				["Released mac", "alice"],
+				["Lent desk to run w-2", "alice"],
+			],
+		);
+	} finally {
+		await srv.close();
+	}
+});
