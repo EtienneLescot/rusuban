@@ -207,6 +207,7 @@ const T = {
 	carriedOut: "The coordinator carries it out.",
 	cardGone: "This card is closed: it was answered or replaced.",
 	answerSent: "Answer sent",
+	setting: "Setting",
 	answerFailed: (error) => `Answer refused: ${error}`,
 	flagged: "Flagged for you",
 	issueRef: (n) => `Issue #${n}`,
@@ -796,6 +797,7 @@ const safeUrl = (u) => (/^https?:\/\//i.test(String(u ?? "")) ? u : null);
 const BACK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
 const refOf = (c) => {
+	if (c.type === "setting") return T.setting;
 	const n = String(c.item).split("#")[1];
 	return c.type === "pr" ? T.prRef(n) : T.issueRef(n);
 };
@@ -893,8 +895,13 @@ function cardViewHtml(c) {
 				"",
 			)}${rest.length ? `<div class="cv-grid">${rest.map((o) => opt(o, true)).join("")}</div>` : ""}</div>
 			${pick ? `<div class="cv-confirm"><button type="button" class="send-option" data-send>${esc(T.sendOption(pick.label))}</button>${pick.message ? `<small>${T.postsOnGitHub} ${esc(pick.message)}</small>` : ""}</div>` : ""}
-			<label for="cv-free" class="cv-free-label">${ph ? T.ownWordsShort : T.ownWords}</label>
-			<div class="cv-free"><textarea id="cv-free" rows="2"></textarea><button type="button" class="send" data-send-free${ph ? ` aria-label="${T.send}"` : ""}>${ph ? ARROW : T.send}</button></div>`;
+			${
+				// A setting is allowed or not, never answered in words (the validated mockup).
+				c.type === "setting"
+					? ""
+					: `<label for="cv-free" class="cv-free-label">${ph ? T.ownWordsShort : T.ownWords}</label>
+			<div class="cv-free"><textarea id="cv-free" rows="2"></textarea><button type="button" class="send" data-send-free${ph ? ` aria-label="${T.send}"` : ""}>${ph ? ARROW : T.send}</button></div>`
+			}`;
 	}
 	return `<article class="cv" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${did}${body}</article>`;
 }
@@ -937,6 +944,8 @@ async function sendAnswer(c, option, note = "") {
 		chosen = null;
 		draft = { card: null, text: "" };
 		toast(T.answerSent);
+		// A setting allowed or declined is done with: back to the inbox.
+		if (c.type === "setting") location.hash = "inbox";
 	} catch (err) {
 		toast(T.answerFailed(err.message), true);
 	}

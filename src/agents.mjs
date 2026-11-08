@@ -73,7 +73,18 @@ export const SHADOW_DENY = [
 ];
 
 // The commands of contracts/cli.md that belong to the owner; the agent CLI refuses them inside a run.
-export const OWNER_COMMANDS = ["project", "task", "start"];
+export const OWNER_COMMANDS = [
+	"project",
+	"task",
+	"start",
+	"permissions",
+	"machine",
+	"channel",
+	"remote",
+	"service",
+	"init",
+	"mcp",
+];
 
 // ponytail: deny rules match command text; an agent that hides a merge or a push behind a variable
 // or another tool gets through. The server flags merges and pushes it did not make (research R3); an
@@ -85,8 +96,10 @@ export function builtInDeny({ home = homeDir(), defaultBranches = [], shadow = f
 		"Bash(gh api*Merge*)", // GraphQL enablePullRequestAutoMerge and the like
 		"Bash(git push*--all*)",
 		"Bash(git push*--mirror*)",
-		// The owner's commands: no agent makes a project live, turns its bypass on or starts tasks.
+		// The owner's settings (FR-095): no agent makes a project live, turns its bypass on, starts a
+		// task or reaches Rusuban's own MCP server.
 		...OWNER_COMMANDS.map((c) => `Bash(rusuban ${c}*)`),
+		"mcp__rusuban",
 		...STATE.map((name) => editRule(path.join(home, name), !name.endsWith(".json"))),
 	];
 	for (const b of new Set(defaultBranches.filter(Boolean)))

@@ -1,0 +1,333 @@
+// The owner's settings: one implementation, for the owner's commands and the MCP (US9, FR-090). A change
+// that widens what agents may do, or where data goes, never applies from a non-interactive context: it
+// waits in pending.json as a card the owner allows in the dashboard, unless a person confirmed it in a
+// terminal (FR-092). A change that narrows applies at once (FR-093). Each change goes to settings.jsonl
+// with its origin (FR-094). Nothing here runs inside an agent run (FR-095). See security.md.
+import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
+import { listRuns } from "./agents.mjs";
+import {
+	append,
+	homePath,
+	loadConfig,
+	PROJECT_ID,
+	read,
+	readJsonl,
+	SLUG,
+	saveConfig,
+	write,
+} from "./home.mjs";
+import { waiting } from "./tasks.mjs";
+
+const PENDING = "pending.json";
+const LOG = "settings.jsonl";
+export const ORIGINS = {
+	terminal: "a terminal",
+	cli: "the command line, without a terminal",
+	mcp: "Claude, through the MCP",
+};
+export const MODE_SAYS = {
+	live: "its agents act as its rules say, and the server merges what they allow",
+	shadow: "its agents judge and propose, nothing is written on GitHub and nothing merges",
+};
+
+// A project's id from a repo's name: lowercase letters, digits and dashes.
+const idOf = (s) =>
+	s
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+/, "")
+		.slice(0, 40)
+		.replace(/-+$/, "");
+
+// What a change does: whether it widens, the words of its card when it does, what it says once applied,
+// and the change itself. Throws on a change that cannot be made. `same` when nothing would change.
+export function planOf(config, change) {
+	const find = (id) => {
+		const p = config.projects.find((x) => x.id === id);
+		if (!p)
+			throw new Error(
+				`no project "${id}": ${config.projects.map((x) => x.id).join(", ") || "none yet"}`,
+			);
+		return p;
+	};
+	const project = (c, id) => c.projects.find((x) => x.id === id);
+	switch (change.kind) {
+		case "project.add": {
+			const { slug, checkout = null, to = null } = change;
+			if (!SLUG.test(slug ?? "")) throw new Error(`${slug} is not owner/repo`);
+			const holder = config.projects.find((p) =>
+				p.repos.some((r) => r.slug.toLowerCase() === slug.toLowerCase()),
+			);
+			if (holder) throw new Error(`${slug} is already in project ${holder.id}`);
+			const dir = checkout ? path.resolve(checkout) : null;
+			if (dir && !fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory())
+				throw new Error(`checkout ${dir} is not a folder`);
+			const repo = { slug, checkout: dir };
+			if (to) {
+				const p = find(to);
+				return {
+					project: p.id,
+					widens: p.mode === "live",
+					apply: (c) => project(c, p.id).repos.push(repo),
+					said: `${slug} added to project ${p.id} (${p.mode}).`,
+					card: {
+						q: `Add ${slug} to ${p.id}, a live project?`,
+						ctx: `The agents will act on ${slug} as its own rules say, and the server will merge what those rules and the locks allow.`,
+						allow: `${slug} joins ${p.id}.`,
+						deny: "Nothing changes.",
+					},
+				};
+			}
+			// A new project starts in shadow mode: it goes live on its owner's word, never on its own.
+			const [owner, name] = slug.split("/");
+			const ids = [idOf(name), idOf(`${owner}-${name}`)];
+			const id = ids.find((x) => PROJECT_ID.test(x) && !config.projects.some((p) => p.id === x));
+			if (!id)
+				throw new Error(
+					`no free project id for ${slug} (${ids.join(", ")} taken): add it --to a project`,
+				);
+			return {
+				project: id,
+				widens: false,
+				apply: (c) => c.projects.push({ id, title: name, mode: "shadow", repos: [repo] }),
+				said: `project ${id} added, in shadow mode: ${MODE_SAYS.shadow}.`,
+			};
+		}
+		case "project.remove": {
+			const p = find(change.project);
+			// A run asked for the project would find it gone, or keep writing its files after the remove.
+			const busy = listRuns(p.id).filter(waiting);
+			if (busy.length)
+				throw new Error(
+					`project ${p.id} has runs that wait or work: ${busy.map((r) => `${r.id} (${r.state})`).join(", ")}. Stop them in the Agents view, or let them end.`,
+				);
+			return {
+				project: p.id,
+				widens: false,
+				apply: (c) => {
+					c.projects = c.projects.filter((x) => x.id !== p.id);
+				},
+				said: `project ${p.id} removed.`,
+			};
+		}
+		case "project.mode": {
+			const p = find(change.project);
+			if (!Object.hasOwn(MODE_SAYS, change.mode)) throw new Error("a mode is live or shadow");
+			if (p.mode === change.mode)
+				return { project: p.id, same: `project ${p.id} is already ${p.mode}.` };
+			const live = change.mode === "live";
+			return {
+				project: p.id,
+				widens: live,
+				apply: (c) => {
+					project(c, p.id).mode = change.mode;
+				},
+				said: `project ${p.id} is ${live ? "live" : "in shadow mode"}: ${MODE_SAYS[change.mode]}.`,
+				card: {
+					q: `Let the agents act on ${p.id} as its rules say?`,
+					ctx: "Live, the agents write on GitHub and the server merges what the rules and the locks allow.",
+					allow: `${p.id} goes live. Runs at work keep shadow mode until they end.`,
+					deny: `${p.id} stays in shadow mode.`,
+				},
+			};
+		}
+		case "project.bypass": {
+			const p = find(change.project);
+			const on = change.on === true;
+			if (p.bypassApproval === on)
+				return {
+					project: p.id,
+					same: `project ${p.id}: the approval bypass is already ${on ? "on" : "off"}.`,
+				};
+			return {
+				project: p.id,
+				widens: on,
+				apply: (c) => {
+					project(c, p.id).bypassApproval = on;
+				},
+				said: on
+					? `project ${p.id}: approval bypass on. What the server merges anyway${p.mode === "live" ? "" : " once the project is live"}, with the merge switch armed, it merges with --admin, and only once every check the base branch requires is green on the head.`
+					: `project ${p.id}: approval bypass off. The server never merges with --admin.`,
+				card: {
+					q: `Let the server merge with your bypass on ${p.id}?`,
+					ctx: "The bypass skips the required approval only: CI, threads and every other lock still hold.",
+					allow:
+						"The server merges what passes every lock, without the approval. Each such merge is journaled.",
+					deny: "Nothing changes.",
+				},
+			};
+		}
+		case "permissions.mode": {
+			if (!["bypass", "allowlist"].includes(change.mode))
+				throw new Error("the host profile is bypass or allowlist");
+			if (config.permissions.mode === change.mode)
+				return { project: null, same: `the host profile is already ${change.mode}.` };
+			const bypass = change.mode === "bypass";
+			return {
+				project: null,
+				widens: bypass,
+				apply: (c) => {
+					c.permissions.mode = change.mode;
+				},
+				said: bypass
+					? "host profile: bypass. Agents run any command on this machine but those the built-in deny rules forbid."
+					: "host profile: allowlist. Agents run only the commands the allowlist names.",
+				card: {
+					q: "Let the agents run any command on this machine?",
+					ctx: "The host profile goes from allowlist to bypass: the agents get your shell, under the built-in deny rules only.",
+					allow: "The agents run every command but those the built-in deny rules forbid.",
+					deny: "The allowlist stays.",
+				},
+			};
+		}
+		default:
+			throw new Error(`unknown setting "${change.kind}"`);
+	}
+}
+
+// One writer at a time, whichever process: the CLI, the MCP server or the daemon. A lock older than
+// 10 s belongs to a dead writer and is taken over.
+function withLock(fn) {
+	const dir = homePath("settings.lock");
+	fs.mkdirSync(path.dirname(dir), { recursive: true });
+	const until = Date.now() + 10_000;
+	for (;;) {
+		try {
+			fs.mkdirSync(dir);
+			break;
+		} catch {
+			if (Date.now() > until) fs.rmSync(dir, { recursive: true, force: true });
+			else Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+		}
+	}
+	try {
+		return fn();
+	} finally {
+		fs.rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+const log = (entry) => append(LOG, { at: new Date().toISOString(), kind: "setting", ...entry });
+export const pendingRequests = () => read(PENDING, { requests: [] }).requests;
+export const settingsLog = () => readJsonl(LOG);
+
+// A change asked by the owner's commands or the MCP. `confirmed`: a person typed its confirmation in a
+// terminal. What widens without it waits for the owner's card.
+export function changeSetting(change, { origin, by, confirmed = false }) {
+	if (process.env.RUSUBAN_RUN)
+		throw new Error("the owner's settings are never changed inside an agent run");
+	if (!Object.hasOwn(ORIGINS, origin)) throw new Error(`unknown origin "${origin}"`);
+	return withLock(() => {
+		const config = loadConfig();
+		const plan = planOf(config, change);
+		if (plan.same) return { state: "unchanged", text: plan.same };
+		const base = { project: plan.project, setting: change.kind, origin, by };
+		if (plan.widens && !confirmed) {
+			const id = `${Date.now().toString(36)}-${crypto.randomBytes(3).toString("hex")}`;
+			const request = {
+				id,
+				at: new Date().toISOString(),
+				origin,
+				by,
+				change,
+				project: plan.project,
+				card: plan.card,
+				said: plan.said,
+			};
+			write(PENDING, { requests: [...pendingRequests(), request] });
+			log({
+				...base,
+				state: "pending",
+				request: id,
+				text: `Asked from ${ORIGINS[origin]}: ${plan.card.q}`,
+			});
+			return { state: "pending", id, text: plan.card.q };
+		}
+		plan.apply(config);
+		saveConfig(config);
+		log({ ...base, state: "applied", text: plan.said, ...(plan.widens ? { notify: true } : {}) });
+		return { state: "applied", text: plan.said };
+	});
+}
+
+// The owner's answer to a setting's card, from the dashboard: allowed, it applies on the config as it is
+// now; declined, nothing changes. Either way the card goes.
+export function confirmRequest(id, { allow, by }) {
+	return withLock(() => {
+		const request = pendingRequests().find((r) => r.id === id);
+		if (!request)
+			throw Object.assign(new Error("no such setting waits: it was allowed or declined already"), {
+				status: 404,
+			});
+		write(PENDING, { requests: pendingRequests().filter((r) => r.id !== id) });
+		const base = {
+			project: request.project,
+			setting: request.change.kind,
+			origin: request.origin,
+			by,
+			request: id,
+		};
+		if (!allow) {
+			log({ ...base, state: "declined", text: `Not allowed by @${by}: ${request.card.q}` });
+			return { state: "declined" };
+		}
+		const config = loadConfig();
+		let plan;
+		try {
+			plan = planOf(config, request.change);
+		} catch (e) {
+			log({ ...base, state: "declined", text: `Could not be applied: ${e.message}` });
+			throw Object.assign(e, { status: 409 });
+		}
+		if (!plan.same) {
+			plan.apply(config);
+			saveConfig(config);
+		}
+		const text = `Allowed by @${by}: ${plan.same ?? plan.said}`;
+		log({ ...base, state: "confirmed", text, notify: true });
+		return { state: "confirmed", text };
+	});
+}
+
+// The cards of the settings that wait, for the inbox: a card like the others, with no recommendation and
+// no free answer (the validated mockup, T120).
+export function settingsCards(config) {
+	const clock = (iso) =>
+		new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+	return pendingRequests().map((r) => ({
+		project: r.project,
+		projectTitle:
+			config.projects.find((p) => p.id === r.project)?.title ?? r.project ?? "This instance",
+		item: null,
+		type: "setting",
+		label: r.card.q,
+		kind: null,
+		author: null,
+		url: null,
+		itemOpen: true,
+		judgedBy: null,
+		evidence: null,
+		card: {
+			id: `setting:${r.id}`,
+			to: config.owner.login,
+			urgency: "now",
+			q: r.card.q,
+			ctx: `Asked from ${ORIGINS[r.origin]}, at ${clock(r.at)}. ${r.card.ctx}`,
+			done: [],
+			rec: null,
+			why: null,
+			options: [
+				{ id: "allow", label: "Allow it", effect: r.card.allow },
+				{
+					id: "deny",
+					label: "Don't allow it",
+					effect: r.origin === "mcp" ? `${r.card.deny} Claude is told.` : r.card.deny,
+				},
+			],
+			createdAt: r.at,
+		},
+		answer: null,
+	}));
+}

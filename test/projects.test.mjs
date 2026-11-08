@@ -14,6 +14,7 @@ import { assemblePrompt } from "../src/agents.mjs";
 import { homePath, read, readJsonl, saveConfig, validateConfig, write } from "../src/home.mjs";
 import { applyJudgment } from "../src/model.mjs";
 import { reloadConfig, startServer } from "../src/server.mjs";
+import { confirmRequest, pendingRequests } from "../src/settings.mjs";
 import { parseTask } from "../src/tasks.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
@@ -395,10 +396,25 @@ test("project add, list, mode and remove, without a daemon", async () => {
 	);
 	assert.match((await cli("project", "add", "seven")).stderr, /seven is not owner\/repo/);
 
-	assert.match((await cli("project", "mode", "three", "live")).stdout, /^project three is live: /);
+	// Going live widens what agents do: without a terminal it waits for the owner's card (FR-092).
+	const asked = await cli("project", "mode", "three", "live");
+	assert.match(asked.stdout, /^Let the agents act on three as its rules say\?\nIt waits for your/);
+	assert.deepEqual(ids(), ["alpha:live", "beta:live", "three:shadow", "d-three:shadow"]);
+	const [request] = pendingRequests();
+	assert.deepEqual(
+		[request.origin, request.change],
+		["cli", { kind: "project.mode", project: "three", mode: "live" }],
+	);
+	assert.equal(confirmRequest(request.id, { allow: true, by: "alice" }).state, "confirmed");
 	assert.match((await cli("project", "mode", "three", "live")).stdout, /already live/);
 	assert.match((await cli("project", "mode", "three", "maybe")).stderr, /usage: project add/);
 	assert.deepEqual(ids(), ["alpha:live", "beta:live", "three:live", "d-three:shadow"]);
+	// A repo added to a live project waits too; to a shadow one, it is added.
+	assert.match(
+		(await cli("project", "add", "c/eight", "--to", "three")).stdout,
+		/^Add c\/eight to three, a live project\?/,
+	);
+	assert.equal(read("config.json").projects.find((p) => p.id === "three").repos.length, 2);
 
 	// A run of the project that waits refuses the remove, which deletes nothing.
 	write("runs/act-9/status.json", { id: "act-9", kind: "act", project: "three", state: "queued" });
@@ -412,7 +428,8 @@ test("project add, list, mode and remove, without a daemon", async () => {
 	write("runs/act-9/status.json", { id: "act-9", kind: "act", project: "three", state: "done" });
 	const removed = await cli("project", "remove", "three");
 	assert.equal(removed.status, 0, removed.stderr);
-	assert.match(removed.stdout, /^project three removed\. Its files stay in:/);
+	assert.match(removed.stdout, /^project three removed\.\n/);
+	assert.match(removed.stdout, /Its files stay in:/);
 	assert.ok(removed.stdout.includes(homePath("projects/three")));
 	assert.match(removed.stdout, /Task t3 names it and will not run/);
 	assert.ok(fs.existsSync(homePath("projects/three/journal.jsonl")));
@@ -433,12 +450,33 @@ test("a running daemon applies project add, mode and remove without a restart", 
 		const first = srv.ctx.loops.get("three");
 		assert.ok(first);
 
+		// Asked without a terminal, going live waits for the owner, who allows it on the card.
 		const live = await cli("project", "mode", "three", "live");
-		assert.match(live.stdout, /The running daemon applied it\./);
-		const [entry] = readJsonl("projects/three/journal.jsonl");
-		assert.deepEqual([entry.kind, entry.by], ["mode", "alice"]);
-		assert.match(entry.text, /^Live: /);
+		assert.match(live.stdout, /It waits for your confirmation/);
+		const card = (await call(srv, "GET", "/api/inbox")).body.cards.find(
+			(c) => c.type === "setting",
+		);
+		assert.deepEqual(
+			[card.project, card.card.options.map((o) => o.label)],
+			["three", ["Allow it", "Don't allow it"]],
+		);
+		const allowed = await call(srv, "POST", "/api/answer", {
+			project: "three",
+			item: null,
+			card: card.card.id,
+			option: "allow",
+		});
+		assert.deepEqual([allowed.status, allowed.body.state], [200, "confirmed"]);
+		assert.equal(srv.ctx.config.projects.find((p) => p.id === "three").mode, "live");
 		assert.notEqual(srv.ctx.loops.get("three"), first); // started again, with its new mode
+		assert.deepEqual(
+			readJsonl("settings.jsonl").map((e) => [e.setting, e.origin, e.state]),
+			[
+				["project.add", "cli", "applied"],
+				["project.mode", "cli", "pending"],
+				["project.mode", "cli", "confirmed"],
+			],
+		);
 
 		const removed = await cli("project", "remove", "three");
 		assert.match(removed.stdout, /The running daemon applied it\./);
