@@ -131,6 +131,8 @@ test("the merge switch takes a proper write and journals it; the agents' log sho
 		[entry.setting, entry.origin, entry.state, entry.text],
 		["switch", "dashboard", "applied", "Merges armed"],
 	);
+	// A later write than the switch: two entries of the same millisecond have no order of their own.
+	await new Promise((resolve) => setTimeout(resolve, 5));
 	agentLog("demo", { kind: "note", item: null, text: "Judged 3 PRs", by: "agent:judge-1" });
 	const { journal } = JSON.parse((await call("GET", "/api/state?project=demo")).text);
 	assert.deepEqual(
