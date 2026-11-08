@@ -180,7 +180,28 @@ const T = {
 	// The inbox and its cards
 	inbox: "Inbox",
 	conversations: "Conversations",
-	conversationsSoon: "The project's Claude conversations will come here.",
+	indexedAgo: (n, age) => `${n} · indexed ${age} ago`,
+	notIndexed: "not indexed yet",
+	startedFrom: "Started from",
+	origins: { all: "All", desktop: "Desktop", terminal: "Terminal", rusuban: "Rusuban" },
+	notLinked: "Not linked to an item",
+	forkOf: (time) => `Fork: your answer of ${time}`,
+	convStates: { live: "live", running: "running", done: "done", ended: "ended", failed: "failed" },
+	liveIn: {
+		desktop: "Live in Claude Desktop",
+		terminal: "Live in a terminal",
+		rusuban: "At work in Rusuban",
+	},
+	endedAgo: (age) => `Ended ${age} ago`,
+	startedAt: (time) => `started ${time}`,
+	earlier: "Earlier messages",
+	answer: "Answer",
+	answerInFork: "Answer in a fork",
+	openInTerminal: "Open in terminal",
+	openedInTerminal: "Opened in a terminal",
+	replied: (forked) => (forked ? "Answered in a fork" : "Answer sent"),
+	pickConversation: "Pick a conversation to read it here.",
+	noConversations: "No conversation found in the project's folders yet.",
 	menu: "Menu",
 	forYouAll: "for you · all projects",
 	forYouTitle: "For you",
@@ -264,6 +285,7 @@ const ui = {
 	kind: "all",
 	themes: true,
 	view: "graph",
+	origin: "all",
 	// A phone opens on its inbox: the decisions waiting are what one checks from it.
 	tab: "inbox",
 	project: null,
@@ -286,6 +308,8 @@ const save = () => {
 let S = null; // the last state the server pushed
 let INBOX = { cards: [], flags: [] }; // the inbox the server pushed, every project's
 let AGENTS = { dry: false, runs: [], tasks: [] }; // every project's runs and the tasks
+let HUB = { indexedAt: null, conversations: [], items: {} }; // every project's Claude conversations
+let READER = null; // the conversation open in the reader, a page of it
 let chosen = null; // the option picked on the open card, waiting for Send
 let stopArmed = null; // the run whose Stop was pressed once
 let runFocus = null; // the runs the Agents view highlights: a run id, or an item's runs
@@ -502,6 +526,12 @@ function detailHtml(n, linked) {
 		parts.push(`<div><div class="gatehead"><b>${T.mergeGates}</b><span style="color:${sub.c}">${esc(status)}</span></div>
 			<ol class="gatelist">${n.gates.map((g) => `<li><i style="background:${GATE[g.state]}"></i><b>${esc(g.name)}</b><span>${esc(g.detail)}</span></li>`).join("")}</ol></div>`);
 	}
+	// The item's Claude conversations: a click opens one in the Conversations view.
+	const convs = HUB.conversations.filter((c) => c.items.includes(n.id) && !c.forkOf);
+	if (convs.length)
+		parts.push(
+			`<div><h4>${T.conversations}</h4><div class="links">${convs.map((c) => `<button type="button" data-conv="${esc(c.id)}">${esc(convOrigin(c))} · ${esc(c.title)}</button>`).join("")}</div></div>`,
+		);
 	if (linked.length)
 		parts.push(
 			`<div><h4>${T.linkedTo}</h4><div class="links">${linked.map((l) => `<button type="button" data-focus="${esc(l.id)}">${l.type === "pr" ? T.pr : T.issue} ${esc(numOf(l.repo, l.n))} · ${esc(l.label)}</button>`).join("")}</div></div>`,
@@ -979,6 +1009,8 @@ function followCard() {
 	if (phone() || ui.view !== "graph" || centerOn(c.item)) followed = ui.card;
 }
 function readHash() {
+	const conv = /^#conv\/(.+)$/.exec(location.hash);
+	ui.conv = conv ? decodeURIComponent(conv[1]) : null;
 	const m = /^#card\/(.+)$/.exec(location.hash);
 	const id = m ? decodeURIComponent(m[1]) : null;
 	if (id === ui.card) return;
@@ -1243,6 +1275,193 @@ function renderAgents() {
 	}
 }
 
+// ── Conversations (T061, the validated mockups) ──────────────────────────────────────────────
+// Every project's Claude conversations by item, then the one open in the reader, a page at a time.
+const CONV_DOT = { live: "#34b27b", running: "#d97757" };
+const convState = (c) =>
+	c.live
+		? "live"
+		: c.runState === "running"
+			? "running"
+			: c.runState === "failed"
+				? "failed"
+				: c.run
+					? "done"
+					: "ended";
+const convOrigin = (c) =>
+	c.origin === "rusuban"
+		? `${T.origins.rusuban}${c.runKind ? ` · ${c.runKind}` : ""}`
+		: (T.origins[c.origin] ?? c.origin);
+// A reply forks unless Rusuban started the session and its run has ended (research R6b).
+const convForks = (c) => !c.run || ["queued", "running"].includes(c.runState);
+const refOfKey = (key) => {
+	const info = HUB.items?.[key];
+	const n = key.split("#")[1];
+	return info?.type === "pr" ? T.prRef(n) : T.issueRef(n);
+};
+let convDraft = { id: null, text: "" };
+
+function convRowHtml(c, current) {
+	const state = convState(c);
+	const age = span(
+		Date.now() -
+			Date.parse((state === "live" || state === "running" ? c.firstAt : c.lastAt) ?? Date.now()),
+	);
+	if (c.forkOf)
+		return `<button type="button" class="cl-row fork${current ? " current" : ""}" data-conv="${esc(c.id)}"${current ? ' aria-current="true"' : ""}>
+			<span class="cl-fork-body"><b>${esc(T.forkOf(clock(c.firstAt)))}</b><span>${esc(convOrigin(c))} · ${esc(T.convStates[state])}</span></span>
+			<span class="mono">${esc(clock(c.lastAt))}</span></button>`;
+	return `<button type="button" class="cl-row${current ? " current" : ""}" data-conv="${esc(c.id)}"${current ? ' aria-current="true"' : ""}>
+		<span class="cl-title"><i class="dot" style="background:${CONV_DOT[state] ?? "#a1a1aa"}"></i><b>${esc(c.title)}</b></span>
+		<span class="cl-meta"><span>${esc(convOrigin(c))}</span><span>·</span><span class="st ${state}">${esc(T.convStates[state])}</span><span class="grow"></span><span class="mono">${esc(age)}</span></span>
+	</button>`;
+}
+
+function convListHtml() {
+	const list = HUB.conversations.filter((c) => ui.origin === "all" || c.origin === ui.origin);
+	const age = HUB.indexedAt ? span(Date.now() - Date.parse(HUB.indexedAt)) : null;
+	const chips = Object.entries(T.origins)
+		.map(
+			([id, label]) =>
+				`<button type="button" class="chip" data-origin="${id}" aria-pressed="${ui.origin === id}">${esc(label)}</button>`,
+		)
+		.join("");
+	// One group per item, the unlinked ones last; a fork right under the conversation it came from.
+	const groups = new Map();
+	const byId = new Map(list.map((c) => [c.id, c]));
+	for (const c of list) {
+		if (c.forkOf && byId.has(c.forkOf)) continue;
+		const key = `${c.project}|${c.items[0] ?? ""}`;
+		if (!groups.has(key)) groups.set(key, []);
+		groups.get(key).push(c, ...list.filter((f) => f.forkOf === c.id));
+	}
+	const ordered = [...groups.entries()].sort(
+		([a], [b]) => (a.endsWith("|") ? 1 : 0) - (b.endsWith("|") ? 1 : 0),
+	);
+	const groupHtml = ordered
+		.map(([key, cs]) => {
+			const [project, item] = key.split("|");
+			const title = item ? HUB.items?.[item]?.title : null;
+			const head = item
+				? `<span class="mono">${esc(refOfKey(item))}</span>${title ? `<b>${esc(title)}</b>` : ""}`
+				: `<b>${T.notLinked}</b>`;
+			return `<div class="cl-group"><div class="cl-ghead">${head}<span class="grow"></span><span>${esc(projectOf(project) || project)}</span></div>${cs.map((c) => convRowHtml(c, c.id === ui.conv)).join("")}</div>`;
+		})
+		.join("");
+	return `<div class="cl-head"><h2>${T.conversations}</h2><span>${esc(age ? T.indexedAgo(list.length, age) : T.notIndexed)}</span></div>
+		<div class="cl-chips" role="group" aria-label="${T.startedFrom}">${chips}</div>
+		<div class="cl-groups">${groupHtml || `<p class="ag-empty">${T.noConversations}</p>`}</div>`;
+}
+
+function entriesHtml(entries) {
+	const out = [];
+	for (let i = 0; i < entries.length; i++) {
+		const e = entries[i];
+		if (e.kind === "user") out.push(`<div class="cr-user">${esc(e.text)}</div>`);
+		else if (e.kind === "assistant") out.push(`<p class="cr-said">${esc(e.text)}</p>`);
+		else if (e.kind === "tool") {
+			const result = entries[i + 1]?.kind === "result" ? entries[++i].text : null;
+			out.push(
+				`<div class="cr-tool"><span><b>${esc(e.name)}</b><span class="mono">${esc(e.input ?? "")}</span></span>${result ? `<pre>${esc(result)}</pre>` : ""}</div>`,
+			);
+		} else out.push(`<div class="cr-tool"><pre>${esc(e.text)}</pre></div>`);
+	}
+	return out.join("");
+}
+
+function convReaderHtml(c) {
+	const ph = phone();
+	if (!c) return ph ? "" : `<p class="cr-empty">${T.pickConversation}</p>`;
+	const state = convState(c);
+	const status =
+		state === "live" || state === "running"
+			? `<span class="cr-live"><i class="dot"></i>${esc(T.liveIn[c.origin] ?? T.liveIn.rusuban)}</span>`
+			: `<span>${esc(T.endedAgo(span(Date.now() - Date.parse(c.lastAt ?? Date.now()))))}</span>`;
+	const refs = c.items.map((k) => `<span class="mono">${esc(refOfKey(k))}</span>`).join("");
+	const top = ph
+		? `<div class="cr-bar"><button type="button" class="cv-back" data-conv-back>${BACK}${T.conversations}</button><span class="grow"></span>${refs}</div>`
+		: "";
+	const page = READER?.id === c.id ? READER : null;
+	return `${top}<div class="cr-head">
+		<div class="cr-top"><h1>${esc(c.title)}</h1>${ph ? "" : `<button type="button" class="secondary" data-terminal="${esc(c.id)}">${T.openInTerminal}</button>`}</div>
+		<div class="cr-meta">${status}<span>${esc(projectOf(c.project) || c.project)}</span>${ph ? "" : refs}${c.branch ? `<span class="mono">${esc(c.branch)}</span>` : ""}${!ph && c.firstAt ? `<span>${esc(T.startedAt(clock(c.firstAt)))}</span>` : ""}</div>
+	</div>
+	<div class="cr-body" id="cr-body">${page?.before != null ? `<button type="button" class="cr-earlier" data-earlier>${T.earlier}</button>` : ""}${page ? entriesHtml(page.entries) : ""}</div>
+	<div class="cr-answer"><label for="cr-text" class="vh">${T.answer}</label><textarea id="cr-text" rows="2"></textarea>
+		<div class="cr-send"><button type="button" class="send-option" data-reply="${esc(c.id)}">${convForks(c) ? T.answerInFork : T.answer}</button></div></div>`;
+}
+
+let convListKey = "";
+let convReaderKey = "";
+function renderConversations() {
+	const el = $("conversations");
+	if (el.hidden) return;
+	if (!el.querySelector("#conv-list"))
+		el.innerHTML =
+			'<section class="cl" id="conv-list"></section><section class="cr" id="conv-reader"></section>';
+	const c = HUB.conversations.find((x) => x.id === ui.conv) ?? null;
+	el.classList.toggle("reading", !!c);
+	const list = convListHtml();
+	if (list !== convListKey) {
+		const box = $("conv-list");
+		const scroll = box.scrollTop;
+		convListKey = list;
+		box.innerHTML = list;
+		box.scrollTop = scroll;
+	}
+	// The reader is rebuilt only when its conversation or its page changes: typing is never cut.
+	const reader = convReaderHtml(c);
+	if (reader !== convReaderKey) {
+		convReaderKey = reader;
+		$("conv-reader").innerHTML = reader;
+		const area = $("cr-text");
+		if (area && convDraft.id === ui.conv) area.value = convDraft.text;
+		const body = $("cr-body");
+		if (body && !READER?.earlier) body.scrollTop = body.scrollHeight;
+	}
+	if (c && (READER?.id !== c.id || READER.lastAt !== c.lastAt) && !READER?.loading)
+		loadConversation(c.id);
+}
+
+async function loadConversation(id, before = null) {
+	if (!id) return;
+	const keep = before !== null && READER?.id === id ? READER : null;
+	READER = { ...(keep ?? {}), id, loading: true };
+	try {
+		const res = await fetch(
+			`/api/conversations/${encodeURIComponent(id)}${before !== null ? `?before=${before}` : ""}`,
+		);
+		const page = await res.json();
+		const c = HUB.conversations.find((x) => x.id === id);
+		READER = keep
+			? { ...page, entries: [...page.entries, ...keep.entries], earlier: true, lastAt: keep.lastAt }
+			: { ...page, lastAt: c?.lastAt ?? null };
+	} catch {
+		READER = { id, before: null, entries: [], lastAt: null };
+	}
+	renderConversations();
+}
+
+function openConversation(id) {
+	ui.view = "conversations";
+	if (phone()) ui.tab = "conversations";
+	save();
+	location.hash = `conv/${encodeURIComponent(id)}`;
+}
+
+async function sendReply(id) {
+	const text = $("cr-text")?.value.trim();
+	if (!text) return $("cr-text")?.focus();
+	try {
+		const r = await post(`/api/conversations/${encodeURIComponent(id)}/reply`, { text });
+		convDraft = { id: null, text: "" };
+		$("cr-text").value = "";
+		toast(T.replied(r.forked));
+	} catch (err) {
+		toast(err.message, true);
+	}
+}
+
 // One project: its name. Several: a switcher (a switcher with one choice would do nothing).
 let projectsKey = "";
 function renderProjects() {
@@ -1269,6 +1488,11 @@ function render() {
 	// On a phone one screen shows at a time, picked in the tab bar; an open card covers them all.
 	document.body.dataset.tab = ui.tab;
 	document.body.classList.toggle("card-open", !!ui.card);
+	// A phone reads a conversation full screen, like a card.
+	document.body.classList.toggle(
+		"conv-open",
+		phone() && ui.tab === "conversations" && !!ui.conv && !ui.card,
+	);
 	for (const b of document.querySelectorAll("#tabbar [data-tab]"))
 		b.setAttribute("aria-current", b.dataset.tab === ui.tab && !ui.card ? "page" : "false");
 	if (!S) return;
@@ -1322,6 +1546,7 @@ function render() {
 		applyTransform();
 	} else if (view === "kanban") renderKanban();
 	renderAgents();
+	renderConversations();
 	renderDrawer();
 	tick();
 }
@@ -1520,9 +1745,21 @@ function cardClick(t) {
 		}
 		save();
 		render();
-	} else if (d.tab) {
+	} else if (d.conv) openConversation(d.conv);
+	else if (d.convBack !== undefined) location.hash = "conversations";
+	else if (d.origin) {
+		ui.origin = d.origin;
+		save();
+		renderConversations();
+	} else if (d.earlier !== undefined) loadConversation(READER?.id, READER?.before);
+	else if (d.reply) sendReply(d.reply);
+	else if (d.terminal)
+		post(`/api/conversations/${encodeURIComponent(d.terminal)}/terminal`)
+			.then(() => toast(T.openedInTerminal))
+			.catch((err) => toast(err.message, true));
+	else if (d.tab) {
 		ui.tab = d.tab;
-		if (ui.card) location.hash = d.tab;
+		if (ui.card || ui.conv) location.hash = d.tab;
 		save();
 		render();
 	} else return false;
@@ -1531,13 +1768,14 @@ function cardClick(t) {
 
 document.addEventListener("input", (e) => {
 	if (e.target.id === "cv-free") draft = { card: ui.card, text: e.target.value };
+	if (e.target.id === "cr-text") convDraft = { id: ui.conv, text: e.target.value };
 });
 
 document.addEventListener("click", (e) => {
 	if (e.target.closest("a[href]")) return;
 	// The tab bar's own buttons only: <body> carries the current tab too, and every click reaches it.
 	const card = e.target.closest(
-		"[data-card],[data-back],[data-option],[data-send],[data-send-free],[data-stop],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],#tabbar [data-tab]",
+		"[data-card],[data-back],[data-option],[data-send],[data-send-free],[data-stop],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],[data-conv],[data-conv-back],[data-origin],[data-earlier],[data-reply],[data-terminal],#tabbar [data-tab]",
 	);
 	// A Stop pressed once is forgotten at the next click elsewhere.
 	if (stopArmed && !card?.dataset.stop) {
@@ -1593,6 +1831,11 @@ function connect() {
 		followCard();
 	});
 	// Every project's runs and the tasks, for the Agents view and the header.
+	// Every project's Claude conversations, for the Conversations view and the items' details.
+	es.addEventListener("hub", (ev) => {
+		HUB = JSON.parse(ev.data);
+		render();
+	});
 	es.addEventListener("agents", (ev) => {
 		AGENTS = JSON.parse(ev.data);
 		render();

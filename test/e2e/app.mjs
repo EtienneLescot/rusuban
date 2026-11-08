@@ -8,11 +8,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test as base } from "@playwright/test";
 import { runner } from "../../src/agents.mjs";
-import { homePath, saveConfig, write } from "../../src/home.mjs";
+import { homePath, loadConfig, saveConfig, write } from "../../src/home.mjs";
+import { scanHub, slugOf } from "../../src/hub.mjs";
 import { applyJudgment } from "../../src/model.mjs";
 import { startServer } from "../../src/server.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
+const conversationsDir = (cwd) => path.join(process.env.CLAUDE_CONFIG_DIR, "projects", slugOf(cwd));
 const NOW = new Date().toISOString();
 const LATER = new Date(Date.now() + 7 * 86400e3).toISOString();
 
@@ -93,7 +95,7 @@ function project(id, slug, { prs, issues, judgments, rules }) {
 	return Object.values(judgment.items).find((j) => j.decision).decision.id;
 }
 
-function seed(busyPid) {
+export function seed(busyPid, checkout) {
 	saveConfig({
 		version: 1,
 		owner: { login: "alice" },
@@ -101,7 +103,7 @@ function seed(busyPid) {
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
 		projects: [
-			{ id: "acme", title: "Acme", mode: "live", repos: [{ slug: "acme/widgets" }] },
+			{ id: "acme", title: "Acme", mode: "live", repos: [{ slug: "acme/widgets", checkout }] },
 			{ id: "orbit", title: "Orbit", mode: "shadow", repos: [{ slug: "orbit/site" }] },
 		],
 	});
@@ -188,6 +190,70 @@ function seed(busyPid) {
 		summary: null,
 	});
 	fs.writeFileSync(homePath(`runs/${id}/run.log`), "10:00:00  Reading the merged PRs\n");
+	// Two Claude conversations in acme's checkout: one live on PR #11 from Claude Desktop, one ended
+	// in a terminal on issue #22.
+	const said = (id, entry, rows) =>
+		fs.writeFileSync(
+			path.join(conversationsDir(checkout), `${id}.jsonl`),
+			`${rows.map((r) => JSON.stringify({ sessionId: id, cwd: checkout, entrypoint: entry, isSidechain: false, ...r })).join("\n")}\n`,
+		);
+	fs.mkdirSync(conversationsDir(checkout), { recursive: true });
+	said("aaaaaaaa-0000-4000-8000-000000000011", "claude-desktop", [
+		{ type: "custom-title", customTitle: "Fix the crash on save" },
+		{
+			type: "user",
+			gitBranch: "fix/11-save",
+			timestamp: NOW,
+			message: { role: "user", content: "The app crashes on save. Find why." },
+		},
+		{
+			type: "assistant",
+			gitBranch: "fix/11-save",
+			timestamp: NOW,
+			message: {
+				role: "assistant",
+				content: [
+					{ type: "text", text: "The save path writes before the folder exists." },
+					{ type: "tool_use", name: "Bash", input: { command: "npm test -- save" } },
+				],
+			},
+		},
+		{
+			type: "user",
+			gitBranch: "fix/11-save",
+			timestamp: NOW,
+			message: {
+				role: "user",
+				content: [{ type: "tool_result", content: "1 failing: save without a folder" }],
+			},
+		},
+		{
+			type: "pr-link",
+			prNumber: 11,
+			prRepository: "acme/widgets",
+			prUrl: "https://github.com/acme/widgets/pull/11",
+			timestamp: NOW,
+		},
+	]);
+	said("bbbbbbbb-0000-4000-8000-000000000022", "cli", [
+		{
+			type: "user",
+			gitBranch: "main",
+			timestamp: "2026-11-01T10:00:00.000Z",
+			message: { role: "user", content: "Reproduce #22 offline." },
+		},
+		{
+			type: "assistant",
+			gitBranch: "main",
+			timestamp: "2026-11-01T10:05:00.000Z",
+			message: { role: "assistant", content: [{ type: "text", text: "Reproduced." }] },
+		},
+	]);
+	fs.utimesSync(
+		path.join(conversationsDir(checkout), "bbbbbbbb-0000-4000-8000-000000000022.jsonl"),
+		new Date("2026-11-01T10:05:00Z"),
+		new Date("2026-11-01T10:05:00Z"),
+	);
 	return { cards: { acme, orbit } };
 }
 
@@ -201,7 +267,11 @@ export const test = base.extend({
 				stdio: "ignore",
 			});
 			const children = [busy];
-			const seeded = seed(children[0].pid);
+			const checkout = path.join(process.env.RUSUBAN_HOME, "acme-checkout");
+			fs.mkdirSync(checkout, { recursive: true });
+			process.env.CLAUDE_CONFIG_DIR = path.join(process.env.RUSUBAN_HOME, "claude");
+			const seeded = seed(busy.pid, checkout);
+			await scanHub({ config: loadConfig() });
 			runner.launch = (id) =>
 				children.push(spawn(process.execPath, [RUN, id], { stdio: "ignore" }));
 			const srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });

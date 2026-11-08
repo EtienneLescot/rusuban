@@ -396,14 +396,300 @@ button.pill:hover {
 	min-width: 0;
 	position: relative;
 }
+/* ── Conversations (T061, the validated mockups) ── */
 .conversations {
 	position: absolute;
 	inset: 0;
 	display: flex;
-	align-items: center;
-	justify-content: center;
+	gap: 16px;
+	padding: 12px 20px 20px;
 	background: var(--bg);
+	font-size: 14px;
+}
+.vh {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+}
+.cl {
+	width: 372px;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-height: 0;
+	overflow: auto;
+}
+.cl-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+}
+.cl-head h2 {
+	margin: 0;
+	font-size: 15px;
+	color: #ffffff;
+}
+.cl-head span {
 	color: var(--text-3);
+	font-size: 12px;
+}
+.cl-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.cl-groups {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+.cl-group {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.cl-ghead {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+	font-size: 12px;
+	color: var(--text-3);
+}
+.cl-ghead b {
+	color: #d9e2ee;
+	font-size: 13px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cl-row {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	border: 1px solid rgba(255, 255, 255, 0.075);
+	background: #101216;
+	color: #e4e4e7;
+	text-align: left;
+	font: inherit;
+	cursor: pointer;
+}
+.cl-row.current {
+	border-color: rgba(96, 165, 250, 0.55);
+	background: #15171c;
+}
+.cl-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+.cl-title .dot {
+	width: 8px;
+	height: 8px;
+	flex: none;
+}
+.cl-title b {
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cl-meta {
+	display: flex;
+	gap: 6px;
+	padding-left: 16px;
+	font-size: 12px;
+	color: var(--text-3);
+}
+.cl-meta .st.live {
+	color: #86efac;
+}
+.cl-meta .st.running {
+	color: #d97757;
+}
+.cl-row.fork {
+	flex-direction: row;
+	align-items: center;
+	gap: 8px;
+	margin-left: 16px;
+	padding: 8px 12px;
+}
+.cl-fork-body {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.cl-fork-body b {
+	color: #ffffff;
+	font-size: 13px;
+}
+.cl-fork-body span {
+	font-size: 12px;
+	color: var(--text-3);
+}
+.cr {
+	flex: 1 1 auto;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	border-radius: 12px;
+	border: 1px solid rgba(255, 255, 255, 0.075);
+	background: #0c0d10;
+	overflow: hidden;
+}
+.cr-empty {
+	margin: auto;
+	color: var(--text-3);
+}
+.cr-bar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 8px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+	background: #07080a;
+}
+.cr-head {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 14px 16px;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+}
+.cr-top {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.cr-top h1 {
+	flex: 1 1 auto;
+	min-width: 0;
+	margin: 0;
+	font-size: 17px;
+	color: #ffffff;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cr-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	font-size: 12px;
+	color: var(--text-3);
+}
+.cr-live {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	color: #86efac;
+}
+.cr-live .dot {
+	width: 7px;
+	height: 7px;
+	background: #34b27b;
+}
+.cr-body {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow: auto;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px;
+}
+.cr-earlier {
+	align-self: center;
+	height: 28px;
+	padding: 0 12px;
+	border-radius: 14px;
+	border: 1px solid rgba(255, 255, 255, 0.075);
+	background: transparent;
+	color: var(--text-3);
+	font: inherit;
+	cursor: pointer;
+}
+.cr-user {
+	align-self: flex-end;
+	max-width: 80%;
+	padding: 10px 12px;
+	border-radius: 12px;
+	background: #1a1d24;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.cr-said {
+	margin: 0;
+	color: #d9e2ee;
+	line-height: 1.55;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.cr-tool {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	padding: 8px 10px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	background: rgba(255, 255, 255, 0.03);
+}
+.cr-tool > span {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	min-width: 0;
+	font-size: 12px;
+}
+.cr-tool b {
+	color: #d9e2ee;
+}
+.cr-tool .mono {
+	color: var(--text-3);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.cr-tool pre {
+	margin: 0;
+	font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+	font-size: 12px;
+	color: var(--text-3);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.cr-answer {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding: 12px 16px;
+	border-top: 1px solid rgba(255, 255, 255, 0.075);
+	background: #0a0b0d;
+}
+.cr-answer textarea {
+	min-height: 56px;
+	padding: 10px 12px;
+	border-radius: 10px;
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	background: #101216;
+	color: #e4e4e7;
+	font: inherit;
+	resize: none;
+}
+.cr-send {
+	display: flex;
+	justify-content: flex-end;
 }
 .vp {
 	position: absolute;
@@ -2545,5 +2831,58 @@ body[data-showing="conversations"] .filters > :not(.views) {
 	.ag-line .ag-sum {
 		white-space: normal;
 		line-height: 1.4;
+	}
+}
+
+/* Conversations on a phone: the list, or one conversation full screen; every target 44 px. */
+@media (max-width: 720px) {
+	.conversations {
+		padding: 0;
+		gap: 0;
+	}
+	.cl {
+		width: auto;
+		flex: 1 1 auto;
+		padding: 14px 16px;
+	}
+	.cr {
+		display: none;
+		border: 0;
+		border-radius: 0;
+	}
+	.conversations.reading .cl {
+		display: none;
+	}
+	.conversations.reading .cr {
+		display: flex;
+	}
+	body.conv-open .tabbar,
+	body.conv-open .filters {
+		display: none;
+	}
+	.cl-chips .chip,
+	.cl-row,
+	.cr-earlier,
+	.cr-bar .cv-back {
+		min-height: 44px;
+	}
+	.cr-head {
+		padding: 14px 16px 12px;
+	}
+	.cr-top h1 {
+		font-size: 19px;
+		line-height: 1.3;
+		white-space: normal;
+	}
+	.cr-user {
+		max-width: 85%;
+	}
+	.cr-answer {
+		padding: 12px 16px 16px;
+		background: #07080a;
+	}
+	.cr-send .send-option {
+		width: 100%;
+		min-height: 48px;
 	}
 }

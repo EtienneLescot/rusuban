@@ -168,3 +168,34 @@ test("a setting asked from Claude waits as a card, and applies once the owner al
 	await expect(page.locator(".ibx-list")).toBeVisible();
 	expect(read("config.json").projects[0].bypassApproval).toBe(true);
 });
+
+test("Conversations: by item, filtered by origin; the reader shows one and answers it in a fork", async ({
+	page,
+	isMobile,
+}) => {
+	await goTo(page, "conversations", isMobile);
+	const list = page.locator("#conv-list");
+	await expect(list.locator(".cl-row")).toHaveCount(2);
+	await expect(list.locator(".cl-ghead").first()).toContainText("PR #11");
+	await press(list.locator('[data-origin="terminal"]'), isMobile);
+	await expect(list.locator(".cl-row")).toHaveCount(1);
+	await expect(list.locator(".cl-row")).toContainText("Reproduce #22 offline.");
+	await press(list.locator('[data-origin="all"]'), isMobile);
+	await press(list.locator(".cl-row", { hasText: "Fix the crash on save" }), isMobile);
+	const reader = page.locator("#conv-reader");
+	await expect(reader.locator("h1")).toHaveText("Fix the crash on save");
+	await expect(reader.locator(".cr-live")).toHaveText("Live in Claude Desktop");
+	await expect(reader.locator(".cr-tool b")).toHaveText("Bash");
+	await expect(reader.locator(".cr-tool pre")).toHaveText("1 failing: save without a folder");
+	// A terminal opens a window of this machine: offered on a desktop only.
+	await expect(reader.locator("[data-terminal]")).toHaveCount(isMobile ? 0 : 1);
+	await reader.locator("#cr-text").fill("Also check the folder rights.");
+	const send = reader.locator("[data-reply]");
+	await expect(send).toHaveText("Answer in a fork");
+	await press(send, isMobile);
+	await expect(page.locator("#toast")).toHaveText("Answered in a fork");
+	await expect(reader.locator("#cr-text")).toHaveValue("");
+	await expect
+		.poll(() => readJsonl("projects/acme/journal.jsonl").map((e) => e.text))
+		.toContain("Answered the conversation “Fix the crash on save” in a fork");
+});

@@ -374,3 +374,39 @@ test("a run that finds its work done when it starts ends without a session", asy
 	const act = await executeRun(request({ kind: "act" }).id, { config, command: FAKE });
 	assert.deepEqual([act.state, act.summary], ["done", "Nothing waited when the run started."]);
 });
+
+test("a reply sends the person's text as is to the session it resumes, in a fork or in place", async () => {
+	const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-reply-"));
+	const reply = (session, over = {}) =>
+		requestRun({
+			kind: "reply",
+			project: "demo",
+			mission: "Also check the rights.",
+			title: "Save",
+			cwd,
+			resume: session,
+			lock: `demo.reply.${session}`,
+			trigger: "button",
+			...over,
+		});
+	const fork = reply("s-1", { fork: true });
+	assert.equal(readRun(fork.id).forkOf, "s-1");
+	const done = await executeRun(fork.id, { config, command: FAKE });
+	assert.equal(done.state, "done");
+	const { args, cwd: ranIn } = JSON.parse(done.summary);
+	const at = args.indexOf("--resume");
+	assert.deepEqual(args.slice(at, at + 3), ["--resume", "s-1", "--fork-session"]);
+	assert.equal(fs.realpathSync(ranIn), fs.realpathSync(cwd));
+	assert.equal(
+		fs.readFileSync(homePath(`runs/${fork.id}/prompt.md`), "utf8"),
+		"Also check the rights.",
+	);
+	const inPlace = reply("s-2");
+	assert.equal(readRun(inPlace.id).forkOf, null);
+	const again = JSON.parse((await executeRun(inPlace.id, { config, command: FAKE })).summary).args;
+	assert.deepEqual(again.slice(again.indexOf("--resume"), again.indexOf("--resume") + 2), [
+		"--resume",
+		"s-2",
+	]);
+	assert.ok(!again.includes("--fork-session"));
+});

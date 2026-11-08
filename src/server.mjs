@@ -30,6 +30,7 @@ import {
 	validateConfig,
 	write,
 } from "./home.mjs";
+import { hubState, lastIndex, openTerminal, readPage, replyTo, scanHub } from "./hub.mjs";
 import {
 	buildModel,
 	bypassStops,
@@ -311,6 +312,8 @@ const DEPS = {
 	loadRules,
 	branchRules,
 	headChecks,
+	scanHub,
+	openTerminal,
 };
 const since = (iso, ref) => Date.parse(iso) >= Date.parse(ref);
 
@@ -822,6 +825,43 @@ const itemOf = (p, ref) => {
 	}
 };
 
+// ── Conversations (T058 to T060) ──────────────────────────────────────────────────────────────
+// The list, filtered by project, item, origin or words of its title, and the index's age.
+const conversationsOf = (ctx, q = new URLSearchParams()) => ({
+	...hubState(ctx.hubIndex, ctx.config, {
+		project: q.get("project"),
+		item: q.get("item"),
+		origin: q.get("origin"),
+		q: q.get("q") ?? "",
+	}),
+	error: ctx.hubError ?? null,
+});
+
+// An answer from the dashboard starts a reply run (journaled as the owner's); "Open in terminal" opens
+// a window of this machine, so it is refused from anywhere but this machine.
+function converse(ctx, id, what, body, res, req) {
+	try {
+		if (what === "terminal") {
+			if (!localHosts(ctx.port).includes(String(req.headers.host ?? "").toLowerCase()))
+				return json(res, 403, { error: "a terminal opens only from this machine" });
+			return json(res, 200, depsOf(ctx).openTerminal(ctx.hubIndex, id));
+		}
+		if (ctx.dry) return json(res, 200, { run: null, forked: false, state: "dry" });
+		const r = replyTo(ctx.hubIndex, id, body.text, depsOf(ctx).requestRun);
+		journal(r.project, {
+			kind: "reply",
+			item: null,
+			text: `Answered the conversation “${r.title}”${r.forked ? " in a fork" : ""}`,
+			by: ctx.config.owner.login,
+			run: r.run,
+		});
+		ctx.broadcast(true);
+		return json(res, 200, { run: r.run, forked: r.forked });
+	} catch (e) {
+		return json(res, e.status ?? 409, { error: firstLine(e) });
+	}
+}
+
 // A setting's card (FR-092): allowed, the change applies; declined, nothing changes. Never a note.
 function confirmSetting(ctx, body, res) {
 	if (!["allow", "deny"].includes(body.option))
@@ -905,7 +945,9 @@ function stop(ctx, id, res) {
 	return json(res, 200, { state: stopped.state });
 }
 
-async function post(ctx, path, body, res) {
+async function post(ctx, path, body, res, req) {
+	const conversation = /^\/api\/conversations\/([\w-]+)\/(reply|terminal)$/.exec(path);
+	if (conversation) return converse(ctx, conversation[1], conversation[2], body, res, req);
 	const by = ctx.config.owner.login;
 	if (path === "/api/answer") return answer(ctx, body, res);
 	if (path === "/api/ask") return ask(ctx, body, res);
@@ -948,6 +990,14 @@ async function handle(ctx, req, res) {
 			return json(res, 200, stateOf(ctx, url.searchParams.get("project")));
 		if (req.method === "GET" && url.pathname === "/api/inbox")
 			return json(res, 200, inboxState(ctx));
+		if (req.method === "GET" && url.pathname === "/api/conversations")
+			return json(res, 200, conversationsOf(ctx, url.searchParams));
+		const reading = req.method === "GET" && /^\/api\/conversations\/([\w-]+)$/.exec(url.pathname);
+		if (reading) {
+			const before = url.searchParams.get("before");
+			const page = await readPage(ctx.hubIndex, reading[1], { before });
+			return page ? json(res, 200, page) : json(res, 404, { error: "no such conversation" });
+		}
 		if (req.method === "GET" && url.pathname === "/api/tasks")
 			return json(res, 200, { tasks: tasksState(ctx.config) });
 		if (req.method === "GET" && url.pathname === "/api/runs")
@@ -969,6 +1019,7 @@ async function handle(ctx, req, res) {
 				sent: "",
 				sentInbox: "",
 				sentAgents: "",
+				sentHub: "",
 			};
 			ctx.clients.add(client);
 			ctx.push(client, true);
@@ -978,7 +1029,7 @@ async function handle(ctx, req, res) {
 		if (req.method === "POST") {
 			const no = checkPost(req.headers, ctx);
 			if (no) return json(res, no.status, { error: no.error });
-			return await post(ctx, url.pathname, await readBody(req), res);
+			return await post(ctx, url.pathname, await readBody(req), res, req);
 		}
 		send(res, 404, "text/plain; charset=utf-8", "404");
 	} catch (e) {
@@ -1011,6 +1062,7 @@ export async function startServer({
 		loops: new Map(),
 		errors: new Map(),
 		clients: new Set(),
+		hubIndex: lastIndex(), // shown, with its age, until the first pass ends
 		say: (...a) =>
 			quiet || console.log(new Date().toLocaleTimeString("en-GB", { hour12: false }), ...a),
 	};
@@ -1026,6 +1078,7 @@ export async function startServer({
 		send("state", stateOf(ctx, client.project), "sent");
 		send("inbox", inboxState(ctx), "sentInbox");
 		send("agents", agentsState(ctx), "sentAgents");
+		send("hub", conversationsOf(ctx), "sentHub");
 	};
 	// A state file the model cannot read (cut short, from an older version) costs the page one update,
 	// never the daemon nor a write that already happened: said once per distinct error.
@@ -1075,6 +1128,25 @@ export async function startServer({
 			p.repos.map((r) => r.slug),
 		);
 	if (polling) for (const p of config.projects) startLoop(ctx, p);
+	// The conversations hub (T105): a pass at start, then every 30 s, one at a time, new bytes only.
+	let scanning = false;
+	const passHub = async () => {
+		if (scanning) return;
+		scanning = true;
+		try {
+			ctx.hubIndex = await depsOf(ctx).scanHub({ config: ctx.config });
+			ctx.hubError = null;
+		} catch (e) {
+			ctx.hubError = firstLine(e);
+		} finally {
+			scanning = false;
+			ctx.broadcast();
+		}
+	};
+	if (polling) {
+		passHub();
+		timers.push(setInterval(passHub, 30_000));
+	}
 	// Recurring tasks: their slots are looked at every 30 s, and once at start for those missed.
 	const schedule = () => {
 		try {

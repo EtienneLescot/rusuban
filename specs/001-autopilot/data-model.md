@@ -20,7 +20,7 @@ file has **one writer**. `rusuban` is the product name.
 | `automerge.json` | daemon | the merge switch: `{ armed, at, by }`; `init` asks whether to arm it |
 | `runs/<run>/status.json` | the run's launcher | Run |
 | `runs/<run>/<ts>.log` | the run's launcher | readable live steps |
-| `hub/index.json` | daemon | `{ sessions: { "<id>": Conversation }, files: { "<path>": { size, offset, mtime } } }` |
+| `hub/index.json` | daemon | `{ version, scannedAt, sessions: { "<id>": Conversation }, files: { "<path>": { size, offset, mtime } } }`; an index of another version is read again from scratch |
 | `<workspace>/.lease/` on each machine | lease module (agent CLI and daemon, same code) | Lease, created by an atomic `mkdir` over SSH: the machine arbitrates |
 | `leases/queue.json` | lease module, under a host lock | `{ "<machine>": [runId] }`, FIFO |
 | `tasks/<id>.md` | the user | Task |
@@ -134,6 +134,9 @@ leases[], trigger, state, startedAt, endedAt, exitCode, step, summary }`
 
 `{ id, project, cwd, title, origin: "rusuban" | "claude-desktop" | "cli" | "sdk-cli", run?, forkOf?,
 firstAt, lastAt, live, branch, prs[], items[], parseError? }`
+
+- The page shows a run's session under its run's title, not its prompt. `forkOf` comes from the reply
+  run that made the fork (T059), as do `runKind` and `runState`.
 
 ### Machine and lease
 

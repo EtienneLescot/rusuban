@@ -59,15 +59,25 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
 - **Verified format** (internal, may change):
   - one JSON object per line; `user` and `assistant` lines carry `sessionId`, `cwd`, `gitBranch`,
     `entrypoint` (`claude-desktop`, `sdk-cli`, `cli`), `timestamp`, `message`;
-  - `custom-title` and `agent-name` give the session title; `pr-link` gives `prNumber`, `prUrl`,
+  - the session title is its `custom-title`, else its `agent-name`, else the `ai-title` Claude Code
+    writes itself (`aiTitle`), else its first user text; `pr-link` gives `prNumber`, `prUrl`,
     `prRepository`; `relocated` gives a new `cwd`;
   - Claude Desktop sessions live there too; the openscreen repo has 128 worktree folders;
-  - files: median 0.66 MB, largest 16 MB.
+  - files: median 0.66 MB; on 2026-11-08 the largest was 196 MB, and the whole folder 7.4 GB. A file
+    is read 1 MB at a time.
 - **Rules**: the folder slug (non-alphanumerics → `-`) only says where to look; membership comes from
   `cwd`, because sibling folders collide (`repo-website` vs `repo/website`). A file written in the last
   120 s marks a live session.
+- **Runs**: a run's session is found by the run's own record (`session`, `cwd` in its status), not by
+  its folder.
 - **Linking order**: pilot run metadata → `pr-link` → `gitBranch` equal to a PR head ref → `#N` and
-  GitHub URLs in the title and user messages.
+  GitHub URLs in the title and user messages. A run's session takes no citation: its prompt cites every
+  open card. A bare `#N` links only to an item the live state knows. The `<system-reminder>` blocks
+  Claude Code adds to a message are neither title nor citation. A fork's PR from its default branch
+  never matches a session on `main`.
+- **Missed, accepted**: a session that moves into a project folder after it started elsewhere is missed
+  while its transcript stays in its first folder: only the folders a project folder's slug starts are
+  read.
 - **Degradation**: an unknown line type is skipped; a file that fails to parse is listed without links,
   and the hub says so.
 
@@ -125,7 +135,8 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
 ## R6b. Hub details (added by the analysis)
 
 - **Answering**: a session Rusuban started resumes in place unless its run is alive; any other session
-  is answered with `--fork-session`, recorded as `forkOf` and listed under the original.
+  is answered with `--fork-session`, recorded as `forkOf` and listed under the original. `forkOf` is the
+  reply run's (T059): the fork is a new session, found by its run.
 - **Branch numbers**: `fix/1475-keyframes` links to #1475 as well as to the PR whose head it is.
 - **Cadence**: a rescan every 30 s, cheap because only new bytes are read.
 

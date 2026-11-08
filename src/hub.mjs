@@ -5,12 +5,13 @@
 // from the byte where the last pass stopped. The format is Claude Code's own and may change: a line
 // of an unknown type is skipped, an unreadable one counted, and a file in an unknown format is still
 // listed, plainly.
+import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { listRuns } from "./agents.mjs";
+import { listRuns, readRun, requestRun } from "./agents.mjs";
 import { read, write } from "./home.mjs";
-import { keyOf } from "./model.mjs";
+import { flatten, keyOf } from "./model.mjs";
 
 const INDEX = "hub/index.json";
 const VERSION = 1; // an index of another version is read again from scratch
@@ -152,8 +153,9 @@ function cite(s, text) {
 	for (const m of text.matchAll(BARE_REF)) add(s.cited, Number(m[1]));
 }
 
-// A session's title: its custom title, else its agent name, else the start of its first message.
-const RANK = { user: 0, "agent-name": 1, "custom-title": 2 };
+// A session's title: its custom title, else its agent name, else the title Claude Code wrote for it,
+// else the start of its first message.
+const RANK = { user: 0, "ai-title": 1, "agent-name": 2, "custom-title": 3 };
 function retitle(s, text, from) {
 	const t = humanText(text)
 		.replace(/<[^>]*>/g, " ")
@@ -215,10 +217,14 @@ function take(s, line) {
 		add(s.branches, branch);
 	}
 	s.entrypoint ??= str(o.entrypoint);
-	const title = { "custom-title": o.customTitle, "agent-name": o.agentName }[o.type];
+	const title = {
+		"custom-title": o.customTitle,
+		"agent-name": o.agentName,
+		"ai-title": o.aiTitle,
+	}[o.type];
 	if (str(title)) {
 		retitle(s, title, o.type);
-		cite(s, title);
+		if (o.type !== "ai-title") cite(s, title); // a title Claude wrote is not a person's citation
 	}
 	const repo = str(o.prRepository);
 	if (o.type === "pr-link" && repo && Number.isInteger(o.prNumber))
@@ -475,4 +481,97 @@ export async function readPage(index, id, { before = null, limit = 50 } = {}) {
 		start = at;
 	}
 	return { id, before: more ? start : null, entries };
+}
+
+// The index the last pass wrote, for the daemon to show at start while its first pass reads.
+export const lastIndex = () => {
+	const index = read(INDEX, null);
+	return index?.version === VERSION ? index : null;
+};
+
+// ── The Conversations view (T061) ─────────────────────────────────────────────────────────────
+const ORIGIN = { "claude-desktop": "desktop", cli: "terminal" };
+
+// `listConversations`, with each session's origin as the page names it, its run, and the type and
+// title of each item the projects know, for the list's headings. A run's session shows the run's
+// title: its first message is the assembled prompt. A fork is listed under the session it came from.
+export function hubState(index, config, { origin = null, ...filters } = {}) {
+	const runs = new Map(listRuns().map((r) => [r.id, r]));
+	const items = {};
+	for (const p of config.projects) {
+		const { prs, issues } = flatten(read(`projects/${p.id}/live.json`, {}));
+		for (const i of prs) items[keyOf(i)] = { type: "pr", title: i.title };
+		for (const i of issues) items[keyOf(i)] = { type: "issue", title: i.title };
+	}
+	const conversations = listConversations(index, filters)
+		.map((c) => {
+			const run = c.run ? runs.get(c.run) : null;
+			return {
+				...c,
+				title: run?.title ?? c.title ?? "Untitled",
+				origin: ORIGIN[c.origin] ?? c.origin ?? "unknown",
+				runKind: run?.kind ?? null,
+				runState: run?.state ?? null,
+				forkOf: run?.forkOf ?? null,
+			};
+		})
+		.filter((c) => !origin || c.origin === origin);
+	return { indexedAt: index?.scannedAt ?? null, items, conversations };
+}
+
+const sessionIn = (index, id) => {
+	const s = index?.sessions?.[id];
+	if (!s?.project) throw Object.assign(new Error("no such conversation"), { status: 404 });
+	return s;
+};
+
+// Answers a conversation (T059, research R6b): a session Rusuban started resumes in place, unless its
+// run is at work; any other session is answered in a fork, which leaves the original as it was. The
+// fork's run records `forkOf`. The person's text goes as is.
+export function replyTo(index, id, text, request = requestRun) {
+	const s = sessionIn(index, id);
+	if (!String(text ?? "").trim())
+		throw Object.assign(new Error("the answer is empty"), { status: 400 });
+	const run = s.run ? readRun(s.run) : null;
+	const fork = !run || ["queued", "running"].includes(run.state);
+	const title = run?.title ?? s.title ?? "Untitled";
+	const r = request({
+		kind: "reply",
+		project: s.project,
+		mission: text,
+		items: s.items,
+		title,
+		cwd: s.cwd,
+		resume: id,
+		fork,
+		lock: `${s.project}.reply.${id}`,
+		trigger: "button",
+	});
+	return { run: r.id, forked: fork, title, project: s.project };
+}
+
+// The command that opens a session in a terminal of this machine (T060), for the platform.
+export function terminalCommand(s, platform = process.platform) {
+	const resume = `claude --resume ${s.id}`;
+	if (platform === "win32") return ["wt.exe", ["-d", s.cwd, "cmd", "/k", resume]];
+	const quoted = `'${s.cwd.replace(/'/g, "'\\''")}'`; // a quote closes, is escaped, reopens
+	if (platform === "darwin")
+		return [
+			"osascript",
+			["-e", `tell application "Terminal" to do script "cd ${quoted} && ${resume}"`],
+		];
+	return [
+		process.env.TERMINAL || "x-terminal-emulator",
+		["-e", "sh", "-c", `cd ${quoted} && ${resume}; exec sh`],
+	];
+}
+
+export function openTerminal(index, id, start = spawn) {
+	const s = sessionIn(index, id);
+	if (!s.cwd) throw Object.assign(new Error("no such conversation"), { status: 404 });
+	const [cmd, args] = terminalCommand(s);
+	start(cmd, args, { detached: true, stdio: "ignore", windowsHide: false })
+		.on?.("error", () => {})
+		?.unref?.();
+	return { ok: true };
 }
