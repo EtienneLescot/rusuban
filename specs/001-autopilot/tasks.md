@@ -388,6 +388,7 @@ frees the Mac at expiry.
 - [x] T111 [US5] Mockup of the machines view, validated by Etienne before T071
   - Validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/machines/`. Machines are a section of the Agents view; the button is "Release".
 - [ ] T112 [US5] Live proof of M4: two runs need macOS on the real Mac; the second waits; killing the first frees the Mac at expiry
+  - After 0.1.0, by the same decision.
 
 ---
 
@@ -410,6 +411,7 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
   - Its mockup was validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/observe-only/`: the banner of a project without rules, with two links.
   - Built as validated: the banner under the view tabs names the repos' default branch, and the main node says "people merge". Screenshots in `mockups/observe-only/built/`; a click test checks it.
 - [ ] T078 [US1] Timed clean-machine install on the three OSes (SC-001)
+  - After 0.1.0, by the owner's decision of 2026-11-08: the release follows his own trials and the two phone proofs (T106, T108).
 - [x] T113 [US1] Updates: `status` compares the installed version with npm; config and state files carry a version, migrated on load (FR-074)
   - `status` reads `registry.npmjs.org/rusuban/latest` (or `RUSUBAN_REGISTRY`) and says when a newer release is out, with `npm i -g rusuban` then `service install` to restart; it installs nothing. config.json's `version` is the whole home's format: a newer one is refused on load, and the first format change brings its migration.
 
