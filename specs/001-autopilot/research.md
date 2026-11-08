@@ -31,8 +31,15 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
   owner chooses the host profile (allowlist or full bypass) at init.
 - **Later**: an agent-only GitHub token without admin rights, plus a repository ruleset.
 - **Pushes**: the server also flags any commit on a default branch that none of its merges produced.
-- **Desktops**: a person's desktop alias is added to the deny rules of every run that does not hold its
-  lease.
+- **Desktops**: a person's desktop alias is refused to every run that does not hold its lease. Deny
+  rules cannot do it: they are set when a run starts, and a run leases the desktop later. So while a
+  desktop is registered, each run gets a PreToolUse hook (`--settings`), `rusuban guard`.
+  - It refuses (exit 2) a Bash command that names the alias unless the run holds the lease, read on
+    the machine.
+  - It lets `rusuban lease` and `rusuban release` through, alone on their line.
+  - Checked on Claude Code 2.1.302 on Windows: the hook runs with `--setting-sources user` and
+    `--dangerously-skip-permissions`, and finds `rusuban` on the run's PATH.
+  - An alias spelt another way gets through. The desktop's own agent account is the wall.
 - **Shadow projects**: every GitHub write (`gh` comment, review, close, edit, `gh api` with a method,
   `git push`) is added to the deny rules.
 

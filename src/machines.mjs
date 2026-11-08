@@ -771,3 +771,40 @@ export const pruneAsks = (alive = isAlive) =>
 			keep(read(ANSWERS, {}), (k) => k.split(" ")[0]),
 		);
 	});
+
+// ── The desktop guard (T110, FR-063) ──────────────────────────────────────────────────────────
+// A run reaches a person's desktop only while it holds the desktop's lease. Claude Code passes every
+// Bash command of a run here first (a PreToolUse hook, `rusuban guard`): one that names a desktop's
+// alias is refused unless the run holds that desktop now, as read on the machine itself. A run's deny
+// rules are set when it starts, so they could not open the desktop to the run that leases it later.
+// Taking and giving back the lease stay open. ponytail: an alias spelt another way (encoded, built
+// by a script) gets through; the desktop's own agent account is the wall.
+// `rusuban lease …` or `rusuban release …` alone: redirected, or in the background, but never with a
+// second command after a separator.
+const leaseOnly = (text) => {
+	const t = text.replace(/\d?>&\d/g, "").replace(/&\s*$/, "");
+	return /^\s*rusuban\s+(lease|release)\s/.test(t) && !/[;&|`\n]|\$\(/.test(t);
+};
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+// The alias as a host: `ssh desk`, `rusuban@desk`, `desk:path`, `desk.tail1234.ts.net`, not `desktop`.
+const names = (text, alias) =>
+	new RegExp(`(?<![\\w.@-])(?:[\\w.-]+@)?${escapeRe(alias)}(?![\\w-])`, "i").test(text);
+
+export const desktops = (config) =>
+	validateMachines(config.machines).filter((m) => m.owner && m.ssh);
+
+// Null when the command may run, else why not.
+export async function guardCommand(config, command, run, { exec = sshExec } = {}) {
+	const text = String(command ?? "");
+	if (leaseOnly(text)) return null;
+	for (const m of desktops(config)) {
+		if (!names(text, m.ssh)) continue;
+		const lease = `lease it first: rusuban lease ${m.name} --reason <why>, then wait for their yes`;
+		if (!run)
+			return `${m.name} is ${m.owner}'s desktop: only a run that holds its lease reaches it`;
+		const r = await readLease(m, exec);
+		if (!r.ok) return `${m.name} is ${m.owner}'s desktop, and its lease cannot be read: ${r.said}`;
+		if (r.lease?.run !== run) return `${m.name} is ${m.owner}'s desktop: ${lease}`;
+	}
+	return null;
+}

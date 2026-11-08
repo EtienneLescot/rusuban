@@ -140,9 +140,16 @@ export function builtInDeny({
 // user settings load: a repo's own `.claude` settings (hooks, permissions) never reach a run, so
 // whoever can merge in a repo gains no shell on the host. The agent CLI is allowed in both profiles:
 // it is how every run reports.
+// T110: with a person's desktop registered, Claude Code passes each Bash command of a run to
+// `rusuban guard` first, which refuses the desktop to a run that does not hold its lease.
+const GUARD = JSON.stringify({
+	hooks: {
+		PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "rusuban guard" }] }],
+	},
+});
 export function permissionArgs(permissions, context = {}) {
 	const deny = [...builtInDeny(context), ...(permissions?.deny ?? [])];
-	const sources = ["--setting-sources", "user"];
+	const sources = ["--setting-sources", "user", ...(context.guard ? ["--settings", GUARD] : [])];
 	if (permissions?.mode === "bypass")
 		return [...sources, "--dangerously-skip-permissions", "--disallowedTools", ...deny];
 	if (permissions?.mode === "allowlist")
@@ -701,6 +708,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			defaultBranches: Object.values(live.repos ?? {}).map((r) => r.defaultBranch),
 			shadow: mode !== "live", // a project no longer configured gets the shadow rules too
 			port: config.port,
+			guard: config.machines?.some((m) => m.owner), // a desktop added later guards later runs
 		});
 		if (!takeLock(s.lock, id)) {
 			enqueue(s.lock, id);

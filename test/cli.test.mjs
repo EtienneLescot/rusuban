@@ -292,3 +292,37 @@ test("lease and release: a run's commands, with a machine or an OS, a reason and
 		[["mac", "rusuban"]],
 	);
 });
+
+test("rusuban guard, Claude Code's hook: exit 2 with the reason refuses a command", () => {
+	const home = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-guard-"));
+	fs.writeFileSync(
+		path.join(home, "config.json"),
+		JSON.stringify({
+			version: 1,
+			owner: { login: "alice" },
+			permissions: { mode: "bypass" },
+			limits: { maxWorkers: 3, maxRunMinutes: 150 },
+			projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
+			machines: [{ name: "desk", os: "windows", ssh: "desk.invalid", owner: "alice" }],
+		}),
+	);
+	const guard = (input) =>
+		spawnSync(process.execPath, [BIN, "guard"], {
+			encoding: "utf8",
+			input: typeof input === "string" ? input : JSON.stringify(input),
+			env: { ...process.env, RUSUBAN_HOME: home, RUSUBAN_RUN: "" },
+		});
+	const bash = (command) => ({ tool_name: "Bash", tool_input: { command } });
+	assert.equal(guard(bash("ls")).status, 0);
+	assert.equal(guard({ tool_name: "Read", tool_input: { file_path: "desk.invalid" } }).status, 0);
+	assert.equal(guard(bash("rusuban lease desk --reason measure")).status, 0);
+	const refused = guard(bash("ssh desk.invalid uname"));
+	assert.equal(refused.status, 2);
+	assert.match(
+		refused.stderr,
+		/desk is alice's desktop: only a run that holds its lease reaches it/,
+	);
+	const broken = guard("not json");
+	assert.equal(broken.status, 2);
+	assert.match(broken.stderr, /the desktop guard could not judge this command/);
+});
