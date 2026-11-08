@@ -39,6 +39,7 @@ export const TOOLS = [
 			return {
 				owner: c.owner.login,
 				hostProfile: c.permissions.mode,
+				remoteAccess: !!c.owner.tailscaleLogin,
 				limits: c.limits,
 				mergesArmed: read("automerge.json", { armed: false }).armed === true,
 				channels: c.channels.map((ch) => ({
@@ -197,6 +198,13 @@ export const TOOLS = [
 		description: "Removes a channel: it applies at once.",
 		inputSchema: obj({ id: text }, ["id"]),
 		run: ({ id }) => set({ kind: "channel.remove", id }),
+	},
+	{
+		name: "remote",
+		description:
+			"The dashboard on this machine's tailnet name, through Tailscale Serve, for the owner's devices: turning it on waits for the owner; off applies at once.",
+		inputSchema: obj({ enabled: { type: "boolean" } }, ["enabled"]),
+		run: ({ enabled }) => set({ kind: "remote", on: enabled }),
 	},
 	{
 		name: "task_remove",

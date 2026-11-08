@@ -41,15 +41,15 @@ Settings. Each one returns `{ state, text }`, where `state` is:
 | `owner { login }` | always |
 | `task_write { id, title, project, schedule?, lock?, cwd?, prompt }` | always: its card shows the task, or the diff of its file |
 | `task_remove { id }` | never: the task stops, its file is kept as `<id>.md.removed` |
-| `channel_add { type, target, urgency?, quietHours?, digestAt?, smtp?, from? }` | always: data leaves to its target |
+| `channel_add { type, target, urgency?, quietHours?, digestAt?, smtp?, from?, token? }` | always: data leaves to its target |
 | `channel_remove { id }` | never |
+| `remote { enabled }` | `enabled` is true: the dashboard answers on the tailnet |
 
 These arrive with their phases, through the same module:
 
 | Tool | Phase | Widens when |
 |---|---|---|
 | `machine_add { alias, os, caps?, workspace?, owner? }`, `machine_remove { name }` | 9 | add: always; remove: never |
-| `remote { enabled }` | 10 (T076) | `enabled` is true |
 
 A setting waiting for a confirmation is listed by `state`. Once the owner allows or declines it, the
 journal says so, and the next call to `state` shows the outcome.

@@ -21,7 +21,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `task list` / `task run <id>` | The catalog with each task's slots, state and last runs; starts a task now, refused while one of its runs waits or works. |
 | `task add <file.md>` / `task remove <id>` | Writes a task into the instance (it widens: confirmed, FR-092), or sets one aside, its file kept as `<id>.md.removed`. |
 | `mcp` | Rusuban's MCP server on stdio (`contracts/mcp.md`). |
-| `remote enable` / `remote disable` | Runs `tailscale serve` for the dashboard, or stops it. |
+| `remote enable` / `remote disable` | Enable widens (confirmed, FR-092): `tailscale serve --bg --https=443 http://127.0.0.1:<port>`, and `owner.tailscaleLogin` stored from `tailscale status --json`. Disable applies at once: the login goes, so every tailnet request is refused, and Serve stops forwarding. |
 | `service install` / `service uninstall` | Autostart with restart on failure (Task Scheduler, launchd, systemd user), and a menu shortcut to the dashboard. Refused from npx's cache, which npm empties: `npm i -g rusuban` first. |
 
 The `project` commands write `config.json`; a running daemon reads it again within seconds, without a

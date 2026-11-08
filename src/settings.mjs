@@ -3,6 +3,7 @@
 // waits in pending.json as a card the owner allows in the dashboard, unless a person confirmed it in a
 // terminal (FR-092). A change that narrows applies at once (FR-093). Each change goes to settings.jsonl
 // with its origin (FR-094). Nothing here runs inside an agent run (FR-095). See security.md.
+import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -40,6 +41,33 @@ const textOf = (file) => {
 	}
 };
 const isArmedNow = () => read("automerge.json", { armed: false }).armed === true;
+
+// Remote access (T076) goes through Tailscale Serve, never Funnel: the dashboard on this machine's
+// tailnet name, for the owner's devices. Tests replace `run`.
+export const tailscale = {
+	run: (args) =>
+		execFileSync("tailscale", args, {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+			timeout: 15_000,
+			windowsHide: true,
+		}),
+};
+// This machine's tailnet name and the login Tailscale knows its user by, which Serve sends as
+// `Tailscale-User-Login` and the dashboard compares (research R7).
+function tailnetSelf() {
+	let s;
+	try {
+		s = JSON.parse(tailscale.run(["status", "--json"]));
+	} catch {
+		throw new Error("Tailscale does not answer: install it and log in, then again");
+	}
+	const name = s.Self?.DNSName?.replace(/\.$/, "").toLowerCase();
+	const login = s.User?.[s.Self?.UserID]?.LoginName;
+	if (s.BackendState !== "Running" || !name || !login)
+		throw new Error("Tailscale is not logged in on this machine: tailscale up, then again");
+	return { name, login };
+}
 // A channel's target holds its secret (a webhook URL, a topic): only its host, or the address of an
 // e-mail channel, is ever shown.
 export function maskTarget(channel) {
@@ -361,6 +389,42 @@ export function planOf(config, change) {
 					ctx: `Every card goes to the owner, and the dashboard answers as them. It is @${config.owner.login} now.`,
 					allow: `@${change.login} owns the instance.`,
 					deny: "Nothing changes.",
+				},
+			};
+		}
+		case "remote": {
+			const on = change.on === true;
+			if (!!config.owner.tailscaleLogin === on)
+				return { project: null, same: `remote access is already ${on ? "on" : "off"}.` };
+			// Off applies at once: without the login, the dashboard refuses every tailnet request, even
+			// if Tailscale could not be told to stop forwarding.
+			if (!on)
+				return {
+					project: null,
+					widens: false,
+					apply: (c) => {
+						delete c.owner.tailscaleLogin;
+						try {
+							tailscale.run(["serve", "--https=443", "off"]);
+						} catch {}
+					},
+					said: "remote access off: the dashboard answers on this machine only.",
+				};
+			const self = tailnetSelf();
+			return {
+				project: null,
+				widens: true,
+				// A card is planned again when allowed: `self` is Tailscale's state at that moment.
+				apply: (c) => {
+					tailscale.run(["serve", "--bg", "--https=443", `http://127.0.0.1:${c.port}`]);
+					c.owner.tailscaleLogin = self.login;
+				},
+				said: `remote access on: https://${self.name}/, for ${self.login} only.`,
+				card: {
+					q: `Open the dashboard to your tailnet, at https://${self.name}/?`,
+					ctx: `Tailscale Serve forwards it to your devices, never to the internet, and only ${self.login} gets in. Pings then link there, so a phone can answer cards.`,
+					allow: "Remote access is on; `rusuban remote disable` turns it off.",
+					deny: "The dashboard stays on this machine.",
 				},
 			};
 		}

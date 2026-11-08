@@ -16,6 +16,7 @@ import {
 	planOf,
 	settingsCards,
 	settingsLog,
+	tailscale,
 } from "../src/settings.mjs";
 
 beforeEach(() => {
@@ -148,6 +149,58 @@ test("a setting's card: Allow it or Don't allow it, no recommendation, Claude to
 		],
 	);
 	assert.match(card.card.id, /^setting:/);
+});
+
+test("remote access: on waits for the owner, then Serve forwards the dashboard; off applies at once", () => {
+	const real = tailscale.run;
+	const calls = [];
+	let status = {
+		BackendState: "Running",
+		Self: { DNSName: "box.tail1.ts.net.", UserID: 7 },
+		User: { 7: { LoginName: "alice@example.com" } },
+	};
+	const fake = (args) => {
+		calls.push(args.join(" "));
+		return args[0] === "status" ? JSON.stringify(status) : "";
+	};
+	try {
+		tailscale.run = fake;
+		const asked = changeSetting({ kind: "remote", on: true }, as);
+		assert.deepEqual(
+			[asked.state, asked.text],
+			["pending", "Open the dashboard to your tailnet, at https://box.tail1.ts.net/?"],
+		);
+		assert.deepEqual(calls, ["status --json"], "nothing is served before the owner allows it");
+		confirmRequest(pendingRequests()[0].id, { allow: true, by: "alice" });
+		assert.deepEqual(calls.slice(1), [
+			"status --json",
+			"serve --bg --https=443 http://127.0.0.1:0",
+		]);
+		assert.equal(loadConfig().owner.tailscaleLogin, "alice@example.com");
+		assert.equal(changeSetting({ kind: "remote", on: true }, as).state, "unchanged");
+		// Off: the login goes even when Tailscale does not answer, and with it every tailnet request.
+		calls.length = 0;
+		tailscale.run = (args) => {
+			calls.push(args.join(" "));
+			throw new Error("tailscaled is not running");
+		};
+		assert.equal(changeSetting({ kind: "remote", on: false }, as).state, "applied");
+		assert.deepEqual(calls, ["serve --https=443 off"]);
+		assert.equal(loadConfig().owner.tailscaleLogin, undefined);
+		assert.throws(
+			() => changeSetting({ kind: "remote", on: true }, as),
+			/Tailscale does not answer/,
+		);
+		status = { BackendState: "NeedsLogin", Self: {}, User: {} };
+		tailscale.run = fake;
+		assert.throws(
+			() => changeSetting({ kind: "remote", on: true }, as),
+			/Tailscale is not logged in on this machine/,
+		);
+		assert.deepEqual(pendingRequests(), []);
+	} finally {
+		tailscale.run = real;
+	}
 });
 
 test("nothing is set inside an agent run", () => {
