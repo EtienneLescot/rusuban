@@ -48,7 +48,9 @@ file has **one writer**. `rusuban` is the product name.
 
 - `permissions.mode`: `bypass` or `allowlist`, asked at init, no default. `deny` adds to the built-in
   deny rules (research R3), it never removes them.
-- `version`: checked on load; an update migrates older files (FR-074).
+- `version`: the format of the whole instance home, config.json and every state file under it (FR-074).
+  A rusuban that finds a newer one refuses to load it; a change to any file's format bumps it, and the
+  update that brings it migrates the home on load. Version 1 has no migration yet.
 - `owner.tailscaleLogin`: written by `remote enable` from `tailscale status --json`; it may differ from
   the GitHub login (research R7).
 - `limits`: written explicitly by `init`; `maxWorkers` caps concurrent workers, `maxRunMinutes` stops a

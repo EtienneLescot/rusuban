@@ -70,6 +70,12 @@ async function freePort(from) {
 	}
 	throw new Error(`no free port from ${from} to ${from + 19}`);
 }
+// Whether release a is after release b, by their major, minor and patch numbers.
+const newer = (a, b) => {
+	const [x, y] = [a, b].map((v) => String(v).split(/[.+-]/).slice(0, 3).map(Number));
+	const i = x.findIndex((n, k) => n !== y[k]);
+	return i >= 0 && x[i] > y[i];
+};
 const minutes = (ms) => {
 	const m = Math.max(0, Math.round(ms / 60e3));
 	return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
@@ -534,6 +540,12 @@ const commands = {
 		}
 		const { tailnetName } = await import("../src/server.mjs");
 		const tailnet = config.owner.tailscaleLogin ? await tailnetName() : null;
+		// T113: a newer release on npm, said once here; nothing is installed without the owner.
+		const registry = process.env.RUSUBAN_REGISTRY ?? "https://registry.npmjs.org";
+		const latest = await fetch(`${registry}/rusuban/latest`, { signal: AbortSignal.timeout(3000) })
+			.then((r) => (r.ok ? r.json() : null))
+			.then((p) => p?.version ?? null)
+			.catch(() => null);
 		const ago = (at) => minutes(Date.now() - Date.parse(at));
 		const runs = listRuns().filter((r) => r.state === "running");
 		const projects = config.projects.map(
@@ -543,6 +555,9 @@ const commands = {
 			[
 				`rusuban ${state.version}${state.dry ? " (dry)" : ""}, up ${ago(state.startedAt)}, on ${url}/`,
 				...(tailnet ? [`from your tailnet: https://${tailnet}/`] : []),
+				...(latest && newer(latest, version)
+					? [`rusuban ${latest} is out: npm i -g rusuban, then rusuban service install to restart`]
+					: []),
 				`merges ${state.armed ? "armed" : "paused"}; projects: ${projects.join(", ") || "none"}`,
 				`agents at work: ${runs.map((r) => `${r.title ?? r.kind} in ${r.project}, ${ago(r.startedAt)}`).join("; ") || "none"}`,
 				`log: ${log}`,

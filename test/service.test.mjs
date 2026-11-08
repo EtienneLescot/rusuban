@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawn, spawnSync } from "node:child_process";
+import { execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import http from "node:http";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import {
 	appleScript,
 	dashboardUrl,
@@ -31,6 +33,7 @@ const WIN_COMMAND = [
 ];
 const COMMAND = ["/opt/node 22/bin/node", "/home/a/50%$off/bin/rusuban.mjs", "start"];
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-service-"));
+const execFileP = promisify(execFile);
 
 // Records each command, then lets `react` look at it: throwing is the command exiting non-zero.
 function fake(react = () => {}) {
@@ -313,6 +316,7 @@ test("a service's daemon writes what it says to daemon.log, and status reads it 
 		RUSUBAN_HOME: home,
 		RUSUBAN_DRY: "1",
 		RUSUBAN_CLAUDE_PROJECTS: tmp(),
+		RUSUBAN_REGISTRY: "http://127.0.0.1:9", // no registry: nothing to say about updates
 	};
 	const bin = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
 	const cli = (...args) => spawnSync(process.execPath, [bin, ...args], { env, encoding: "utf8" });
@@ -335,6 +339,22 @@ test("a service's daemon writes what it says to daemon.log, and status reads it 
 			up.stdout,
 			/^rusuban \S+ \(dry\), up 0 min, on http:\/\/127\.0\.0\.1:\d+\/\nmerges paused; projects: demo \(shadow\)\nagents at work: none\nlog: /,
 		);
+		// A newer release on npm is said; status never installs it.
+		const registry = http.createServer((req, res) =>
+			res.end(req.url === "/rusuban/latest" ? '{"version":"99.0.0"}' : "{}"),
+		);
+		await new Promise((r) => registry.listen(0, "127.0.0.1", r));
+		try {
+			const { stdout } = await execFileP(process.execPath, [bin, "status"], {
+				env: { ...env, RUSUBAN_REGISTRY: `http://127.0.0.1:${registry.address().port}` },
+			});
+			assert.match(
+				stdout,
+				/\nrusuban 99\.0\.0 is out: npm i -g rusuban, then rusuban service install to restart\n/,
+			);
+		} finally {
+			registry.close();
+		}
 	} finally {
 		daemon.kill();
 	}
