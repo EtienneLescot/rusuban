@@ -35,6 +35,8 @@ test("each view tab shows its view", async ({ page, isMobile }) => {
 		await expect(page.locator("#inbox")).toBeVisible();
 		await expect(page.locator(".main-area")).toBeHidden();
 	}
+	// The phone's first tab is named after the view it shows, graph or kanban.
+	const board = page.locator('#tabbar [data-tab="graph"]');
 	for (const view of ["kanban", "conversations", "agents", "graph"]) {
 		await goTo(page, view, isMobile);
 		await showing(page, view);
@@ -44,8 +46,17 @@ test("each view tab shows its view", async ({ page, isMobile }) => {
 				"aria-selected",
 				"true",
 			);
+		if (isMobile && view === "kanban") await expect(board).toHaveText("Kanban");
 	}
 	if (isMobile) {
+		await expect(board).toHaveText("Graph");
+		// Agents picked in the first tab's row of view tabs: the tab bar follows to its own tab.
+		await press(page.locator('.views [data-view="agents"]'), true);
+		await showing(page, "agents");
+		await expect(page.locator('#tabbar [data-tab="agents"]')).toHaveAttribute(
+			"aria-current",
+			"page",
+		);
 		await press(page.locator('#tabbar [data-tab="inbox"]'), true);
 		await expect(page.locator("#inbox")).toBeVisible();
 		await expect(page.locator(".main-area")).toBeHidden();

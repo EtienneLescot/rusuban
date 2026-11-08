@@ -1270,10 +1270,13 @@ function render() {
 	$("observe").hidden = !S.project?.observeOnly;
 	$("dry").hidden = !S.dry;
 	$("shadow").hidden = S.project?.mode !== "shadow";
+	// On a phone, Conversations and Agents have tabs of their own; the first tab shows the graph or the
+	// kanban, picked in its row of view tabs, and is named after the one it shows.
+	const board = ui.view === "kanban" ? "kanban" : "graph";
+	const view = phone() ? (["conversations", "agents"].includes(ui.tab) ? ui.tab : board) : ui.view;
+	$("tab-board").textContent = T[board];
 	for (const b of document.querySelectorAll(".views button"))
-		b.setAttribute("aria-selected", String(b.dataset.view === ui.view));
-	// A phone's Conversations and Agents tabs show that view, whatever the view tabs say.
-	const view = phone() && ["conversations", "agents"].includes(ui.tab) ? ui.tab : ui.view;
+		b.setAttribute("aria-selected", String(b.dataset.view === view));
 	document.body.dataset.showing = view;
 	$("vp").hidden = view !== "graph";
 	$("kanban").hidden = view !== "kanban";
@@ -1544,8 +1547,11 @@ document.addEventListener("click", (e) => {
 	} else if (t.dataset.focus) return focusOn(t.dataset.focus);
 	else if (t.dataset.own) ui.own = t.dataset.own;
 	else if (t.dataset.kind) ui.kind = t.dataset.kind;
-	else if (t.dataset.view) ui.view = t.dataset.view;
-	else if (t.dataset.close !== undefined) drawerOpen = false;
+	else if (t.dataset.view) {
+		ui.view = t.dataset.view;
+		// A phone shows Conversations and Agents on their own tabs: the tab bar follows.
+		if (phone() && ["conversations", "agents"].includes(ui.view)) ui.tab = ui.view;
+	} else if (t.dataset.close !== undefined) drawerOpen = false;
 	$("collapse").hidden = !ui.exp.size;
 	save();
 	render();
