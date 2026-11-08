@@ -12,6 +12,7 @@ import {
 	holder,
 	kickQueues,
 	listRuns,
+	noteCrash,
 	permissionArgs,
 	queued,
 	readRun,
@@ -22,7 +23,8 @@ import {
 	stopRun,
 	usageLimitOf,
 } from "../src/agents.mjs";
-import { append, homePath, read, write } from "../src/home.mjs";
+import { append, homePath, read, readJsonl, saveConfig, write } from "../src/home.mjs";
+import { changeSetting, confirmRequest, tailscale } from "../src/settings.mjs";
 
 const FAKE = [
 	process.execPath,
@@ -351,6 +353,99 @@ test("a run whose runner died goes back to its queue, twice at most; a stopped o
 	const waiting = request();
 	assert.equal(stopRun(waiting.id, "Not needed.").state, "stopped");
 	assert.ok(!queued("demo.coordinator").includes(waiting.id));
+});
+
+test("a run cut short says why in the journal, once: its runner's crash, the host's restart, or neither", (t) => {
+	t.mock.method(os, "uptime", () => 60); // the host started a minute ago
+	const cut = (over = {}) => {
+		const { id } = request();
+		write(`runs/${id}/status.json`, {
+			...readRun(id),
+			state: "running",
+			pid: 2 ** 22 + 12345,
+			startedAt: new Date().toISOString(),
+			...over,
+		});
+		return id;
+	};
+	const crashed = cut();
+	noteCrash(crashed, new Error("EPERM: operation not permitted, rename 'a' -> 'b'\n    at write"));
+	const rebooted = cut({ startedAt: new Date(Date.now() - 600e3).toISOString() });
+	const killed = cut();
+	const third = cut({ attempt: 3 });
+	kickQueues();
+	kickQueues();
+	const told = readJsonl("projects/demo/journal.jsonl").filter((e) => e.kind === "interrupted");
+	assert.equal(told.length, 4, "each told once");
+	const said = (id) => told.find((e) => e.run === id);
+	const retry = (id) => listRuns("demo").find((r) => r.retryOf === id)?.id;
+	const why = {
+		[crashed]: "its runner crashed (EPERM: operation not permitted, rename 'a' -> 'b')",
+		[rebooted]: "the host restarted",
+		[killed]: "its runner ended without saying why (killed, or out of disk or memory)",
+	};
+	for (const [id, text] of Object.entries(why)) {
+		assert.equal(
+			said(id).text,
+			`The judge run was cut short: ${text}. Asked again as ${retry(id)}.`,
+		);
+		assert.equal(said(id).notify, undefined);
+		assert.deepEqual(
+			[readRun(id).state, readRun(id).summary],
+			["interrupted", `Cut short: ${text}.`],
+		);
+		assert.ok(readRun(id).endedAt);
+	}
+	assert.equal(
+		said(third).text,
+		`The judge run was cut short: ${why[killed]}. Not asked again: it was cut short three times.`,
+	);
+	assert.deepEqual([said(third).notify, retry(third)], [true, undefined]);
+});
+
+test("a setting allowed while a run works does not cut the run short", async (t) => {
+	// 2026-11-08: the owner allowed remote access while a judge worked. As the daemon read the runs to
+	// tell the page, Windows refused the runner the rename that saves the run's status (EPERM: another
+	// process has the file open), and the uncaught error ended the runner, and the judge with it.
+	saveConfig(config);
+	const real = tailscale.run;
+	t.after(() => {
+		tailscale.run = real;
+	});
+	tailscale.run = (args) =>
+		args[0] === "status"
+			? JSON.stringify({
+					BackendState: "Running",
+					Self: { DNSName: "box.tail1.ts.net.", UserID: 7 },
+					User: { 7: { LoginName: "alice@example.com" } },
+				})
+			: "";
+	const asked = changeSetting({ kind: "remote", on: true }, { origin: "mcp", by: "claude" });
+	process.env.FAKE_CLAUDE_MS = "2500"; // past the save of the run's step, 2 s after it comes
+	const { id } = request();
+	const status = homePath(`runs/${id}/status.json`);
+	const rename = fs.renameSync;
+	let refusals = 0;
+	t.mock.method(fs, "renameSync", (from, to) => {
+		if (to === status && refusals > 0) {
+			refusals--;
+			throw Object.assign(
+				new Error(`EPERM: operation not permitted, rename '${from}' -> '${to}'`),
+				{
+					code: "EPERM",
+				},
+			);
+		}
+		return rename(from, to);
+	});
+	const working = executeRun(id, { config, command: FAKE });
+	while (!readRun(id)?.session) await new Promise((r) => setTimeout(r, 20));
+	assert.equal(confirmRequest(asked.id, { allow: true, by: "alice" }).state, "confirmed");
+	refusals = 3; // the daemon reads every run's status as it tells the page
+	const done = await working;
+	assert.equal(refusals, 0, "the run's save was refused three times");
+	assert.equal(done.state, "done");
+	assert.equal(readRun(id).state, "done");
 });
 
 test("a queue whose holder died is restarted", () => {

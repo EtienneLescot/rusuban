@@ -18,12 +18,27 @@ export function read(name, fallback) {
 	}
 }
 
+// Windows refuses to rename over a file another process has open (EPERM), as the daemon has a run's
+// status open while it reads it: the rename is tried again for a second before it fails.
+const BUSY = ["EPERM", "EACCES", "EBUSY"];
+function replace(tmp, target) {
+	const until = Date.now() + 1000;
+	for (let wait = 10; ; wait = Math.min(wait * 2, 100)) {
+		try {
+			return fs.renameSync(tmp, target);
+		} catch (e) {
+			if (!BUSY.includes(e.code) || Date.now() > until) throw e;
+			Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, wait);
+		}
+	}
+}
+
 export function write(name, value, { mode } = {}) {
 	const target = homePath(name);
 	fs.mkdirSync(path.dirname(target), { recursive: true });
 	const tmp = `${target}.${process.pid}.tmp`;
 	fs.writeFileSync(tmp, `${JSON.stringify(value, null, 1)}\n`, { mode });
-	fs.renameSync(tmp, target);
+	replace(tmp, target);
 }
 
 export function readJsonl(name) {

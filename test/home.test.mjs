@@ -74,6 +74,22 @@ test("write replaces a file whole and leaves no temp file behind", () => {
 	]);
 });
 
+test("write tries again for a second while Windows refuses the rename, then fails; other errors fail at once", (t) => {
+	const refuse = (code) =>
+		t.mock.method(fs, "renameSync", () => {
+			throw Object.assign(new Error(`${code}: rename`), { code });
+		});
+	const busy = refuse("EPERM");
+	const start = Date.now();
+	assert.throws(() => write("a.json", {}), /EPERM/);
+	assert.ok(Date.now() - start >= 1000, "tried for a second");
+	assert.ok(busy.mock.callCount() > 3);
+	busy.mock.restore();
+	const gone = refuse("ENOENT");
+	assert.throws(() => write("a.json", {}), /ENOENT/);
+	assert.equal(gone.mock.callCount(), 1);
+});
+
 test("missing files read as the fallback", () => {
 	assert.equal(read("nope.json", null), null);
 	assert.deepEqual(read("nope.json", { items: {} }), { items: {} });

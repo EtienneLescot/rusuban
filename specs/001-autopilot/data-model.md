@@ -134,9 +134,12 @@ message? }], createdAt, resolvedAt, outcome }`
 ### Run
 
 `{ id, kind: "judge" | "act" | "worker" | "task" | "reply", project, items[], session, cwd, worktree,
-leases[], trigger, state, startedAt, endedAt, exitCode, step, summary }`
+leases[], trigger, state, startedAt, endedAt, exitCode, step, summary, crash? }`
 
 - `state`: `queued → running → done | failed | stopped`; `running` with a dead pid reads `interrupted`.
+- An interrupted run is journaled once by the daemon, with why: the error its runner noted in `crash`
+  as it crashed, the host's restart, or neither. Its `endedAt` and `summary` are set then, and it is
+  asked again unless it was its third attempt.
 
 ### Conversation
 
