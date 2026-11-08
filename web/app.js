@@ -18,8 +18,9 @@ const T = {
 	graph: "Graph",
 	kanban: "Kanban",
 	paused: "Auto-merge is paused: no PR is merged without you.",
-	observeOnly:
-		"Observe only: no repo of this project has rules in .rusuban/rules/ yet. Agents read it and never act.",
+	observeTitle: "Observe only",
+	observeText: (branch) =>
+		`No rules in <span class="mono">.rusuban/rules/</span> on ${branch ? esc(branch) : "the default branch"}: agents read this project and never act.`,
 	dry: "Dry mode: the server starts no agent and writes nothing on GitHub.",
 	shadow:
 		"Shadow mode: agents judge and propose, nothing is written on GitHub and nothing is merged.",
@@ -95,6 +96,7 @@ const T = {
 	noArea: "No area",
 	groupFrame: (group, count) => `${T.groups[group]} · unlinked · ${count}`,
 	mainTitle: "default branch",
+	peopleMerge: "people merge",
 	mainFlow: (inFlight, ready) => `Auto-merge · ${inFlight} on the way, ${ready} ready`,
 	mainMerged: (n, auto) => `${plural(n, "PR")} merged in 7 days, ${auto} without you`,
 	seeInGraph: "See it in the graph",
@@ -677,10 +679,15 @@ function renderGraph() {
 				.filter(Boolean),
 		),
 	];
+	// Without rules, only people merge (mockups/observe-only).
+	const branch = branches.length === 1 ? branches[0] : (S.project?.defaultBranch ?? T.mainTitle);
+	const flow = S.project?.observeOnly
+		? `<span>${T.peopleMerge}</span>`
+		: `<span>${esc(T.mainFlow(M.main.inFlight, M.main.ready))}</span>
+		<small>${esc(T.mainMerged(M.main.merged7, M.main.mergedAuto))}</small>`;
 	$("main-node").innerHTML =
-		`<div class="main-card" style="left:${M.main.x}px;top:${M.main.y}px"><span class="port"></span><b>${esc(branches.length === 1 ? branches[0] : T.mainTitle)}</b>
-		<span>${esc(T.mainFlow(M.main.inFlight, M.main.ready))}</span>
-		<small>${esc(T.mainMerged(M.main.merged7, M.main.mergedAuto))}</small></div>`;
+		`<div class="main-card" style="left:${M.main.x}px;top:${M.main.y}px"><span class="port"></span><b>${esc(branch)}</b>
+		${flow}</div>`;
 	renderMinimap();
 }
 
@@ -1501,6 +1508,7 @@ function render() {
 	$("auto").setAttribute("aria-checked", String(S.armed));
 	$("paused").hidden = S.armed;
 	$("observe").hidden = !S.project?.observeOnly;
+	$("observe-text").innerHTML = T.observeText(S.project?.defaultBranch);
 	$("dry").hidden = !S.dry;
 	$("shadow").hidden = S.project?.mode !== "shadow";
 	// On a phone, Conversations and Agents have tabs of their own; the first tab shows the graph or the

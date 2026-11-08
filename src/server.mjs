@@ -209,6 +209,7 @@ export function stateOf(ctx, projectId) {
 		.map((r) => ({ ...r, focus: focusOf(r, live) }));
 	const repos = p.repos.map((r) => r.slug);
 	const checked = repos.map((s) => liveFile.repos?.[s]?.checkedAt);
+	const branches = new Set(repos.map((s) => liveFile.repos?.[s]?.defaultBranch).filter(Boolean));
 	const errors = [
 		ctx.errors.get(p.id),
 		...repos.map((s) => liveFile.repos?.[s]?.error ?? rules[s]?.error),
@@ -222,6 +223,7 @@ export function stateOf(ctx, projectId) {
 			bypassApproval: p.bypassApproval,
 			repos,
 			observeOnly: repos.every((s) => rules[s]?.observeOnly !== false),
+			defaultBranch: branches.size === 1 ? [...branches][0] : null,
 		},
 		model: buildModel({
 			live,
