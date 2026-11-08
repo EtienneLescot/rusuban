@@ -9,7 +9,7 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { executeRun, listRuns, OWNER_COMMANDS, readRun } from "../src/agents.mjs";
+import { executeRun, listRuns, noteCrash, OWNER_COMMANDS, readRun } from "../src/agents.mjs";
 import { agentLog, homePath, loadConfig, read, readJsonl, SLUG, write } from "../src/home.mjs";
 import {
 	answerOf,
@@ -835,8 +835,15 @@ const commands = {
 			`service installed: ${r.service}; the shortcut ${r.shortcut} opens ${serviceUrl(config.port)}`,
 		);
 	},
-	// Internal: the detached process that executes one run (src/agents.mjs).
+	// Internal: the detached process that executes one run (src/agents.mjs). Nobody reads its console:
+	// a crash is noted in the run's status first, for the daemon to journal.
 	async _run([id]) {
+		process.on("uncaughtException", (e) => {
+			try {
+				noteCrash(id, e);
+			} catch {}
+			process.exit(1);
+		});
 		await executeRun(id);
 	},
 };

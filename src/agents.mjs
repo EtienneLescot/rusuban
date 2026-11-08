@@ -9,9 +9,10 @@
 import { execFileSync, spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { append, homeDir, homePath, loadConfig, read, readJsonl, write } from "./home.mjs";
+import { append, homeDir, homePath, journal, loadConfig, read, readJsonl, write } from "./home.mjs";
 import { lastProbes, releaseRun } from "./machines.mjs";
 import { flatten, pendingAnswers, refusedOf, todoOf } from "./model.mjs";
 import { prepareWorktree, removeWorktree } from "./workers.mjs";
@@ -628,37 +629,72 @@ export function stopRun(id, why = "Stopped.") {
 	return stopped;
 }
 
+// A runner's last word (`rusuban _run`): what crashed it, kept in its status for the daemon to journal.
+// The run still reads interrupted, and is asked again.
+export function noteCrash(id, e) {
+	const s = read(statusName(id), null);
+	if (s?.state === "running") write(statusName(id), { ...s, crash: firstLine(e) });
+}
+
+// Why a runner ended before its run: the crash it noted, else the host's restart since the run
+// started. A process killed leaves no trace.
+function cutShortBy(r, now) {
+	if (r.crash) return `its runner crashed (${r.crash})`;
+	if (Date.parse(r.startedAt) < now - os.uptime() * 1000) return "the host restarted";
+	return "its runner ended without saying why (killed, or out of disk or memory)";
+}
+
+function askAgain(r) {
+	let mission = "";
+	try {
+		mission = fs.readFileSync(homePath(`runs/${r.id}/mission.md`), "utf8");
+	} catch {}
+	return requestRun({
+		kind: r.kind,
+		project: r.project,
+		mission,
+		items: r.items,
+		lock: r.lock,
+		trigger: "retry",
+		title: r.title,
+		cwd: r.kind === "worker" ? null : r.cwd,
+		attempt: (r.attempt ?? 1) + 1,
+		retryOf: r.id,
+		task: r.task ?? null,
+		resume: r.resume ?? null,
+		fork: !!r.forkOf,
+	});
+}
+
 // Every cycle of the daemon: once the usage limit resets, a run it stopped is asked again; a run
-// whose runner died (a crash, a reboot) gives its work back to the queue, twice at most; then every
-// queue whose holder died starts its next run.
+// whose runner died (a crash, a reboot) is journaled with why, once, and gives its work back to the
+// queue, twice at most; then every queue whose holder died starts its next run.
 export function kickQueues(now = Date.now()) {
 	if (limitedUntil() > now) return;
 	for (const r of listRuns()) {
 		if (r.retriedBy) continue;
 		const due = r.state === "limited" && Date.parse(r.retryAt) <= now;
-		const lost = r.state === "interrupted" && (r.attempt ?? 1) < 3;
+		const lost = r.state === "interrupted" && !r.endedAt; // its end set when it is journaled
 		if (!due && !lost) continue;
 		if (lost && r.worktree) removeWorktree(r.worktree, slugOf(r));
-		let mission = "";
-		try {
-			mission = fs.readFileSync(homePath(`runs/${r.id}/mission.md`), "utf8");
-		} catch {}
-		const again = requestRun({
-			kind: r.kind,
-			project: r.project,
-			mission,
-			items: r.items,
-			lock: r.lock,
-			trigger: "retry",
-			title: r.title,
-			cwd: r.kind === "worker" ? null : r.cwd,
-			attempt: (r.attempt ?? 1) + 1,
-			retryOf: r.id,
-			task: r.task ?? null,
-			resume: r.resume ?? null,
-			fork: !!r.forkOf,
-		});
-		write(statusName(r.id), { ...r, retriedBy: again.id });
+		const again = due || (r.attempt ?? 1) < 3 ? askAgain(r) : null;
+		const settled = { ...r, ...(again && { retriedBy: again.id }) };
+		if (lost) {
+			const why = cutShortBy(r, now);
+			Object.assign(settled, {
+				endedAt: new Date(now).toISOString(),
+				summary: `Cut short: ${why}.`,
+			});
+			journal(r.project, {
+				kind: "interrupted",
+				item: r.items?.[0] ?? null,
+				text: `The ${r.kind} run was cut short: ${why}. ${again ? `Asked again as ${again.id}.` : "Not asked again: it was cut short three times."}`,
+				by: "server",
+				run: r.id,
+				...(again ? {} : { notify: true }),
+			});
+		}
+		write(statusName(r.id), settled);
 	}
 	let files = [];
 	try {
