@@ -314,7 +314,8 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
 - **FR-027**: A rules change on the default branch MUST apply at the next read; it is journaled with its
   diff and the owner is pinged. No rule can widen the instance's permission profile.
 - **FR-028**: A project MUST have a mode: `live`, or `shadow`, where agents judge and propose but every
-  GitHub write is denied and nothing is merged (used for the switch from the OpenScreen pilot).
+  GitHub write is denied, no worker is started and nothing is merged (used for the switch from the
+  OpenScreen pilot).
 - **FR-029**: A project MAY have an approval bypass: a setting of the instance's config, off by default,
   that only the owner turns on (confirmed outside Claude, FR-092), never a repo, a PR, a rule or an agent. It applies only to a
   merge the server would make anyway (a live project, the switch armed, FR-021 and FR-044 met): the
