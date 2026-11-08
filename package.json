@@ -25,5 +25,8 @@
 	"devDependencies": {
 		"@biomejs/biome": "2.6.3",
 		"@playwright/test": "1.64.1"
+	},
+	"dependencies": {
+		"nodemailer": "10.2.1"
 	}
 }
