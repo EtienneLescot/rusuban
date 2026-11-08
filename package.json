@@ -1,9 +1,26 @@
 {
 	"name": "rusuban",
-	"version": "0.0.0",
-	"private": true,
+	"version": "0.1.0",
 	"description": "Minds your project while you're away, follows the rules you write, keeps every Claude conversation, and calls you only when your rules say so.",
 	"license": "MIT",
+	"author": "Etienne Lescot",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/EtienneLescot/rusuban.git"
+	},
+	"homepage": "https://github.com/EtienneLescot/rusuban#readme",
+	"bugs": {
+		"url": "https://github.com/EtienneLescot/rusuban/issues"
+	},
+	"keywords": [
+		"claude",
+		"claude-code",
+		"github",
+		"maintainer",
+		"agents",
+		"autopilot",
+		"mcp"
+	],
 	"type": "module",
 	"bin": {
 		"rusuban": "bin/rusuban.mjs"
