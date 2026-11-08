@@ -1,6 +1,7 @@
 // The instance home: every state file of one person's Rusuban, each with one writer
 // (specs/001-autopilot/data-model.md). JSON is written atomically (temp file + rename), JSONL is
 // appended. RUSUBAN_HOME overrides the location, read on every call so tests can point it elsewhere.
+import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -206,6 +207,18 @@ export function loadConfig() {
 // config.json holds channel secrets: mode 600.
 export function saveConfig(config) {
 	const valid = validateConfig(config);
+	sealConfig(valid); // first: the daemon may read config.json between the two writes
 	write("config.json", valid, { mode: 0o600 });
 	return valid;
 }
+
+// The seal of what the settings module wrote last (T125). A config.json that does not match it was
+// changed outside Rusuban, by hand or by a shell, and the daemon flags it. No seal yet (an instance
+// from before T125) means nothing to compare with.
+const SEAL = "config.json.seal";
+const sealOf = (config) => crypto.createHash("sha256").update(JSON.stringify(config)).digest("hex");
+export const sealConfig = (config) => write(SEAL, { sha: sealOf(config) }, { mode: 0o600 });
+export const sealMatches = (config) => {
+	const seal = read(SEAL, null);
+	return !seal || seal.sha === sealOf(config);
+};

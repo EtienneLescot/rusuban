@@ -7,8 +7,8 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
-import { loadConfig, read, saveConfig, write } from "../src/home.mjs";
-import { startServer } from "../src/server.mjs";
+import { homePath, loadConfig, read, saveConfig, write } from "../src/home.mjs";
+import { flagsToPing, reloadConfig, startServer } from "../src/server.mjs";
 import {
 	changeSetting,
 	confirmRequest,
@@ -332,5 +332,52 @@ test("a machine widens where agents run: a card, then the registry; a desktop is
 	assert.throws(
 		() => saveConfig({ ...loadConfig(), machines: [{ name: "Bad Name", os: "beos", ssh: "x" }] }),
 		/machines\[0\]\.name must be lowercase[\s\S]*machines\[0\]\.os must be windows, macos, linux/,
+	);
+});
+
+test("a config.json changed outside the settings module is flagged once, with what changed (T125)", async () => {
+	const outside = () => settingsLog().filter((e) => e.origin === "outside");
+	const byHand = (change) => {
+		const raw = JSON.parse(fs.readFileSync(homePath("config.json"), "utf8"));
+		change(raw);
+		fs.writeFileSync(homePath("config.json"), JSON.stringify(raw));
+	};
+	const srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
+	try {
+		changeSetting({ kind: "project.mode", project: "live", mode: "shadow" }, as);
+		reloadConfig(srv.ctx);
+		assert.deepEqual(outside(), [], "the settings module's own change");
+		byHand((raw) => {
+			raw.projects[0].mode = "live";
+			raw.projects[0].bypassApproval = true;
+			raw.channels = [
+				{ id: "ntfy", type: "ntfy", target: "https://ntfy.example/secret-topic", urgency: ["now"] },
+			];
+		});
+		reloadConfig(srv.ctx);
+		reloadConfig(srv.ctx);
+		assert.equal(outside().length, 1);
+		const [flag] = outside();
+		assert.equal(
+			flag.text,
+			`config.json was changed outside Rusuban's settings: projects.live.mode: "shadow" → "live"; projects.live.bypassApproval: false → true; channels.ntfy added.`,
+		);
+		assert.ok(!JSON.stringify(flag).includes("secret-topic"));
+		assert.equal(flagsToPing([flag], "alice", "http://x")[0].card.urgency, "now");
+		assert.equal(srv.ctx.config.projects[0].mode, "live", "the edit applies; it is only flagged");
+	} finally {
+		await srv.close();
+	}
+	byHand((raw) => {
+		raw.limits.maxWorkers = 2;
+	});
+	for (let i = 0; i < 2; i++)
+		await (await startServer({ port: 0, polling: false, quiet: true, tailnet: null })).close();
+	assert.deepEqual(
+		outside().map((e) => [e.text, e.notify]),
+		[
+			[outside()[0].text, true],
+			["config.json was changed outside Rusuban's settings while the daemon was stopped.", true],
+		],
 	);
 });

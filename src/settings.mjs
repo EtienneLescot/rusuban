@@ -19,6 +19,7 @@ import {
 	readJsonl,
 	SLUG,
 	saveConfig,
+	sealConfig,
 	validateConfig,
 	write,
 } from "./home.mjs";
@@ -484,6 +485,52 @@ function withLock(fn) {
 
 const log = (entry) => append(LOG, { at: new Date().toISOString(), kind: "setting", ...entry });
 export const pendingRequests = () => read(PENDING, { requests: [] }).requests;
+
+// T125: a config.json changed outside this module, flagged once in the journal, then sealed. What
+// changed is said path by path; a channel only by its id, since its values hold secrets.
+const byKey = (list, key) => Object.fromEntries((list ?? []).map((x) => [x[key], x]));
+const shapeOf = (c) => ({
+	...c,
+	projects: byKey(c.projects, "id"),
+	machines: byKey(c.machines, "name"),
+	channels: byKey(c.channels, "id"),
+});
+function changesOf(a, b, at = "") {
+	const plain = (v) => v && typeof v === "object" && !Array.isArray(v);
+	if (plain(a) && plain(b) && !at.startsWith("channels."))
+		return [...new Set([...Object.keys(a), ...Object.keys(b)])].flatMap((k) =>
+			changesOf(a[k], b[k], at ? `${at}.${k}` : k),
+		);
+	if (JSON.stringify(a) === JSON.stringify(b)) return [];
+	if (a === undefined) return [`${at} added`];
+	if (b === undefined) return [`${at} removed`];
+	if (at.startsWith("channels.")) return [`${at} changed`];
+	return [`${at}: ${JSON.stringify(a)} → ${JSON.stringify(b)}`];
+}
+export function flagOutsideEdit(before, after) {
+	const changes = before ? changesOf(shapeOf(before), shapeOf(after)) : [];
+	const listed = [
+		...changes.slice(0, 6),
+		...(changes.length > 6 ? [`${changes.length - 6} more`] : []),
+	].join("; ");
+	// An approval bypass turned on pings at once, as when the module turns it on.
+	const bypassOn = after.projects
+		.filter((p) => p.bypassApproval && !before?.projects.find((q) => q.id === p.id)?.bypassApproval)
+		.map((p) => p.id);
+	log({
+		project: null,
+		setting: "config.json",
+		origin: "outside",
+		by: "unknown",
+		state: "applied",
+		text: before
+			? `config.json was changed outside Rusuban's settings: ${listed || "nothing that counts"}.`
+			: "config.json was changed outside Rusuban's settings while the daemon was stopped.",
+		...(bypassOn.length ? { bypassOn } : {}),
+		notify: true,
+	});
+	sealConfig(after);
+}
 export const settingsLog = () => readJsonl(LOG);
 
 // A change asked by the owner's commands or the MCP. `confirmed`: a person typed its confirmation in a

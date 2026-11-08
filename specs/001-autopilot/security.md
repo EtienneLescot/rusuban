@@ -31,8 +31,9 @@ without one, the MCP, or a confirmation in the dashboard. The page shows it in t
   its own cards, arm the switch, or allow a setting's confirmation card, the one an MCP change waits
   on included. The shell rules match text: a variable, a script or an interpreter gets past them.
 - The layers stop the direct paths and prompt injections, not a determined agent. For a repo that is
-  not trusted, the answer remains the allowlist profile. T125 is to flag a `config.json` changed outside
-  the settings module.
+  not trusted, the answer remains the allowlist profile. A `config.json` changed outside the settings
+  module is flagged in the journal with what changed (T125), after the fact: an approval bypass it
+  turns on pings at once.
 - After v1, the real barrier: agents under an OS account of their own, or in Claude Code's sandbox
   where it exists, out of reach of the owner's files and the dashboard; and a GitHub token reserved for
   agents, without admin rights.
