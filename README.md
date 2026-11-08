@@ -16,6 +16,8 @@ in [specs/001-autopilot](specs/001-autopilot/spec.md).
 - [Security model](docs/security.md): the deny rules, the host profiles, the dashboard's identity
   check, the residual risks
 - [Setting Rusuban up from Claude](docs/claude.md): its MCP server, and what waits for your card
+- [Test machines](docs/machines/README.md): what a machine needs, a setup script per system, your
+  own desktop
 - [FAQ](docs/faq.md)
 - [Example rules](examples/rules/)
 

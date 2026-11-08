@@ -126,7 +126,8 @@ These go to the journal and to your inbox's "Flagged for you", for 7 days:
   command that gets past the rules can write `config.json`, to turn a project live or its approval
   bypass on, or call the dashboard, to answer a card (a merge order included), allow a setting's card
   (one asked through the MCP included) or arm the switch. The daemon journals these as yours; the
-  bypass turned on is flagged.
+  bypass turned on is flagged. A `config.json` changed outside Rusuban's settings is flagged too,
+  with what changed, after the fact: the daemon applies it all the same.
 - **The real barrier comes after v1**: agents under an OS account of their own, or in Claude Code's
   sandbox where it exists, out of reach of your files and the dashboard; and a GitHub token reserved
   for agents, without admin rights. Until then, a repo you do not trust gets the `allowlist` profile.

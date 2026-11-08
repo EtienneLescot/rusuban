@@ -38,6 +38,7 @@ export function editRule(target, folder = true) {
 // theirs: `scratch/` (judge, act, task) and the workers' `worktrees/` and `repos/`.
 const STATE = [
 	"config.json",
+	"config.json.seal",
 	"automerge.json",
 	"projects",
 	"runs",

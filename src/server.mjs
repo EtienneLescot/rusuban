@@ -27,6 +27,7 @@ import {
 	read,
 	readJournal,
 	readJsonl,
+	sealMatches,
 	validateConfig,
 	write,
 } from "./home.mjs";
@@ -59,7 +60,13 @@ import {
 } from "./model.mjs";
 import { dashboardUrl, dispatch, sendPing } from "./pings.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
-import { changeSetting, confirmRequest, settingsCards, settingsLog } from "./settings.mjs";
+import {
+	changeSetting,
+	confirmRequest,
+	flagOutsideEdit,
+	settingsCards,
+	settingsLog,
+} from "./settings.mjs";
 import {
 	busyRun,
 	dueTasks,
@@ -723,6 +730,7 @@ export function reloadConfig(ctx) {
 		ctx.say(`config.json changed but is not applied: ${e.message.replace(/\n/g, " ")}`);
 		return;
 	}
+	if (!sealMatches(next)) flagOutsideEdit(ctx.config, next); // T125
 	const before = new Map(ctx.config.projects.map((p) => [p.id, p]));
 	ctx.config = next;
 	ctx.owner = next.owner;
@@ -1005,7 +1013,10 @@ export const flagsToPing = (flags, owner, base) =>
 				id: `flag:${f.project ?? "instance"}:${f.at}:${f.kind}`,
 				q: f.text,
 				to: owner,
-				urgency: FLAGS_NOW.includes(f.kind) || f.setting === "project.bypass" ? "now" : "digest",
+				urgency:
+					FLAGS_NOW.includes(f.kind) || f.setting === "project.bypass" || f.bypassOn?.length
+						? "now"
+						: "digest",
 				createdAt: f.at,
 			},
 		}));
@@ -1230,6 +1241,7 @@ export async function startServer({
 } = {}) {
 	const configText = textOf(homePath("config.json")); // read first: a change in between is reloaded
 	const config = loadConfig();
+	if (!sealMatches(config)) flagOutsideEdit(null, config); // changed while the daemon was stopped
 	const ctx = {
 		config,
 		configText,

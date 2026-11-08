@@ -201,7 +201,9 @@ allowed in the dashboard it applies; from inside a run, both are refused.
   - JSON-RPC on stdio with no dependency. Reading: `state`, `project_state`, `runs`, `tasks`, `journal`. Settings: projects, modes, the bypass, the host profile, the merge switch, limits, the owner, tasks; channels, machines and remote access come with their phases. The dashboard's switch now goes through the settings module too, so `automerge.json` has one writer again. `task add|remove` on the command line.
 - [x] T124 [US9] `init` registers the MCP server (`claude mcp add --scope user`), with T073
   - `claude mcp add --scope user rusuban -- <node> <bin> mcp`, an earlier registration removed first.
-- [ ] T125 [US9] A `config.json` changed outside the settings module is flagged in the journal (the residual risk of `security.md` made visible)
+- [x] T125 [US9] A `config.json` changed outside the settings module is flagged in the journal (the residual risk of `security.md` made visible)
+  - `saveConfig` seals what it writes, in `config.json.seal`, before writing it. A `config.json` the daemon reads that does not match the seal is flagged once in `settings.jsonl`, by `unknown`, with what changed path by path; a channel only by its id, since its values hold secrets. Then it is sealed again.
+  - An approval bypass turned on this way pings at once, as when the module turns it on. A change made while the daemon was stopped is flagged at its start. The edit still applies: the flag comes after the fact.
 
 ---
 
@@ -212,7 +214,8 @@ allowed in the dashboard it applies; from inside a run, both are refused.
   - `locks.json` carries R2 and R3 (the supply-chain paths, 300 lines and 15 files outside tests and docs), R4's zones, CodeRabbit required, and the Nix build and the Discord and bookkeeping workflows ignored. The priority scale is new: the old pilot had none, and agents would otherwise ask.
 - [ ] T048 Propose them to `getopenscreen/openscreen` as `.rusuban/` in a PR, which Etienne merges
 - [ ] T049 Configure Etienne's instance: the `openscreen` project; the `publications` and `n8n-series` tasks moved to `~/.rusuban/tasks/`
-- [ ] T050 Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge), judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
+- [x] T050 Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge), judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
+  - Replaced on 2026-11-08, Etienne's decision: no formal shadow week. He tries Rusuban himself on OpenScreen, and v0.1 ships after his trials. The daily comparison task was declined.
 - [x] T115 Approval bypass per project (FR-029): `project bypass <id> <on|off>` in `bin/rusuban.mjs`, off by default and never set by `project add`; `--admin` in `src/github.mjs` only on a merge the server makes anyway, the switch armed, after the base branch's rules are read and met (`src/model.mjs`); journaled in the project
   - The guard reads the base branch's rulesets and its classic protection in full (`/branches/{b}/protection`, none on a 404 "Branch not protected"). Every required check must be on the head, from the app the rule names (a PR's own job named like the review app does not count), in its latest run, and `success`. Rules that only concern pushes pass; a linear history refuses the `merge` method; a code owner's review, an up-to-date requirement, signed commits, protection that binds administrators, push restrictions, a locked branch, or any rule or setting it does not know stops it. What stops it is journaled once per head and flagged.
   - Tried on `getopenscreen/openscreen` main, read only: #1506 would pass; #1505 (CodeRabbit cancelled) and #1478 (macOS jobs cancelled) would not, though both were merged under the old pilot.
@@ -221,7 +224,8 @@ allowed in the dashboard it applies; from inside a run, both are refused.
 - [x] T126 Cheap shell deny rules: no command naming the dashboard's port or a `.ts.net` address, nor `config.json` next to the home's name, `automerge.json`, `answers.jsonl` or `pending.json` (leading wildcards checked on Claude Code 2.1.302)
 - [ ] T051 Switch: the project goes `live`; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
   - Decided on 2026-11-08: the approval bypass, set per project (T115). `getopenscreen/openscreen` requires an approval that agents' PRs, pushed under the owner's account, cannot get; the switch to `live` turns the bypass on.
-- [ ] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)
+- [x] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)
+  - Nothing found on 2026-11-08, with every phase on main (`validation.md`).
 
 ---
 
@@ -302,8 +306,8 @@ frees the Mac at expiry.
   - Machines are a section of the Agents view, as T111 validated it. Release is pressed twice, like Stop, and journaled as the owner's.
 - [x] T072 [US5] Live machine state in the prompt context of T028, in `src/agents.mjs` (one copy, not a second one)
   - Each machine with how to reach it, its workspace, its tags, its desktop owner and its last probe, from `leases/probes.json`.
-- [ ] T109 [US5] `machine list|probe|doctor` in `bin/rusuban.mjs`; setup scripts per OS (OpenSSH server, `rusuban` account, the host's key) in `docs/machines/`
-  - The commands are done. The setup scripts in `docs/machines/` are left.
+- [x] T109 [US5] `machine list|probe|doctor` in `bin/rusuban.mjs`; setup scripts per OS (OpenSSH server, `rusuban` account, the host's key) in `docs/machines/`
+  - `docs/machines/README.md`, with `setup-linux.sh`, `setup-macos.sh` and `setup-windows.ps1`. Each makes the `rusuban` account (no administrator, no password, the host's key), the SSH server, git and `~/rusuban`, and can run again. They are syntax-checked, but not yet run on a real machine: T078 and T112 do it.
 - [x] T110 [US5] Desktop guard: a person's desktop alias is denied to every run that does not hold its lease (FR-063)
   - A PreToolUse hook rather than deny rules, which are fixed when a run starts (research R3). `rusuban guard` refuses a Bash command naming the alias, as a host, a user@host or a tailnet name, unless the run holds the lease. A lease it cannot read refuses too, and so does a guard that cannot judge. A desktop added during a run guards the runs started after it.
 - [x] T111 [US5] Mockup of the machines view, validated by Etienne before T071
@@ -343,10 +347,11 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 - [x] T080 [P] Generic rule examples in `examples/rules/` next to OpenScreen's
   - `cautious`: agents judge and ask, and every path is locked, so only the owner's merge order merges. `solo-maintainer`: bug fixes, docs, tests and maintenance merge alone within path and size locks; features, API changes and dependencies go to the owner.
   - `test/examples.test.mjs` loads every folder of `examples/rules/` through the real `loadRules`, as a repo's `.rusuban/`: valid locks, rules present, no file the loader would skip.
-- [ ] T081 [P] Playwright tests in `test/e2e/`: answer a card, answer a conversation, release a machine
+- [x] T081 [P] Playwright tests in `test/e2e/`: answer a card, answer a conversation, release a machine
   - Started in Phase 6: `npm run test:e2e`, a CI job on Ubuntu with Chromium. Each test starts the real server on a free port over a seeded home of two projects; a run goes through the real runner with fake-claude. At 1440×900 and 390×844, with real clicks and taps: every view tab shows its view; a card opens and closes; an answered option leaves the cards to answer and is written to `answers.jsonl`; a filter changes the list; Agents shows Run now on a task at rest, none on a task at work, and Run now starts it. With the #7 click bug put back, five of the ten fail.
-  - Left for their phases: answering a conversation (Phase 7), releasing a machine (Phase 9).
+  - Answering a conversation came with Phase 7, at both widths: a Desktop session answered in a fork, through the real runner. Releasing a machine came with Phase 9: Release pressed twice ends the lease. A desktop's card lent is checked too.
 - [ ] T082 Run every check of quickstart.md (SC-001 to SC-007) and record the results in `specs/001-autopilot/validation.md`
+  - Recorded on 2026-11-08. Passed: SC-002's code, SC-003's time, SC-005, and SC-006 on the tests. To do with Etienne, each with its reason: SC-001, SC-004, SC-007, SC-003's links on real data, SC-006's live proof, and SC-002 from OpenScreen's rules once getopenscreen/openscreen#1507 merges.
 - [ ] T083 Remove `"private": true` from `package.json`, publish v0.1.0 on npm and write the release notes (the repo is public since M0)
 
 **After v1**: first the machine runner for graphical tests, screenshots and recordings (reflection P4);
