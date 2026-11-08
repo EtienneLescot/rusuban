@@ -668,10 +668,11 @@ export function pendingAnswers(judgment, answers) {
 }
 
 // A person's merge orders (FR-044): an answered card whose chosen option says `merge: true`. The
-// server still requires CI green, no open thread, no conflict and the head the card was written on;
+// server still requires the switch armed, CI green, no open thread, no conflict and the head the card
+// was written on: a paused switch holds an order until it is armed again;
 // the project's own locks, the judgment's `auto` and the rules-folder lock (a person decided) are
 // lifted for that head only.
-export function mergeOrdersOf({ live, judgment, answers = [], rules = {} }) {
+export function mergeOrdersOf({ live, judgment, answers = [], rules = {}, armed = false }) {
 	const out = [];
 	for (const a of pendingAnswers(judgment, answers)) {
 		if (a.chosen?.merge !== true) continue;
@@ -688,7 +689,8 @@ export function mergeOrdersOf({ live, judgment, answers = [], rules = {} }) {
 			d.head === pr.head
 				? gate("ok", "The head the card was written on")
 				: gate("fail", "New commit since the card"),
-		].map((g, i) => ({ name: ["CI", "Threads", "Mergeable", "Head"][i], ...g }));
+			armed ? gate("ok", "Merges armed") : gate("fail", "Merges paused"),
+		].map((g, i) => ({ name: ["CI", "Threads", "Mergeable", "Head", "Switch"][i], ...g }));
 		out.push({
 			item: a.item,
 			pr,

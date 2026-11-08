@@ -107,7 +107,7 @@ adversarial PRs are not, each with the gate that stopped it.
 - [x] T092 [US3] Direct pushes in `src/server.mjs`: a commit on a default branch that no server merge produced is flagged in the journal and the inbox
   - A commit on the default branch that no merged PR produced, flagged like T031.
 - [x] T093 [US3] Merge orders in `src/server.mjs`: an answer ordering a merge is carried out by the server, which checks CI, threads, head and conflicts and lifts the project locks for that head only (FR-044)
-  - An option `"merge": true` on a PR's card, tied to the head the card was written on. Carried out even when merges are paused, never in shadow mode.
+  - An option `"merge": true` on a PR's card, tied to the head the card was written on. Held while merges are paused, never carried out in shadow mode.
 - [x] T094 [US3] Rules changes in `src/rules.mjs`: a new tree sha applies at once, is journaled with its diff and pings the owner (FR-027); a `locks.json` that fails to parse is journaled and pings the owner too
   - The entries carry `notify` for the pings of Phase 7.
 - [x] T095 [US3] Evidence in `bin/rusuban.mjs`: accepted only from a worker run other than the judging run, for the live head, with the run and its conversation attached

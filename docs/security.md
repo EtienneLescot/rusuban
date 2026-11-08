@@ -127,8 +127,8 @@ These go to the journal and to your inbox's "Flagged for you", for 7 days:
   PRs agents work on; the host profile decides what they may run.
 - **Agents act as you on GitHub.** They use your `gh` login: what they post appears under your account,
   and an agent past the deny rules has every right your token has.
-- **A merge order overrides the project's locks for its head**, and is carried out while merges are
-  paused. An agent wrote the card: read it before you pick its merge option.
+- **A merge order overrides the project's locks for its head**; a paused switch still holds it. An
+  agent wrote the card: read it before you pick its merge option.
 - **The approval bypass reads classic branch protection for its required checks only.** `--admin`
   also skips the classic settings it does not read, such as an up-to-date requirement, signed commits
   or a code owner's review. Rulesets are what it checks.
