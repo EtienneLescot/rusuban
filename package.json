@@ -20,9 +20,10 @@
 	"scripts": {
 		"lint": "biome check .",
 		"test": "node --test \"test/*.test.mjs\"",
-		"test:e2e": "echo No e2e tests yet && exit 1"
+		"test:e2e": "playwright test"
 	},
 	"devDependencies": {
-		"@biomejs/biome": "2.6.3"
+		"@biomejs/biome": "2.6.3",
+		"@playwright/test": "1.64.1"
 	}
 }

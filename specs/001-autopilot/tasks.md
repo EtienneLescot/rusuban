@@ -271,6 +271,8 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 - [ ] T079 [P] Docs in `docs/`: writing rules, locks reference, security model (deny rules, identity check, residual risks), machines, FAQ
 - [ ] T080 [P] Generic rule examples in `examples/rules/` next to OpenScreen's
 - [ ] T081 [P] Playwright tests in `test/e2e/`: answer a card, answer a conversation, release a machine
+  - Started in Phase 6: `npm run test:e2e`, a CI job on Ubuntu with Chromium. Each test starts the real server on a free port over a seeded home of two projects; a run goes through the real runner with fake-claude. At 1440×900 and 390×844, with real clicks and taps: every view tab shows its view; a card opens and closes; an answered option leaves the cards to answer and is written to `answers.jsonl`; a filter changes the list; Agents shows Run now on a task at rest, none on a task at work, and Run now starts it. With the #7 click bug put back, five of the ten fail.
+  - Left for their phases: answering a conversation (Phase 7), releasing a machine (Phase 9).
 - [ ] T082 Run every check of quickstart.md (SC-001 to SC-007) and record the results in `specs/001-autopilot/validation.md`
 - [ ] T083 Remove `"private": true` from `package.json`, publish v0.1.0 on npm and write the release notes (the repo is public since M0)
 
