@@ -1,4 +1,8 @@
 <!--
+Sync Impact Report, 1.3.0 (2026-11-08)
+- Principle IV: every setting can be made from Claude; a change that widens what agents may do, or
+  where data goes, takes effect only once a person confirms it outside Claude
+
 Sync Impact Report, 1.2.0 (2026-11-07)
 - Principle IV: a project may name checks that do not count toward CI green (`ignoredChecks`), never all
 
@@ -72,6 +76,8 @@ own instance, on their own machine.
 - Every agent run carries the built-in deny rules (no merge, no push to a default branch, no edit to
   the instance's state), whatever the host's permission profile.
 - What agents may run on a host belongs to the host's owner, chosen at init, never to a repo's rules.
+- Every setting can be made from Claude. A change that widens what agents may do, or where data goes,
+  takes effect only once a person confirms it outside Claude.
 - A merge the server did not perform is flagged.
 - Every lock is proven by a test that tries to break it.
 - Every autonomous action is journaled, with its link.
@@ -116,4 +122,4 @@ own instance, on their own machine.
 - Every plan checks its compliance with the six principles before implementation; a justified
   exception goes in its Complexity Tracking table.
 
-**Version**: 1.2.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-07
+**Version**: 1.3.0 | **Ratified**: 2026-11-07 | **Last Amended**: 2026-11-08

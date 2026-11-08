@@ -11,7 +11,7 @@ dashboard's origin (local or `ts.net`) and the `x-rusuban: 1` header, and a body
 |---|---|---|
 | GET | `/`, `/app.js`, `/app.css` | the page, no build |
 | GET | `/api/state?project=<id>` | the project's model: nodes, edges, cards, runs, freshness, journal |
-| GET | `/api/inbox` | open cards of every project, newest first |
+| GET | `/api/inbox` | open cards of every project, and the settings waiting for a confirmation (`type: "setting"`, card id `setting:<id>`), newest first |
 | GET | `/api/events` | SSE: `state`, `inbox` and `agents` (every project's runs and the tasks) on each change, `: ping` every 15 s |
 | GET | `/api/conversations?project=&item=&q=` | Conversation list, newest activity first |
 | GET | `/api/conversations/<id>?before=<offset>` | one page of a transcript: user text, assistant text, tool calls (name and short input), results cut to 2 KB |
@@ -25,7 +25,7 @@ dashboard's origin (local or `ts.net`) and the `x-rusuban: 1` header, and a body
 
 | Method | Path | Body | Effect |
 |---|---|---|---|
-| POST | `/api/answer` | `{ project, item, card, option, note? }` | records the answer, starts the coordinator; refuses a replaced card |
+| POST | `/api/answer` | `{ project, item, card, option, note? }` | records the answer, starts the coordinator; refuses a replaced card. On a `setting:<id>` card, `option` is `allow` or `deny` (never a note): the owner's confirmation (FR-092) |
 | POST | `/api/ask` | `{ project, text, item? }` | records a request, starts the coordinator |
 | POST | `/api/automerge` | `{ armed }` | the global merge switch, stored in `automerge.json` |
 | POST | `/api/refresh` | `{ project? }` | immediate GitHub read |
