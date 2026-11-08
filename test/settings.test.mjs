@@ -12,6 +12,7 @@ import { startServer } from "../src/server.mjs";
 import {
 	changeSetting,
 	confirmRequest,
+	initInstance,
 	pendingRequests,
 	planOf,
 	settingsCards,
@@ -201,6 +202,32 @@ test("remote access: on waits for the owner, then Serve forwards the dashboard; 
 	} finally {
 		tailscale.run = real;
 	}
+});
+
+test("init writes the first config from the owner's answers, its limits spelled out, and only once", () => {
+	const config = path.join(process.env.RUSUBAN_HOME, "config.json");
+	fs.rmSync(config);
+	const answers = { owner: "alice", mode: "bypass", armed: false, port: 8790, slug: "o/first" };
+	// A wrong answer writes nothing.
+	assert.throws(() => initInstance({ ...answers, slug: "first" }), /first is not owner\/repo/);
+	assert.throws(() => initInstance({ ...answers, mode: "both" }), /permissions\.mode/);
+	assert.ok(!fs.existsSync(config));
+	const c = initInstance(answers);
+	assert.deepEqual(
+		[c.owner.login, c.port, c.permissions.mode, c.limits],
+		["alice", 8790, "bypass", { maxWorkers: 3, maxRunMinutes: 150 }],
+	);
+	assert.deepEqual(
+		c.projects.map((p) => [p.id, p.mode, p.repos[0].slug]),
+		[["first", "shadow", "o/first"]],
+	);
+	assert.equal(read("automerge.json").armed, false);
+	const [entry] = settingsLog();
+	assert.deepEqual(
+		[entry.setting, entry.origin, entry.project, entry.notify],
+		["init", "terminal", "first", true],
+	);
+	assert.throws(() => initInstance(answers), /set up already/);
 });
 
 test("nothing is set inside an agent run", () => {

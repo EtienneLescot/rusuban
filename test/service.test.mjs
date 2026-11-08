@@ -11,6 +11,7 @@ import {
 	appleScript,
 	dashboardUrl,
 	desktopEntry,
+	inNpxCache,
 	installService,
 	launchdPlist,
 	openUrl,
@@ -280,6 +281,10 @@ test("install refuses npx's cache, and the daemon it installs writes its log", (
 		/npx's cache, which npm empties: npm i -g rusuban/,
 	);
 	assert.deepEqual(calls, []);
+	assert.ok(
+		inNpxCache(String.raw`C:\Users\a\AppData\Local\npm-cache\_npx\1f2e\node_modules\rusuban`),
+	);
+	assert.ok(!inNpxCache(String.raw`C:\Users\a\AppData\Roaming\npm\node_modules\rusuban`));
 	const { service } = installService({ port: 8788, platform: "linux", exec, home, env: {} });
 	assert.match(fs.readFileSync(service, "utf8"), /rusuban\.mjs" "start" "--log"\n/);
 });

@@ -13,6 +13,9 @@ import { dashboardUrl as baseUrl } from "./pings.mjs";
 const NAME = "rusuban"; // the task, the launchd label and the systemd unit
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
 
+// npx runs a package from a cache npm empties: a service or an MCP server pointing there stops one day.
+export const inNpxCache = (file) => /[\\/]_npx[\\/]/.test(file);
+
 // The dashboard on this machine: what the shortcuts, `open` and `status` show.
 export const dashboardUrl = (port) => `${baseUrl({ port })}/`;
 
@@ -202,8 +205,7 @@ export function installService({
 }) {
 	if (!Number.isInteger(port) || port < 1)
 		throw new Error("the shortcut needs the dashboard on a fixed port: set port in config.json");
-	// npx runs a package from a cache npm empties: a service pointing there would stop one day.
-	if (command.some((part) => /[/]_npx[/]/.test(part)))
+	if (command.some(inNpxCache))
 		throw new Error(
 			"rusuban runs from npx's cache, which npm empties: npm i -g rusuban, then again",
 		);
