@@ -315,7 +315,8 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 - [x] T075 [P] [US1] `start`, `open`, `status`, and a desktop or menu shortcut per OS, in `bin/rusuban.mjs` and `src/service.mjs`
   - `service install|uninstall` call T074's installers; install refuses a path in npx's cache. The service runs `start --log`: the daemon's lines and a crash go to `daemon.log`, rotated past 5 MB at a start. `status` reads `/api/state` (version, `startedAt`) and exits 1 when nothing answers; `open` starts the default browser.
   - Shortcut done in `src/service.mjs`, installed and removed with the service: a Start menu `.url`, `~/Applications/Rusuban.app` from `osacompile`, a `.desktop` entry. Left: the commands in `bin/rusuban.mjs`.
-- [ ] T076 [US1] `remote enable|disable`: `tailscale serve --bg --https=443 http://127.0.0.1:<port>`; `status` shows the tailnet URL; stores `owner.tailscaleLogin` from `tailscale status --json`
+- [x] T076 [US1] `remote enable|disable`: `tailscale serve --bg --https=443 http://127.0.0.1:<port>`; `status` shows the tailnet URL; stores `owner.tailscaleLogin` from `tailscale status --json`
+  - A setting of the settings module (`remote`, and the MCP's `remote { enabled }`): enabling widens where the dashboard answers, so it waits for a typed confirmation or the owner's card, planned again with Tailscale's state when allowed. Disabling applies at once: the login removed, Serve told to stop, which may fail without reopening anything.
 - [ ] T077 [US1] Observe-only page in `web/app.js`: without rules, items and conversations show, with how to add rules and links to `examples/rules/`
   - Its mockup was validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/observe-only/`: the banner of a project without rules, with two links.
 - [ ] T078 [US1] Timed clean-machine install on the three OSes (SC-001)

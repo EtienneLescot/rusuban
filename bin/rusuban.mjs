@@ -84,6 +84,9 @@ const USAGE = `rusuban ${version}
   channel add <type> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM]
           | channel list | channel test <id> | channel remove <id>
                                 where cards ping you: ntfy, Slack, Discord, Teams, e-mail
+  remote enable | remote disable
+                                the dashboard on your tailnet, through Tailscale Serve, so a phone
+                                can answer cards; or this machine only
 A change that widens what agents may do is confirmed by typing its target in a terminal; without a
 terminal (Claude's shell, a script) it waits as a card in the dashboard's inbox.
   task list | task run <id>     the recurring tasks (tasks/<id>.md in the instance home), or one
@@ -346,6 +349,12 @@ const commands = {
 	project: projectCommand,
 	permissions: permissionsCommand,
 	channel: channelCommand,
+	// Remote access (T076): Tailscale Serve, never Funnel. On widens where the dashboard answers.
+	remote([sub, ...rest]) {
+		if (rest.length || !["enable", "disable"].includes(sub))
+			throw new Error("usage: remote enable | remote disable");
+		return setting({ kind: "remote", on: sub === "enable" }, "remote", () => true);
+	},
 	todo() {
 		const p = project();
 		out(
