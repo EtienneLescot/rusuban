@@ -10,15 +10,18 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `start` | Runs the daemon in the foreground (what the service calls). |
 | `status` | URL (local and tailnet), uptime, projects, running agents. |
 | `open` | Opens the dashboard. |
-| `project add <owner/repo> [--checkout <path>] [--to <project>]` | Adds a repo, to a new or an existing project. |
-| `project list` / `project remove <id>` | |
-| `project mode <id> <live\|shadow>` | `shadow`: agents judge and propose, every GitHub write is denied, nothing is merged. |
+| `project add <owner/repo> [--checkout <path>] [--to <project>]` | Adds a repo, to a new project (in `shadow` mode, its id from the repo's name) or to an existing one. A repo belongs to one project. |
+| `project list` / `project remove <id>` | `remove` refuses while a run of the project waits or works, deletes no file and says where they stay. |
+| `project mode <id> <live\|shadow>` | `shadow`: agents judge and propose, every GitHub write is denied, nothing is merged. Runs at work keep the mode they started in. |
 | `machine add <alias> [--os] [--caps a,b] [--workspace <path>] [--owner <login>]` | Checks SSH, the `rusuban` account, git and the workspace, creates the bare mirror, then registers the machine. `--owner` marks a person's desktop. |
 | `machine list` / `machine probe [<machine>]` / `machine doctor <machine>` | `doctor` rechecks SSH, the account, the workspace and the project's toolchain. |
 | `channel add <ntfy\|slack\|discord\|teams\|email> <target>` / `channel test <id>` / `channel list` | |
 | `task list` / `task run <id>` | The catalog with each task's slots, state and last runs; starts a task now, refused while one of its runs waits or works. |
 | `remote enable` / `remote disable` | Runs `tailscale serve` for the dashboard, or stops it. |
 | `service install` / `service uninstall` | Autostart with restart on failure (Task Scheduler, launchd, systemd user). |
+
+The `project` commands write `config.json`; a running daemon reads it again within seconds, without a
+restart. Each command asks that daemon whether it applied the change and says so.
 
 ## Agent commands
 

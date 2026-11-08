@@ -7,7 +7,7 @@ file has **one writer**. `rusuban` is the product name.
 
 | Path | Writer | Content |
 |---|---|---|
-| `config.json` | CLI (`init`, `project`, `machine`, `channel`) | owner, host permissions, port, projects, machines, channels |
+| `config.json` | CLI (`init`, `project`, `machine`, `channel`) | owner, host permissions, port, projects, machines, channels; the daemon reads it again when it changes |
 | `projects/<p>/live.json` | daemon | per repo: `{ checkedAt, changedAt, prs[], issues[], merged[] }` |
 | `projects/<p>/rules.json` | daemon | per repo: `{ treeSha, text, locks, loadedAt }` from the default branch |
 | `projects/<p>/judgment.json` | agent CLI only | `{ items: { "<owner/repo#n>": Judgment } }` |
@@ -56,7 +56,9 @@ file has **one writer**. `rusuban` is the product name.
 `{ id, title, mode: "live" | "shadow", repos: [{ slug: "owner/repo", checkout: "<path>" }], folders: ["<path>"], refreshSec: 90 }`
 
 - `mode`: `shadow` lets agents judge and propose while every GitHub write is denied and nothing is merged
-  (FR-028).
+  (FR-028). `project add` writes `shadow` for a new project; `project mode` makes it `live`.
+- A repo belongs to one project (slugs compared without case): two would read, judge and merge it each on
+  their own.
 
 - `folders`: extra folders whose conversations belong to the project (a website checkout, a scratch dir).
   Each checkout's worktrees are included automatically.
@@ -141,7 +143,8 @@ firstAt, lastAt, live, branch, prs[], items[], parseError? }`
 
 Front matter `title`, `project`, `schedule` (`daily HH:MM,…`, optional), `lock` (group), `cwd`, then the
 prompt. Unchanged from today, plus `project`. Without `lock` a task is its own group; without `cwd` it
-works in its project's scratch folder.
+works in its project's scratch folder. A dotted lock is a project's group and starts with the task's own
+project (`sandbox.coordinator`); a group shared across projects has no dot (`demo-factory`).
 
 ### Channel
 

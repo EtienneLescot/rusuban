@@ -6,7 +6,8 @@
 //   title: Weekly digest
 //   project: sandbox
 //   schedule: daily 09:00,17:30      (optional: without it, the task runs on a click)
-//   lock: sandbox.coordinator         (optional: tasks or runs sharing it go one at a time)
+//   lock: sandbox.coordinator         (optional: tasks or runs sharing it go one at a time; a
+//                                     dotted lock is its project's, an undotted one any project's)
 //   cwd: /path/to/folder              (optional: the project's scratch folder)
 //   ---
 //   <the prompt>
@@ -59,6 +60,10 @@ export function parseTask(id, text, config, since = 0) {
 	if (schedule.error) errors.push(schedule.error);
 	const lock = meta.lock || `${meta.project}.task.${id}`;
 	if (!SAFE.test(lock)) errors.push("lock is letters, digits, dots, dashes");
+	// A dotted lock is a project's groups (`sandbox.coordinator`): a task joins its own project's,
+	// never another's. A group shared across projects has no dot (`demo-factory`).
+	else if (lock.includes(".") && !lock.startsWith(`${meta.project}.`))
+		errors.push(`lock ${lock} is another project's: a dotted lock starts with "${meta.project}."`);
 	// Without a folder of its own, a task works in its project's scratch folder, made when it runs.
 	const cwd = meta.cwd || null;
 	if (cwd && !(path.isAbsolute(cwd) && fs.existsSync(cwd)))

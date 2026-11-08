@@ -62,8 +62,8 @@ export const readJournal = (project) =>
 
 // ── Instance config ───────────────────────────────────────────────────────────────────────────
 const LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
-const PROJECT_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
-const SLUG = /^[\w.-]+\/[\w.-]+$/;
+export const PROJECT_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+export const SLUG = /^[\w.-]+\/[\w.-]+$/;
 const MODES = ["bypass", "allowlist"];
 const PROJECT_MODES = ["live", "shadow"];
 
@@ -105,6 +105,8 @@ export function validateConfig(raw) {
 	const projects = c.projects ?? [];
 	if (!Array.isArray(projects)) errors.push("projects must be a list");
 	const ids = new Set();
+	// A repo belongs to one project: two would read, judge and merge it each on their own.
+	const holders = new Map();
 	for (const [i, p] of (Array.isArray(projects) ? projects : []).entries()) {
 		const at = `projects[${i}]`;
 		if (!PROJECT_ID.test(p?.id ?? ""))
@@ -120,6 +122,11 @@ export function validateConfig(raw) {
 		for (const r of Array.isArray(p?.repos) ? p.repos : []) {
 			if (!SLUG.test(r?.slug ?? ""))
 				errors.push(`${at}: repo slug "${r?.slug}" must be owner/repo`);
+			else if (holders.has(r.slug.toLowerCase()))
+				errors.push(
+					`${at}: repo ${r.slug} is already in project "${holders.get(r.slug.toLowerCase())}": a repo belongs to one project`,
+				);
+			else holders.set(r.slug.toLowerCase(), p.id);
 			if (r?.checkout != null && typeof r.checkout !== "string")
 				errors.push(`${at}: checkout of ${r.slug} must be a path`);
 		}
