@@ -318,6 +318,7 @@ export function planOf(config, change) {
 				...(change.digestAt ? { digestAt: change.digestAt } : {}),
 				...(change.smtp ? { smtp: change.smtp } : {}),
 				...(change.from ? { from: change.from } : {}),
+				...(change.token ? { token: change.token } : {}),
 			};
 			return {
 				project: null,

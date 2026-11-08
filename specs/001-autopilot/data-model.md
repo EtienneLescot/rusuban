@@ -158,4 +158,14 @@ project (`sandbox.coordinator`); a group shared across projects has no dot (`pub
 ### Channel
 
 `{ id, type: "ntfy" | "slack" | "discord" | "teams" | "email", target, urgency: ["now", "digest"],
-quietHours?: "22:00-08:00", digestAt?: "18:00" }`
+quietHours?: "22:00-08:00", digestAt?: "18:00", smtp?, from?, token? }`
+
+- `target`: the topic's or the webhook's URL, or the e-mail address. It is a secret: shown masked.
+- `smtp`: an e-mail channel's server, `smtps://user:pass@host:465`; required for `email`.
+- `from`: an e-mail's sender; the server's user when absent.
+- `token`: a protected ntfy topic's access token, sent as `Authorization: Bearer`.
+
+What pings: every card waiting in the inbox, by its urgency, and what the journal flags for the owner
+(`notify`). A flag goes at once when it is a rules change, an approval bypass turned on, or a merge or
+a push the server did not make; any other waits for the digest. A `ping-failed` flag never pings, or a
+broken channel would loop. Each pings once per channel, and never one older than the channel.

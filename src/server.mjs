@@ -45,7 +45,7 @@ import {
 	refusedOf,
 	todoOf,
 } from "./model.mjs";
-import { dispatch, sendPing } from "./pings.mjs";
+import { dashboardUrl, dispatch, sendPing } from "./pings.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
 import { changeSetting, confirmRequest, settingsCards, settingsLog } from "./settings.mjs";
 import {
@@ -869,15 +869,38 @@ function converse(ctx, id, what, body, res, req) {
 // The inbox's cards go to the channels by their urgency (src/pings.mjs). The dispatcher's state
 // between two calls is pings.json, the daemon's; a dry daemon pings no one. A card of the instance
 // itself (a setting) journals a failed ping in the first project.
+//
+// What the journal flags for the owner pings too, once: a rules change, an approval bypass turned on,
+// a merge or a push the server did not make go at once; the rest waits for the digest. A failed ping
+// never pings, or a broken channel would loop.
+const FLAGS_NOW = ["rules", "foreign-merge", "direct-push"];
+export const flagsToPing = (flags, owner, base) =>
+	flags
+		.filter((f) => f.kind !== "ping-failed")
+		.map((f) => ({
+			project: f.project ?? null,
+			item: f.item ?? null,
+			label: f.project ?? "Rusuban",
+			href: f.href ?? `${base}/`,
+			card: {
+				id: `flag:${f.project ?? "instance"}:${f.at}:${f.kind}`,
+				q: f.text,
+				to: owner,
+				urgency: FLAGS_NOW.includes(f.kind) || f.setting === "project.bypass" ? "now" : "digest",
+				createdAt: f.at,
+			},
+		}));
 export async function pingOnce(ctx) {
 	if (ctx.dry || ctx.pinging) return;
 	ctx.pinging = true;
 	try {
 		const fallback = ctx.config.projects[0]?.id;
+		const inbox = inboxState(ctx);
+		const base = dashboardUrl({ owner: ctx.config.owner, port: ctx.port, tailnet: ctx.tailnet });
 		const state = await depsOf(ctx).dispatch(
 			{
 				config: ctx.config,
-				cards: inboxState(ctx).cards,
+				cards: [...inbox.cards, ...flagsToPing(inbox.flags, ctx.config.owner.login, base)],
 				state: read("pings.json", {}),
 				port: ctx.port,
 				tailnet: ctx.tailnet,

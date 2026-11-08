@@ -11,7 +11,7 @@ import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadConfig, read, saveConfig, validateConfig, write } from "../src/home.mjs";
 import { applyJudgment } from "../src/model.mjs";
-import { pingOnce, startServer } from "../src/server.mjs";
+import { flagsToPing, pingOnce, startServer } from "../src/server.mjs";
 import { confirmRequest, pendingRequests } from "../src/settings.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
@@ -43,6 +43,42 @@ test("a channel's config is checked: its type, its target, its urgency, an e-mai
 	assert.throws(bad({ ...ok, urgency: ["soon"] }), /urgency must list now, digest or both/);
 	assert.throws(bad({ ...ok, type: "email", target: "a@b.c" }), /needs its smtp server/);
 	assert.throws(() => validateConfig(config({ channels: [ok, ok] })), /"ntfy" is used twice/);
+	assert.throws(bad({ ...ok, token: "" }), /token must be the topic's access token/);
+	assert.equal(validateConfig(config({ channels: [{ ...ok, token: "tk_1" }] })).channels.length, 1);
+});
+
+test("flags ping: rules, a bypass turned on, a foreign merge or push at once; the rest in the digest", () => {
+	const at = "2026-11-08T10:00:00.000Z";
+	const flag = (kind, over = {}) => ({ project: "demo", at, kind, text: kind, ...over });
+	const pinged = flagsToPing(
+		[
+			flag("rules", { href: "https://github.com/o/r/tree/abc/.rusuban" }),
+			flag("foreign-merge", { item: "#3" }),
+			flag("direct-push"),
+			flag("setting", { setting: "project.bypass" }),
+			flag("merge-refused"),
+			flag("setting", { project: null, setting: "limits" }),
+			flag("ping-failed"),
+		],
+		"alice",
+		"http://127.0.0.1:8790",
+	);
+	assert.deepEqual(
+		pinged.map((e) => [e.card.q, e.card.urgency]),
+		[
+			["rules", "now"],
+			["foreign-merge", "now"],
+			["direct-push", "now"],
+			["setting", "now"],
+			["merge-refused", "digest"],
+			["setting", "digest"],
+		],
+		"a failed ping never pings, or a broken channel loops",
+	);
+	assert.equal(pinged[0].href, "https://github.com/o/r/tree/abc/.rusuban");
+	assert.equal(pinged[1].href, "http://127.0.0.1:8790/");
+	assert.equal(pinged[5].card.id, `flag:instance:${at}:setting`);
+	assert.ok(pinged.every((e) => e.card.to === "alice" && e.card.createdAt === at));
 });
 
 test("a channel waits for the owner, its secret never shows; a test really sends; removing is at once", async () => {
