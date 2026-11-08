@@ -95,6 +95,13 @@ export function startWorker({ config, project, name, item, mission }) {
 	if (!NAME.test(name ?? ""))
 		throw new Error("a worker's name is 3 to 40 lowercase letters, digits, dashes");
 	if (!mission?.trim()) throw new Error("the mission is empty");
+	// Shadow mode judges and proposes (FR-028): a worker there would only redo, for nothing, what
+	// the project does elsewhere, on the owner's Claude usage.
+	const mode = config.projects.find((p) => p.id === project)?.mode;
+	if (mode !== "live")
+		throw new Error(
+			`project ${project} is in shadow mode: its agents judge and propose, and start no worker`,
+		);
 	const live = listRuns().filter(active);
 	if (live.some((r) => r.project === project && r.title === name))
 		throw new Error(`worker ${name} is already at work`);
