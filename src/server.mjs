@@ -45,6 +45,7 @@ import {
 	todoOf,
 } from "./model.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
+import { confirmRequest, settingsCards, settingsLog } from "./settings.mjs";
 import {
 	busyRun,
 	dueTasks,
@@ -677,23 +678,6 @@ function startLoop(ctx, p) {
 	ctx.loops.set(p.id, loop);
 }
 
-// The approval bypass (FR-029), journaled whenever it differs from the last state journaled: a change
-// made while the daemon was stopped is journaled when it starts. Turning it on is flagged.
-function journalBypass(ctx, p) {
-	const last = readJsonl(`projects/${p.id}/journal.jsonl`).findLast((e) => e.kind === "bypass");
-	if ((last?.on ?? false) === p.bypassApproval) return;
-	journal(p.id, {
-		kind: "bypass",
-		item: null,
-		on: p.bypassApproval,
-		text: p.bypassApproval
-			? "Approval bypass on: what the server merges anyway, it merges with --admin once every check the branch requires is green on the head"
-			: "Approval bypass off: no merge with --admin",
-		by: ctx.config.owner.login,
-		...(p.bypassApproval ? { notify: true } : {}),
-	});
-}
-
 function stopLoop(ctx, id) {
 	ctx.loops.get(id)?.stop();
 	ctx.loops.delete(id);
@@ -701,8 +685,9 @@ function stopLoop(ctx, id) {
 }
 
 // config.json is read again when it changes (`project add|remove|mode`), so no restart is needed: a
-// new project starts its loop, a removed one stops, a changed one starts again with its settings. A
-// mode change is journaled in its project. A config that does not load leaves the running one.
+// new project starts its loop, a removed one stops, a changed one starts again with its settings. The
+// settings module journals each change with its origin. A config that does not load leaves the
+// running one.
 export function reloadConfig(ctx) {
 	const text = textOf(homePath("config.json"));
 	if (text === null || text === ctx.configText) return;
@@ -725,17 +710,6 @@ export function reloadConfig(ctx) {
 	for (const p of next.projects) {
 		const old = before.get(p.id);
 		if (JSON.stringify(old) === JSON.stringify(p)) continue;
-		if (old && old.mode !== p.mode)
-			journal(p.id, {
-				kind: "mode",
-				item: null,
-				text:
-					p.mode === "live"
-						? "Live: agents act as the rules say, merges allowed"
-						: "Shadow mode: agents judge and propose, no GitHub write, no merge",
-				by: next.owner.login,
-			});
-		journalBypass(ctx, p);
 		stopLoop(ctx, p.id);
 		if (ctx.polling) startLoop(ctx, p);
 		ctx.say(`${p.id}: ${old ? "changed" : "added"}`);
@@ -751,8 +725,9 @@ const json = (res, status, v) =>
 	send(res, status, "application/json; charset=utf-8", JSON.stringify(v));
 
 // ── Cards, requests and runs (T037, T101) ─────────────────────────────────────────────────────
-// The inbox: every project's cards waiting for their person, and what the server flagged for the
-// owner in the last 7 days (merges and pushes it did not make, rules changes, refusals).
+// The inbox: every project's cards waiting for their person, the settings waiting for the owner's
+// confirmation, and what was flagged for the owner in the last 7 days (merges and pushes the server
+// did not make, rules changes, refusals, settings that widened).
 export function inboxState(ctx) {
 	const week = Date.now() - 7 * 86400e3;
 	const projects = ctx.config.projects.map((p) => {
@@ -771,9 +746,14 @@ export function inboxState(ctx) {
 				.filter((e) => e.notify && Date.parse(e.at) > week)
 				.map((e) => ({ project: p.id, ...e })),
 		)
+		.concat(settingsLog().filter((e) => e.notify && Date.parse(e.at) > week))
 		.sort((a, b) => String(b.at).localeCompare(String(a.at)))
 		.slice(0, 50);
-	return { cards: inboxOf(projects), flags };
+	// The settings that wait for the owner (FR-092) are cards like the others, newest first with them.
+	const cards = [...inboxOf(projects), ...settingsCards(ctx.config)].sort((a, b) =>
+		String(b.card.createdAt).localeCompare(String(a.card.createdAt)),
+	);
+	return { cards, flags };
 }
 
 // Runs, at work first: running, queued, waiting for a usage limit, then the ended ones, newest first.
@@ -842,7 +822,26 @@ const itemOf = (p, ref) => {
 	}
 };
 
+// A setting's card (FR-092): allowed, the change applies; declined, nothing changes. Never a note.
+function confirmSetting(ctx, body, res) {
+	if (!["allow", "deny"].includes(body.option))
+		return json(res, 400, { error: "a setting is allowed or not, never answered in words" });
+	let r;
+	try {
+		r = confirmRequest(body.card.slice("setting:".length), {
+			allow: body.option === "allow",
+			by: ctx.config.owner.login,
+		});
+	} catch (e) {
+		return json(res, e.status ?? 409, { error: firstLine(e) });
+	}
+	reloadConfig(ctx);
+	ctx.broadcast(true);
+	return json(res, 200, { ok: true, state: r.state });
+}
+
 function answer(ctx, body, res) {
+	if (String(body.card ?? "").startsWith("setting:")) return confirmSetting(ctx, body, res);
 	const p = ctx.config.projects.find((x) => x.id === body.project);
 	if (!p) return json(res, 404, { error: "unknown project" });
 	const dir = `projects/${p.id}`;
@@ -1072,13 +1071,11 @@ export async function startServer({
 				ctx.tailnet = (await tailnetName()) ?? ctx.tailnet;
 			}, 300_000),
 		);
-	for (const p of config.projects) {
+	for (const p of config.projects)
 		cleanStale(
 			p.id,
 			p.repos.map((r) => r.slug),
 		);
-		journalBypass(ctx, p);
-	}
 	if (polling) for (const p of config.projects) startLoop(ctx, p);
 	// Recurring tasks: their slots are looked at every 30 s, and once at start for those missed.
 	const schedule = () => {

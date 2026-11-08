@@ -1,7 +1,8 @@
 // What a person does on the dashboard, with real clicks on a desktop and real taps on a phone: both
 // go through the page's own hit-testing, which is what let the view tabs of #7 ship dead.
 import { expect } from "@playwright/test";
-import { readJsonl } from "../../src/home.mjs";
+import { read, readJsonl } from "../../src/home.mjs";
+import { changeSetting } from "../../src/settings.mjs";
 import { test } from "./app.mjs";
 
 const VIEWS = {
@@ -139,4 +140,31 @@ test("Agents: Run now on a task at rest, none on a task at work", async ({ page,
 	await expect(page.locator("#toast")).toHaveText("Weekly digest started");
 	await expect(runNow("digest")).toHaveCount(0);
 	await expect(page.locator(".ag-run").filter({ hasText: "Weekly digest" })).toBeVisible();
+});
+
+test("a setting asked from Claude waits as a card, and applies once the owner allows it", async ({
+	page,
+	isMobile,
+}) => {
+	changeSetting(
+		{ kind: "project.bypass", project: "acme", on: true },
+		{ origin: "mcp", by: "alice" },
+	);
+	const item = page.locator(".ibx-item", {
+		hasText: "Let the server merge with your bypass on acme?",
+	});
+	await press(item, isMobile);
+	await expect(page.locator(".cv-chips")).toContainText("Setting");
+	await expect(page.locator(".cv-ctx")).toContainText("Asked from Claude, through the MCP");
+	// Allowed or not, never answered in words, and nothing is recommended.
+	await expect(page.locator("#cv-free")).toHaveCount(0);
+	await expect(page.locator(".cv-opt .badge")).toHaveCount(0);
+	await expect(page.locator(".cv-opt b")).toHaveText(["Allow it", "Don't allow it"]);
+	expect(read("config.json").projects[0].bypassApproval).toBe(false);
+	await press(page.locator('[data-option="allow"]'), isMobile);
+	await press(page.locator("[data-send]"), isMobile);
+	await expect(page.locator("#toast")).toHaveText("Answer sent");
+	await expect(item).toHaveCount(0);
+	await expect(page.locator(".ibx-list")).toBeVisible();
+	expect(read("config.json").projects[0].bypassApproval).toBe(true);
 });
