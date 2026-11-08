@@ -186,7 +186,9 @@ show in the journal.
 
 ## Checkpoint: OpenScreen runs on the generic product (SC-002)
 
-- [ ] T047 Write OpenScreen's rules from `.claude/pilot/tasks/judge.md`, `act.md` and its constitution into `examples/rules/openscreen/rules/*.md` and `locks.json`
+- [x] T047 Write OpenScreen's rules from `.claude/pilot/tasks/judge.md`, `act.md` and its constitution into `examples/rules/openscreen/rules/*.md` and `locks.json`
+  - Four files: what the agents do alone and what comes to the owner (the two-day wait included), what merges alone (R1, R4) and how the repo merges, review rules, writing on GitHub. The procedures the product prompts already give (card format, delegation, safety) are not repeated.
+  - `locks.json` carries R2 and R3 (the supply-chain paths, 300 lines and 15 files outside tests and docs), R4's zones, CodeRabbit required, and the Nix build and the Discord and bookkeeping workflows ignored. The priority scale is new: the old pilot had none, and agents would otherwise ask.
 - [ ] T048 Propose them to `getopenscreen/openscreen` as `.rusuban/` in a PR, which Etienne merges
 - [ ] T049 Configure Etienne's instance: the `openscreen` project; the `publications` and `n8n-series` tasks moved to `~/.rusuban/tasks/`
 - [ ] T050 Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge), judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
