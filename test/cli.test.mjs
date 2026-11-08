@@ -248,6 +248,7 @@ test("the agent commands read and write a project's files", () => {
 	put("runs/worker-1/status.json", {
 		id: "worker-1",
 		kind: "worker",
+		project: "demo",
 		state: "done",
 		session: "s-9",
 	});

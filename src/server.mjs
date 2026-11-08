@@ -18,7 +18,7 @@ import {
 	requestRun,
 	stopRun,
 } from "./agents.mjs";
-import { mergePr, poll } from "./github.mjs";
+import { mergePr, poll, readProject } from "./github.mjs";
 import {
 	append,
 	homePath,
@@ -27,6 +27,7 @@ import {
 	read,
 	readJournal,
 	readJsonl,
+	validateConfig,
 	write,
 } from "./home.mjs";
 import {
@@ -297,7 +298,8 @@ export function stateOf(ctx, projectId) {
 }
 
 // ── One cycle, after each read of a project ───────────────────────────────────────────────────
-const DEPS = { merge: mergePr, requestRun, requestCoordinator };
+// What reads GitHub, merges and starts agents; tests replace any of them through startServer.
+const DEPS = { merge: mergePr, requestRun, requestCoordinator, read: readProject, loadRules };
 const since = (iso, ref) => Date.parse(iso) >= Date.parse(ref);
 
 // A rules change applies at once, journaled with its diff for the owner (FR-027); so is a locks.json
@@ -560,11 +562,17 @@ function runTaskNow(ctx, id, res) {
 }
 
 // ── The daemon ────────────────────────────────────────────────────────────────────────────────
+// One loop per project: its read, its rules, its merge and its agents, on its own files only. A loop
+// stopped or replaced while it read (the project removed or changed) drops what it read.
 function startLoop(ctx, p) {
 	const dir = `projects/${p.id}`;
-	const loop = poll(
+	const deps = depsOf(ctx);
+	let loop = null;
+	const current = () => ctx.loops.get(p.id) === loop;
+	loop = poll(
 		p,
 		async (live, error) => {
+			if (!current()) return;
 			if (error) {
 				ctx.errors.set(p.id, firstLine(error));
 				ctx.say(`${p.id}: read failed: ${firstLine(error)}`);
@@ -579,7 +587,7 @@ function startLoop(ctx, p) {
 				const branch = live.repos[slug]?.defaultBranch;
 				if (!branch) continue;
 				try {
-					rules[slug] = await loadRules(slug, branch, rules[slug]);
+					rules[slug] = await deps.loadRules(slug, branch, rules[slug]);
 				} catch (e) {
 					rules[slug] = {
 						observeOnly: true,
@@ -592,11 +600,12 @@ function startLoop(ctx, p) {
 					};
 				}
 			}
+			if (!current()) return;
 			write(`${dir}/rules.json`, rules);
 			for (const { slug } of p.repos) journalRules(p.id, slug, before[slug], rules[slug]);
 			ctx.errors.delete(p.id);
 			try {
-				await runCycle(ctx, p, live, rules, depsOf(ctx));
+				await runCycle(ctx, p, live, rules, deps);
 			} catch (e) {
 				ctx.say(`${p.id}: cycle failed: ${firstLine(e)}`);
 			}
@@ -608,9 +617,57 @@ function startLoop(ctx, p) {
 			ctx.say(`${p.id}: ${items} open items read`);
 			ctx.broadcast(true);
 		},
-		{ initial: read(`${dir}/live.json`, null) },
+		{ initial: read(`${dir}/live.json`, null), read: deps.read },
 	);
 	ctx.loops.set(p.id, loop);
+}
+
+function stopLoop(ctx, id) {
+	ctx.loops.get(id)?.stop();
+	ctx.loops.delete(id);
+	ctx.errors.delete(id);
+}
+
+// config.json is read again when it changes (`project add|remove|mode`), so no restart is needed: a
+// new project starts its loop, a removed one stops, a changed one starts again with its settings. A
+// mode change is journaled in its project. A config that does not load leaves the running one.
+export function reloadConfig(ctx) {
+	const text = textOf(homePath("config.json"));
+	if (text === null || text === ctx.configText) return;
+	ctx.configText = text;
+	let next;
+	try {
+		next = validateConfig(JSON.parse(text));
+	} catch (e) {
+		ctx.say(`config.json changed but is not applied: ${e.message.replace(/\n/g, " ")}`);
+		return;
+	}
+	const before = new Map(ctx.config.projects.map((p) => [p.id, p]));
+	ctx.config = next;
+	ctx.owner = next.owner;
+	for (const id of before.keys())
+		if (!next.projects.some((p) => p.id === id)) {
+			stopLoop(ctx, id);
+			ctx.say(`${id}: removed`);
+		}
+	for (const p of next.projects) {
+		const old = before.get(p.id);
+		if (JSON.stringify(old) === JSON.stringify(p)) continue;
+		if (old && old.mode !== p.mode)
+			journal(p.id, {
+				kind: "mode",
+				item: null,
+				text:
+					p.mode === "live"
+						? "Live: agents act as the rules say, merges allowed"
+						: "Shadow mode: agents judge and propose, no GitHub write, no merge",
+				by: next.owner.login,
+			});
+		stopLoop(ctx, p.id);
+		if (ctx.polling) startLoop(ctx, p);
+		ctx.say(`${p.id}: ${old ? "changed" : "added"}`);
+	}
+	ctx.broadcast(true);
 }
 
 function send(res, status, type, body) {
@@ -694,8 +751,8 @@ const text = (res, body) =>
 		? send(res, 200, "text/plain; charset=utf-8", body)
 		: json(res, 404, { error: "not found" });
 
-// The agents' starters, which tests replace through `startServer({ deps })`.
-const depsOf = (ctx) => ctx.deps ?? DEPS;
+// What reads, merges and starts agents, of which tests replace some through `startServer({ deps })`.
+const depsOf = (ctx) => ({ ...DEPS, ...ctx.deps });
 
 // The coordinator starts at once on an answer or a request (FR-043), unless the daemon is dry.
 const startCoordinator = (ctx, project, trigger) =>
@@ -870,10 +927,13 @@ export async function startServer({
 	tailnet,
 	deps,
 } = {}) {
+	const configText = textOf(homePath("config.json")); // read first: a change in between is reloaded
 	const config = loadConfig();
 	const ctx = {
 		config,
+		configText,
 		dry,
+		polling,
 		deps,
 		port: port ?? config.port,
 		owner: config.owner,
@@ -923,9 +983,12 @@ export async function startServer({
 		server.listen(ctx.port, "127.0.0.1", resolve);
 	});
 	ctx.port = server.address().port;
-	// The judgments, answers and runs' logs change without the daemon: read again every 2 s.
+	// The judgments, answers, runs' logs and the config change without the daemon: read again every 2 s.
 	const timers = [
-		setInterval(() => ctx.broadcast(), 2000),
+		setInterval(() => {
+			reloadConfig(ctx);
+			ctx.broadcast();
+		}, 2000),
 		setInterval(() => {
 			for (const c of ctx.clients) c.res.write(": ping\n\n");
 		}, 15000),
@@ -963,9 +1026,12 @@ export async function startServer({
 		ctx,
 		close: () => {
 			for (const t of timers) clearInterval(t);
-			for (const l of ctx.loops.values()) l.stop();
+			for (const id of [...ctx.loops.keys()]) stopLoop(ctx, id); // a late refresh finds none
 			for (const c of ctx.clients) c.res.end();
-			return new Promise((resolve) => server.close(resolve));
+			// A page reopens its stream at once, on a connection it keeps: those are cut, or close waits.
+			const closed = new Promise((resolve) => server.close(resolve));
+			server.closeAllConnections();
+			return closed;
 		},
 	};
 }

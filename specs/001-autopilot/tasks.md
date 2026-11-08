@@ -169,9 +169,17 @@ show in the journal.
 **Goal**: one instance, several projects, one inbox.
 **Independent test**: two projects, one decision each, both in the inbox; their states never mix.
 
-- [ ] T044 [US7] `project add|list|remove` in `bin/rusuban.mjs`; per-project state under `projects/<p>/`
-- [ ] T045 [US7] Daemon loops per project in `src/server.mjs` (refresh, triggers, merge); one inbox for all
-- [ ] T046 [P] [US7] Two-project test (isolation, merged inbox) in `test/projects.test.mjs`
+- [x] T044 [US7] `project add|list|remove` in `bin/rusuban.mjs`; per-project state under `projects/<p>/`
+  - Also `project mode <id> <live|shadow>`, from the same table of the CLI contract, for the switch (T050, T051). A new project starts in shadow mode and goes live on its owner's word. Its id comes from the repo's name (`owner-repo` when the name is taken); `--to` adds a repo to an existing project, `--checkout` records a folder that exists.
+  - A repo belongs to one project: the config refuses it in two, whatever the case of its name. `config.json` stays at mode 600.
+  - `remove` refuses while a run of the project waits or works, deletes no file and says where they stay, and names the tasks that still point at it.
+  - Each command asks the running daemon, on its port, whether it applied the change, and says so, or that no daemon answers, or that it must be restarted.
+- [x] T045 [US7] Daemon loops per project in `src/server.mjs` (refresh, triggers, merge); one inbox for all
+  - The daemon reads `config.json` again when it changes (every 2 s): a project added starts its loop, one removed stops, one changed starts again with its settings; a loop stopped while it read drops what it read. A mode change is journaled in its project. A config that does not load leaves the running one.
+  - Nothing of one project is read or written by another: an agent command refuses a run of another project (`RUSUBAN_RUN` against `RUSUBAN_PROJECT`), and a task's dotted lock must start with its own project (`alpha.coordinator`); a group shared across projects has no dot. The merge switch stays global.
+- [x] T046 [P] [US7] Two-project test (isolation, merged inbox) in `test/projects.test.mjs`
+  - A real daemon over a fake GitHub: each loop writes its own files; alpha's rules let its PR merge, beta has none and its PR judged to merge alone stays; locks planted in beta's rules for alpha's repo do not stop alpha's merge; a beta run is told no rule of alpha. Both cards in one inbox; beta's card refused as alpha's, then answered into beta's files only.
+  - The `project` commands without a daemon, then against a running one that applies add, mode and remove without a restart.
 
 ---
 

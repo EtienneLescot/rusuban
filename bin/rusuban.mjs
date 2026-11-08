@@ -3,8 +3,20 @@
 // they are the only writers of a project's judgment file and agent log, and each validates against the
 // live state and takes a short lock before writing (specs/001-autopilot/contracts/cli.md).
 import fs from "node:fs";
-import { executeRun, readRun } from "../src/agents.mjs";
-import { agentLog, homePath, loadConfig, read, readJsonl, write } from "../src/home.mjs";
+import path from "node:path";
+import { parseArgs } from "node:util";
+import { executeRun, listRuns, readRun } from "../src/agents.mjs";
+import {
+	agentLog,
+	homePath,
+	loadConfig,
+	PROJECT_ID,
+	read,
+	readJsonl,
+	SLUG,
+	saveConfig,
+	write,
+} from "../src/home.mjs";
 import {
 	applyEvidence,
 	applyJudgment,
@@ -16,7 +28,7 @@ import {
 	pendingAnswers,
 	todoOf,
 } from "../src/model.mjs";
-import { busyRun, readTask, startTask, tasksState } from "../src/tasks.mjs";
+import { busyRun, listTasks, readTask, startTask, tasksState, waiting } from "../src/tasks.mjs";
 import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
 
 const { version } = JSON.parse(
@@ -27,6 +39,12 @@ const out = (v) => console.log(JSON.stringify(v, null, 1));
 const USAGE = `rusuban ${version}
 
   start [--dry]                 runs the daemon and its dashboard in the foreground
+  project add <owner/repo> [--checkout <path>] [--to <project>]
+                                adds a repo, to a new project (in shadow mode) or to an existing one
+  project list | project remove <id>
+                                the projects; one removed, its files kept
+  project mode <id> <live|shadow>
+                                shadow: agents judge and propose, no GitHub write, no merge
   task list | task run <id>     the recurring tasks (tasks/<id>.md in the instance home), or one
                                 started now
 
@@ -52,6 +70,10 @@ function project() {
 				? `unknown project "${wanted}"`
 				: "set RUSUBAN_PROJECT: this instance has several projects",
 		);
+	// A run writes its own project's files only: RUSUBAN_PROJECT does not point it at another one.
+	const run = process.env.RUSUBAN_RUN ? readRun(process.env.RUSUBAN_RUN) : null;
+	if (run && run.project !== p.id)
+		throw new Error(`run ${run.id} works for project ${run.project}, not ${p.id}`);
 	const dir = `projects/${p.id}`;
 	return {
 		id: p.id,
@@ -85,7 +107,144 @@ function withLock(p, fn) {
 	}
 }
 
+// ── Projects (the owner's) ────────────────────────────────────────────────────────────────────
+const PROJECT_USAGE =
+	"usage: project add <owner/repo> [--checkout <path>] [--to <project>] | project list | project remove <id> | project mode <id> <live|shadow>";
+const MODE_SAYS = {
+	live: "its agents act as its rules say, and the server merges what they allow",
+	shadow: "its agents judge and propose, nothing is written on GitHub and nothing merges",
+};
+// A project's id from a repo's name: lowercase letters, digits and dashes.
+const idOf = (s) =>
+	s
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+/, "")
+		.slice(0, 40)
+		.replace(/-+$/, "");
+
+// The daemon reads config.json again when it changes. Whether the one running applied the change is
+// asked on its own port, so the command says it rather than promise it.
+async function daemonApplied(config, id, applied) {
+	const at = `127.0.0.1:${config.port}`;
+	const until = Date.now() + 8000;
+	for (;;) {
+		let state;
+		try {
+			const res = await fetch(`http://${at}/api/state?project=${id}`, {
+				signal: AbortSignal.timeout(2000),
+			});
+			state = await res.json();
+		} catch {
+			return `No daemon answers on ${at}: this applies when it starts.`;
+		}
+		if (applied(state)) return "The running daemon applied it.";
+		if (Date.now() > until) return `The daemon on ${at} has not applied it: restart it.`;
+		await new Promise((r) => setTimeout(r, 250));
+	}
+}
+
+async function projectCommand([sub, ...args]) {
+	const config = loadConfig();
+	const find = (id) => {
+		const p = config.projects.find((x) => x.id === id);
+		if (!p)
+			throw new Error(
+				`no project "${id}": ${config.projects.map((x) => x.id).join(", ") || "none yet"}`,
+			);
+		return p;
+	};
+	if (sub === "list" && !args.length) return out(config.projects);
+	if (sub === "add") {
+		const { values, positionals } = parseArgs({
+			args,
+			options: { checkout: { type: "string" }, to: { type: "string" } },
+			allowPositionals: true,
+		});
+		const [slug, extra] = positionals;
+		if (!slug || extra) throw new Error(PROJECT_USAGE);
+		if (!SLUG.test(slug)) throw new Error(`${slug} is not owner/repo`);
+		const holder = config.projects.find((p) =>
+			p.repos.some((r) => r.slug.toLowerCase() === slug.toLowerCase()),
+		);
+		if (holder) throw new Error(`${slug} is already in project ${holder.id}`);
+		const checkout = values.checkout ? path.resolve(values.checkout) : null;
+		if (checkout && !fs.statSync(checkout, { throwIfNoEntry: false })?.isDirectory())
+			throw new Error(`checkout ${checkout} is not a folder`);
+		const repo = { slug, checkout };
+		if (values.to) {
+			const p = find(values.to);
+			p.repos.push(repo);
+			saveConfig(config);
+			console.log(`${slug} added to project ${p.id} (${p.mode}).`);
+			return console.log(
+				await daemonApplied(config, p.id, (s) => s.project?.repos?.includes(slug)),
+			);
+		}
+		// A new project starts in shadow mode: it goes live on its owner's word, never on its own.
+		const [owner, name] = slug.split("/");
+		const ids = [idOf(name), idOf(`${owner}-${name}`)];
+		const id = ids.find((x) => PROJECT_ID.test(x) && !config.projects.some((p) => p.id === x));
+		if (!id)
+			throw new Error(
+				`no free project id for ${slug} (${ids.join(", ")} taken): add it --to a project`,
+			);
+		config.projects.push({ id, title: name, mode: "shadow", repos: [repo] });
+		saveConfig(config);
+		console.log(`project ${id} added, in shadow mode: ${MODE_SAYS.shadow}.`);
+		console.log(`Make it live with: rusuban project mode ${id} live`);
+		return console.log(
+			await daemonApplied(config, id, (s) => s.projects?.some((p) => p.id === id)),
+		);
+	}
+	if (sub === "remove" && args.length === 1) {
+		const p = find(args[0]);
+		// A run asked for the project would find it gone, or keep writing its files after the remove.
+		const busy = listRuns(p.id).filter(waiting);
+		if (busy.length)
+			throw new Error(
+				`project ${p.id} has runs that wait or work: ${busy.map((r) => `${r.id} (${r.state})`).join(", ")}. Stop them in the Agents view, or let them end.`,
+			);
+		config.projects = config.projects.filter((x) => x !== p);
+		saveConfig(config);
+		// Nothing is deleted: a project added again under the same id finds its state where it was.
+		const kept = ["projects", "scratch", "worktrees"]
+			.map((d) => homePath(`${d}/${p.id}`))
+			.filter((d) => fs.existsSync(d));
+		console.log(`project ${p.id} removed.${kept.length ? " Its files stay in:" : ""}`);
+		for (const d of kept) console.log(`  ${d}`);
+		for (const t of listTasks(config).filter((x) => x.project === p.id))
+			console.log(
+				`Task ${t.id} names it and will not run: edit or delete ${homePath(`tasks/${t.id}.md`)}`,
+			);
+		return console.log(
+			await daemonApplied(config, p.id, (s) => !s.projects?.some((x) => x.id === p.id)),
+		);
+	}
+	if (sub === "mode" && args.length === 2 && Object.hasOwn(MODE_SAYS, args[1])) {
+		const [id, mode] = args;
+		const p = find(id);
+		if (p.mode === mode) return console.log(`project ${id} is already ${mode}.`);
+		p.mode = mode;
+		saveConfig(config);
+		console.log(
+			`project ${id} is ${mode === "live" ? "live" : "in shadow mode"}: ${MODE_SAYS[mode]}.`,
+		);
+		// A run's permissions are set when it starts: those at work keep their mode until they end.
+		const working = listRuns(id).filter((r) => r.state === "running");
+		if (working.length)
+			console.log(
+				`Runs at work keep the mode they started in: ${working.map((r) => r.id).join(", ")}.`,
+			);
+		return console.log(
+			await daemonApplied(config, id, (s) => s.project?.id === id && s.project.mode === mode),
+		);
+	}
+	throw new Error(PROJECT_USAGE);
+}
+
 const commands = {
+	project: projectCommand,
 	todo() {
 		const p = project();
 		out(todoOf({ live: p.live(), judgment: p.judgment(), rules: read(`${p.dir}/rules.json`, {}) }));
