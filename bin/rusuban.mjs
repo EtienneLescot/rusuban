@@ -3,20 +3,10 @@
 // they are the only writers of a project's judgment file and agent log, and each validates against the
 // live state and takes a short lock before writing (specs/001-autopilot/contracts/cli.md).
 import fs from "node:fs";
-import path from "node:path";
+import readline from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { executeRun, listRuns, OWNER_COMMANDS, readRun } from "../src/agents.mjs";
-import {
-	agentLog,
-	homePath,
-	loadConfig,
-	PROJECT_ID,
-	read,
-	readJsonl,
-	SLUG,
-	saveConfig,
-	write,
-} from "../src/home.mjs";
+import { agentLog, homePath, loadConfig, read, readJsonl, write } from "../src/home.mjs";
 import {
 	applyEvidence,
 	applyJudgment,
@@ -29,7 +19,8 @@ import {
 	refusedOf,
 	todoOf,
 } from "../src/model.mjs";
-import { busyRun, listTasks, readTask, startTask, tasksState, waiting } from "../src/tasks.mjs";
+import { changeSetting, MODE_SAYS, planOf } from "../src/settings.mjs";
+import { busyRun, listTasks, readTask, startTask, tasksState } from "../src/tasks.mjs";
 import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
 
 const { version } = JSON.parse(
@@ -48,6 +39,10 @@ const USAGE = `rusuban ${version}
                                 shadow: agents judge and propose, no GitHub write, no merge
   project bypass <id> <on|off>  merges with --admin what the server merges anyway, once every
                                 check the base branch requires is green on the head
+  permissions <bypass|allowlist>
+                                the host profile: what agents may run on this machine
+A change that widens what agents may do is confirmed by typing its target in a terminal; without a
+terminal (Claude's shell, a script) it waits as a card in the dashboard's inbox.
   task list | task run <id>     the recurring tasks (tasks/<id>.md in the instance home), or one
                                 started now
 
@@ -110,21 +105,9 @@ function withLock(p, fn) {
 	}
 }
 
-// ── Projects (the owner's) ────────────────────────────────────────────────────────────────────
+// ── Projects and the host profile (the owner's) ───────────────────────────────────────────────
 const PROJECT_USAGE =
 	"usage: project add <owner/repo> [--checkout <path>] [--to <project>] | project list | project remove <id> | project mode <id> <live|shadow> | project bypass <id> <on|off>";
-const MODE_SAYS = {
-	live: "its agents act as its rules say, and the server merges what they allow",
-	shadow: "its agents judge and propose, nothing is written on GitHub and nothing merges",
-};
-// A project's id from a repo's name: lowercase letters, digits and dashes.
-const idOf = (s) =>
-	s
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+/, "")
-		.slice(0, 40)
-		.replace(/-+$/, "");
 
 // The daemon reads config.json again when it changes. Whether the one running applied the change is
 // asked on its own port, so the command says it rather than promise it.
@@ -134,7 +117,7 @@ async function daemonApplied(config, id, applied) {
 	for (;;) {
 		let state;
 		try {
-			const res = await fetch(`http://${at}/api/state?project=${id}`, {
+			const res = await fetch(`http://${at}/api/state?project=${id ?? ""}`, {
 				signal: AbortSignal.timeout(2000),
 			});
 			state = await res.json();
@@ -147,17 +130,37 @@ async function daemonApplied(config, id, applied) {
 	}
 }
 
-async function projectCommand([sub, ...args]) {
+// One setting through the settings module (src/settings.mjs). In a terminal, a change that widens what
+// agents may do is applied once its target is typed back; without one (Claude's shell, a script), it
+// waits as a card the owner allows in the dashboard (FR-092).
+async function setting(change, target, applied) {
 	const config = loadConfig();
-	const find = (id) => {
-		const p = config.projects.find((x) => x.id === id);
-		if (!p)
-			throw new Error(
-				`no project "${id}": ${config.projects.map((x) => x.id).join(", ") || "none yet"}`,
-			);
-		return p;
-	};
-	if (sub === "list" && !args.length) return out(config.projects);
+	const by = config.owner.login;
+	const terminal = process.stdin.isTTY && process.stdout.isTTY;
+	let confirmed = false;
+	if (terminal) {
+		const plan = planOf(config, change);
+		if (plan.widens) {
+			console.log(`${plan.card.q}\n${plan.card.ctx}`);
+			const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+			const typed = (await rl.question(`Type "${target}" to confirm: `)).trim();
+			rl.close();
+			if (typed !== target) return console.log("Not confirmed: nothing changed.");
+			confirmed = true;
+		}
+	}
+	const r = changeSetting(change, { origin: terminal ? "terminal" : "cli", by, confirmed });
+	console.log(r.text);
+	if (r.state === "pending")
+		return console.log(
+			"It waits for your confirmation: a card in the dashboard's inbox. Nothing changes until you allow it there.",
+		);
+	if (r.state === "applied")
+		console.log(await daemonApplied(config, change.project ?? change.to ?? null, applied));
+}
+
+async function projectCommand([sub, ...args]) {
+	if (sub === "list" && !args.length) return out(loadConfig().projects);
 	if (sub === "add") {
 		const { values, positionals } = parseArgs({
 			args,
@@ -166,72 +169,42 @@ async function projectCommand([sub, ...args]) {
 		});
 		const [slug, extra] = positionals;
 		if (!slug || extra) throw new Error(PROJECT_USAGE);
-		if (!SLUG.test(slug)) throw new Error(`${slug} is not owner/repo`);
-		const holder = config.projects.find((p) =>
-			p.repos.some((r) => r.slug.toLowerCase() === slug.toLowerCase()),
-		);
-		if (holder) throw new Error(`${slug} is already in project ${holder.id}`);
-		const checkout = values.checkout ? path.resolve(values.checkout) : null;
-		if (checkout && !fs.statSync(checkout, { throwIfNoEntry: false })?.isDirectory())
-			throw new Error(`checkout ${checkout} is not a folder`);
-		const repo = { slug, checkout };
-		if (values.to) {
-			const p = find(values.to);
-			p.repos.push(repo);
-			saveConfig(config);
-			console.log(`${slug} added to project ${p.id} (${p.mode}).`);
-			return console.log(
-				await daemonApplied(config, p.id, (s) => s.project?.repos?.includes(slug)),
-			);
-		}
-		// A new project starts in shadow mode: it goes live on its owner's word, never on its own.
-		const [owner, name] = slug.split("/");
-		const ids = [idOf(name), idOf(`${owner}-${name}`)];
-		const id = ids.find((x) => PROJECT_ID.test(x) && !config.projects.some((p) => p.id === x));
-		if (!id)
-			throw new Error(
-				`no free project id for ${slug} (${ids.join(", ")} taken): add it --to a project`,
-			);
-		config.projects.push({ id, title: name, mode: "shadow", repos: [repo] });
-		saveConfig(config);
-		console.log(`project ${id} added, in shadow mode: ${MODE_SAYS.shadow}.`);
-		console.log(`Make it live with: rusuban project mode ${id} live`);
-		return console.log(
-			await daemonApplied(config, id, (s) => s.projects?.some((p) => p.id === id)),
+		const change = {
+			kind: "project.add",
+			slug,
+			checkout: values.checkout ?? null,
+			to: values.to ?? null,
+		};
+		const id = values.to ?? planOf(loadConfig(), change).project;
+		return setting(change, values.to ?? slug, (s) =>
+			values.to ? s.project?.repos?.includes(slug) : s.projects?.some((p) => p.id === id),
 		);
 	}
 	if (sub === "remove" && args.length === 1) {
-		const p = find(args[0]);
-		// A run asked for the project would find it gone, or keep writing its files after the remove.
-		const busy = listRuns(p.id).filter(waiting);
-		if (busy.length)
-			throw new Error(
-				`project ${p.id} has runs that wait or work: ${busy.map((r) => `${r.id} (${r.state})`).join(", ")}. Stop them in the Agents view, or let them end.`,
-			);
-		config.projects = config.projects.filter((x) => x !== p);
-		saveConfig(config);
+		const id = args[0];
+		await setting(
+			{ kind: "project.remove", project: id },
+			id,
+			(s) => !s.projects?.some((p) => p.id === id),
+		);
 		// Nothing is deleted: a project added again under the same id finds its state where it was.
 		const kept = ["projects", "scratch", "worktrees"]
-			.map((d) => homePath(`${d}/${p.id}`))
+			.map((d) => homePath(`${d}/${id}`))
 			.filter((d) => fs.existsSync(d));
-		console.log(`project ${p.id} removed.${kept.length ? " Its files stay in:" : ""}`);
-		for (const d of kept) console.log(`  ${d}`);
-		for (const t of listTasks(config).filter((x) => x.project === p.id))
+		if (kept.length) console.log(`Its files stay in:\n${kept.map((d) => `  ${d}`).join("\n")}`);
+		for (const t of listTasks(loadConfig()).filter((x) => x.project === id))
 			console.log(
 				`Task ${t.id} names it and will not run: edit or delete ${homePath(`tasks/${t.id}.md`)}`,
 			);
-		return console.log(
-			await daemonApplied(config, p.id, (s) => !s.projects?.some((x) => x.id === p.id)),
-		);
+		return;
 	}
-	if (sub === "mode" && args.length === 2 && Object.hasOwn(MODE_SAYS, args[1])) {
+	if (sub === "mode" && args.length === 2) {
 		const [id, mode] = args;
-		const p = find(id);
-		if (p.mode === mode) return console.log(`project ${id} is already ${mode}.`);
-		p.mode = mode;
-		saveConfig(config);
-		console.log(
-			`project ${id} is ${mode === "live" ? "live" : "in shadow mode"}: ${MODE_SAYS[mode]}.`,
+		if (!Object.hasOwn(MODE_SAYS, mode)) throw new Error(PROJECT_USAGE);
+		await setting(
+			{ kind: "project.mode", project: id, mode },
+			id,
+			(s) => s.project?.id === id && s.project.mode === mode,
 		);
 		// A run's permissions are set when it starts: those at work keep their mode until they end.
 		const working = listRuns(id).filter((r) => r.state === "running");
@@ -239,37 +212,31 @@ async function projectCommand([sub, ...args]) {
 			console.log(
 				`Runs at work keep the mode they started in: ${working.map((r) => r.id).join(", ")}.`,
 			);
-		return console.log(
-			await daemonApplied(config, id, (s) => s.project?.id === id && s.project.mode === mode),
-		);
+		return;
 	}
 	// FR-029: the owner's, here only; never in a repo, never by an agent.
 	if (sub === "bypass" && args.length === 2 && ["on", "off"].includes(args[1])) {
 		const [id, state] = args;
-		const p = find(id);
 		const on = state === "on";
-		if (p.bypassApproval === on)
-			return console.log(`project ${id}: the approval bypass is already ${state}.`);
-		p.bypassApproval = on;
-		saveConfig(config);
-		console.log(
-			on
-				? `project ${id}: approval bypass on. What the server merges anyway${p.mode === "live" ? "" : " once the project is live"}, with the merge switch armed, it merges with --admin, and only once every check the base branch requires is green on the head.`
-				: `project ${id}: approval bypass off. The server never merges with --admin.`,
-		);
-		return console.log(
-			await daemonApplied(
-				config,
-				id,
-				(s) => s.project?.id === id && s.project.bypassApproval === on,
-			),
+		return setting(
+			{ kind: "project.bypass", project: id, on },
+			id,
+			(s) => s.project?.id === id && s.project.bypassApproval === on,
 		);
 	}
 	throw new Error(PROJECT_USAGE);
 }
 
+// The host profile (FR-025): what agents may run on this machine.
+async function permissionsCommand([mode, ...rest]) {
+	if (!["bypass", "allowlist"].includes(mode) || rest.length)
+		throw new Error("usage: permissions <bypass|allowlist>");
+	return setting({ kind: "permissions.mode", mode }, mode, () => true);
+}
+
 const commands = {
 	project: projectCommand,
+	permissions: permissionsCommand,
 	todo() {
 		const p = project();
 		out(

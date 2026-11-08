@@ -8,11 +8,12 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { builtInDeny } from "../src/agents.mjs";
+import { builtInDeny, OWNER_COMMANDS } from "../src/agents.mjs";
 import { append, read, readJsonl, saveConfig, validateConfig, write } from "../src/home.mjs";
 import { bypassStops, refusedOf, requiredChecksOf, todoOf } from "../src/model.mjs";
 import { validateLocks } from "../src/rules.mjs";
-import { runCycle, startServer } from "../src/server.mjs";
+import { runCycle } from "../src/server.mjs";
+import { confirmRequest, pendingRequests, settingsLog } from "../src/settings.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
 const REPO = "o/r";
@@ -408,7 +409,7 @@ test("a refused head is never tried again, a restart included; a card settles it
 	assert.equal(merged.length, 3);
 });
 
-test("the owner's commands are closed to agents, and every change of the setting is journaled", async () => {
+test("the owner's commands are closed to agents; the bypass turned on waits for the owner", () => {
 	saveConfig({
 		version: 1,
 		owner: { login: "alice" },
@@ -429,32 +430,42 @@ test("the owner's commands are closed to agents, and every change of the setting
 	);
 	assert.match(asAgent("task", "list").stderr, /owner's command/);
 	assert.match(asAgent("start").stderr, /owner's command/);
+	assert.match(asAgent("permissions", "bypass").stderr, /owner's command/);
 	assert.equal(read("config.json").projects[0].bypassApproval, false);
+	// Layer 1 (FR-095): every owner's command and Rusuban's own MCP server are denied to every run.
 	const deny = builtInDeny();
-	for (const c of ["project", "task", "start"]) assert.ok(deny.includes(`Bash(rusuban ${c}*)`), c);
+	for (const c of OWNER_COMMANDS) assert.ok(deny.includes(`Bash(rusuban ${c}*)`), c);
+	assert.ok(deny.includes("mcp__rusuban"));
 
-	// A project added is off; the owner turns it on, and a daemon started after says so in the journal.
+	// A project added is off. Asked without a terminal, turning it on waits for the owner (FR-092).
 	assert.equal(cli({}, "project", "add", "o/other").status, 0);
 	assert.equal(read("config.json").projects[1].bypassApproval, false);
 	const on = cli({}, "project", "bypass", "demo", "on");
 	assert.equal(on.status, 0, on.stderr);
-	assert.match(on.stdout, /^project demo: approval bypass on\. .*--admin/);
+	assert.match(
+		on.stdout,
+		/^Let the server merge with your bypass on demo\?\nIt waits for your confirmation/,
+	);
+	assert.equal(read("config.json").projects[0].bypassApproval, false);
+	const [request] = pendingRequests();
+	assert.equal(confirmRequest(request.id, { allow: true, by: "alice" }).state, "confirmed");
+	assert.equal(read("config.json").projects[0].bypassApproval, true);
 	assert.match(cli({}, "project", "bypass", "demo", "on").stdout, /already on/);
 	assert.match(cli({}, "project", "bypass", "demo", "maybe").stderr, /usage: project add/);
-	let srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
-	await srv.close();
-	srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
-	await srv.close();
-	const said = () =>
-		journal()
-			.filter((e) => e.kind === "bypass")
-			.map((e) => [e.on, !!e.notify, e.by]);
-	assert.deepEqual(said(), [[true, true, "alice"]], "journaled once, flagged");
-	assert.equal(cli({}, "project", "bypass", "demo", "off").status, 0);
-	srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
-	await srv.close();
-	assert.deepEqual(said(), [
-		[true, true, "alice"],
-		[false, false, "alice"],
-	]);
+	// Turning it off narrows: it applies at once.
+	assert.match(
+		cli({}, "project", "bypass", "demo", "off").stdout,
+		/^project demo: approval bypass off\./,
+	);
+	assert.equal(read("config.json").projects[0].bypassApproval, false);
+	assert.deepEqual(
+		settingsLog()
+			.filter((e) => e.setting === "project.bypass")
+			.map((e) => [e.origin, e.state, !!e.notify]),
+		[
+			["cli", "pending", false],
+			["cli", "confirmed", true],
+			["cli", "applied", false],
+		],
+	);
 });

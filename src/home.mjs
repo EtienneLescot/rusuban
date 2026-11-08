@@ -47,17 +47,20 @@ export function append(name, entry) {
 	fs.appendFileSync(target, `${JSON.stringify(entry)}\n`);
 }
 
-// The journal is two files, one writer each (principle I): the daemon's, and the agent CLI's, which
-// writes under the judgment lock. The page shows them as one, in time order.
+// The journal is three files, one writer each (principle I): the daemon's, the agent CLI's, which
+// writes under the judgment lock, and the settings'. The page shows them as one, in time order.
 const stamp = (entry) => ({ at: new Date().toISOString(), ...entry });
 export const journal = (project, entry) =>
 	append(`projects/${project}/journal.jsonl`, stamp(entry));
 export const agentLog = (project, entry) =>
 	append(`projects/${project}/agent-log.jsonl`, stamp(entry));
+// The settings' own journal (written by src/settings.mjs) joins a project's: its changes, and those of
+// the whole instance, such as the host profile.
 export const readJournal = (project) =>
 	[
 		...readJsonl(`projects/${project}/journal.jsonl`),
 		...readJsonl(`projects/${project}/agent-log.jsonl`),
+		...readJsonl("settings.jsonl").filter((e) => e.project === project || e.project == null),
 	].sort((a, b) => String(a.at).localeCompare(String(b.at)));
 
 // ── Instance config ───────────────────────────────────────────────────────────────────────────
