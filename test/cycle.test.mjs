@@ -94,7 +94,7 @@ test("the server merges one eligible PR per cycle, judged auto on its head, and 
 		items: { "o/r#1": auto(1), "o/r#2": auto(2), "o/r#3": auto(3) },
 	});
 	await runCycle(ctxOf(), project(), live, RULES, deps);
-	assert.deepEqual(merged, [{ slug: REPO, n: 2, method: "squash", head: "sha2" }]);
+	assert.deepEqual(merged, [{ slug: REPO, n: 2, method: "squash", head: "sha2", admin: false }]);
 	const [entry] = journal().filter((e) => e.kind === "merge");
 	assert.deepEqual(
 		[entry.item, entry.by, entry.head, entry.method],
@@ -136,7 +136,7 @@ test("nothing merges alone when paused or in shadow mode; a person's merge order
 	await runCycle(ctxOf(), project("shadow"), live, RULES, deps);
 	assert.deepEqual(merged, [], "shadow: nothing merges at all");
 	await runCycle(ctxOf(), project(), live, RULES, deps);
-	assert.deepEqual(merged, [{ slug: REPO, n: 2, method: "squash", head: "sha2" }]);
+	assert.deepEqual(merged, [{ slug: REPO, n: 2, method: "squash", head: "sha2", admin: false }]);
 	const entry = journal().find((e) => e.kind === "merge");
 	assert.deepEqual(
 		[entry.card, entry.text.startsWith("Merged on @alice's order")],

@@ -260,7 +260,9 @@ test("two projects: each loop reads, merges and starts agents on its own; one in
 		assert.equal(read("projects/beta/rules.json")["b/two"].observeOnly, true);
 		// Alpha's rules let its PR merge; beta has none, so its PR judged to merge alone stays, and
 		// alpha's merge never read beta's locks.
-		assert.deepEqual(merged, [{ slug: "a/one", n: 1, method: "squash", head: "sha1" }]);
+		assert.deepEqual(merged, [
+			{ slug: "a/one", n: 1, method: "squash", head: "sha1", admin: false },
+		]);
 		// Only alpha has something to judge, under its own coordinator lock.
 		assert.deepEqual(
 			runs.map((r) => [r.kind, r.project, r.items, r.lock]),

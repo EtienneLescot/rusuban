@@ -117,6 +117,8 @@ export function validateConfig(raw) {
 			errors.push(
 				`${at}.mode must be "live" or "shadow" (judge only, no GitHub write, no merge): there is no default`,
 			);
+		if (p?.bypassApproval !== undefined && typeof p.bypassApproval !== "boolean")
+			errors.push(`${at}.bypassApproval must be true or false`);
 		if (!Array.isArray(p?.repos) || !p.repos.length)
 			errors.push(`${at}.repos must list at least one repo`);
 		for (const r of Array.isArray(p?.repos) ? p.repos : []) {
@@ -149,6 +151,8 @@ export function validateConfig(raw) {
 			id: p.id,
 			title: p.title || p.id,
 			mode: p.mode,
+			// FR-029: off unless the owner's `project bypass` turned it on.
+			bypassApproval: p.bypassApproval === true,
 			repos: p.repos.map((r) => ({ slug: r.slug, checkout: r.checkout ?? null })),
 			folders: p.folders ?? [],
 			refreshSec: p.refreshSec ?? 90,

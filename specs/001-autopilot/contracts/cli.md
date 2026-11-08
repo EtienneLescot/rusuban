@@ -13,6 +13,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `project add <owner/repo> [--checkout <path>] [--to <project>]` | Adds a repo, to a new project (in `shadow` mode, its id from the repo's name) or to an existing one. A repo belongs to one project. |
 | `project list` / `project remove <id>` | `remove` refuses while a run of the project waits or works, deletes no file and says where they stay. |
 | `project mode <id> <live\|shadow>` | `shadow`: agents judge and propose, every GitHub write is denied, nothing is merged. Runs at work keep the mode they started in. |
+| `project bypass <id> <on\|off>` | The approval bypass (FR-029): the server merges with `--admin` what it would merge anyway, once every check the base branch requires is green on the head. Off for every new project. |
 | `machine add <alias> [--os] [--caps a,b] [--workspace <path>] [--owner <login>]` | Checks SSH, the `rusuban` account, git and the workspace, creates the bare mirror, then registers the machine. `--owner` marks a person's desktop. |
 | `machine list` / `machine probe [<machine>]` / `machine doctor <machine>` | `doctor` rechecks SSH, the account, the workspace and the project's toolchain. |
 | `channel add <ntfy\|slack\|discord\|teams\|email> <target>` / `channel test <id>` / `channel list` | |
@@ -21,7 +22,8 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `service install` / `service uninstall` | Autostart with restart on failure (Task Scheduler, launchd, systemd user). |
 
 The `project` commands write `config.json`; a running daemon reads it again within seconds, without a
-restart. Each command asks that daemon whether it applied the change and says so.
+restart. Each command asks that daemon whether it applied the change and says so. The owner's commands
+(`project`, `task`, `start`) refuse to run inside an agent run, and the built-in deny rules forbid them.
 
 ## Agent commands
 
@@ -30,7 +32,7 @@ the only writers of the judgment file; each validates and locks before writing.
 
 | Command | Effect |
 |---|---|
-| `todo` | JSON list of what the agents must do, each with a reason, all computed by the server: `unjudged` (open item, no judgment); `new-commit` (PR head differs from the judged head); `ci-approval` (a fork's workflow waits for approval); `missing-card` (owned by a person, no open card); `revisit-due` (its `revisitAt` has passed: the agent sets it from the rules, no delay is built in; OpenScreen waits 2 days for a third party); `lock-blocked` (judged `auto` but a project lock or the rules-folder lock stops it: the agent writes a card); `conflict` (judged `auto` on its head, but its base moved and it now conflicts, or cannot be rebased for a rebase merge: a worker rebases it). |
+| `todo` | JSON list of what the agents must do, each with a reason, all computed by the server: `unjudged` (open item, no judgment); `new-commit` (PR head differs from the judged head); `ci-approval` (a fork's workflow waits for approval); `missing-card` (owned by a person, no open card); `revisit-due` (its `revisitAt` has passed: the agent sets it from the rules, no delay is built in; OpenScreen waits 2 days for a third party); `lock-blocked` (judged `auto` but a project lock or the rules-folder lock stops it: the agent writes a card); `conflict` (judged `auto` on its head, but its base moved and it now conflicts, or cannot be rebased for a rebase merge: a worker rebases it); `merge-refused` (GitHub refused the server's merge of that head, its reason given: the agent puts it on a card for the owner; the server never tries that head again). |
 | `show <item>` | Live state and judgment of one item. |
 | `judge <file.json>` | Writes judgments. Refuses an incomplete one, or a PR judged on a head that is not the live head. |
 | `resolve <item> <text>` | Closes a card as replaced, with the reason. |
