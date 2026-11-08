@@ -282,8 +282,11 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 
 ## Phase 11: Polish and release
 
-- [ ] T079 [P] Docs in `docs/`: writing rules, locks reference, security model (deny rules, identity check, residual risks), machines, FAQ
-- [ ] T080 [P] Generic rule examples in `examples/rules/` next to OpenScreen's
+- [x] T079 [P] Docs in `docs/`: writing rules, locks reference, security model (deny rules, identity check, residual risks), machines, FAQ
+  - `writing-rules.md`, `locks.md`, `security.md` and `faq.md`, checked against the code on main, the approval bypass (T115) included, linked from the README. The machines are documented with their phase, in `docs/machines/` (T109).
+- [x] T080 [P] Generic rule examples in `examples/rules/` next to OpenScreen's
+  - `cautious`: agents judge and ask, and every path is locked, so only the owner's merge order merges. `solo-maintainer`: bug fixes, docs, tests and maintenance merge alone within path and size locks; features, API changes and dependencies go to the owner.
+  - `test/examples.test.mjs` loads every folder of `examples/rules/` through the real `loadRules`, as a repo's `.rusuban/`: valid locks, rules present, no file the loader would skip.
 - [ ] T081 [P] Playwright tests in `test/e2e/`: answer a card, answer a conversation, release a machine
   - Started in Phase 6: `npm run test:e2e`, a CI job on Ubuntu with Chromium. Each test starts the real server on a free port over a seeded home of two projects; a run goes through the real runner with fake-claude. At 1440×900 and 390×844, with real clicks and taps: every view tab shows its view; a card opens and closes; an answered option leaves the cards to answer and is written to `answers.jsonl`; a filter changes the list; Agents shows Run now on a task at rest, none on a task at work, and Run now starts it. With the #7 click bug put back, five of the ten fail.
   - Left for their phases: answering a conversation (Phase 7), releasing a machine (Phase 9).
