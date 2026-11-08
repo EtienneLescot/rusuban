@@ -184,6 +184,25 @@ show in the journal.
 
 ---
 
+## Phase 6b: User Story 9 - Every setting from Claude, widening ones confirmed by a person (P2)
+
+**Goal**: Claude sets Rusuban up; what widens agents' rights waits for the owner, outside Claude.
+**Independent test**: from Claude, a project added applies at once, a project made live waits as a card;
+allowed in the dashboard it applies; from inside a run, both are refused.
+
+- [x] T118 [US9] Settings module `src/settings.mjs`: one implementation for the owner's commands and the MCP; widening against narrowing (FR-092, FR-093); `pending.json`; `settings.jsonl` with each change's origin (FR-094); `settings.lock`
+- [x] T119 [US9] Confirmation cards in the inbox (`setting:<id>`), allowed or declined from the dashboard, from the validated mockup (T120)
+- [x] T120 [US9] Mockup of the confirmation card, validated by Etienne before T119
+  - Validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/settings/`. No "Recommended" on these cards.
+- [x] T121 [US9] Layer 1 (FR-095): `mcp__rusuban` and every owner's command in each run's deny rules; the owner's commands refuse inside a run
+  - With #12, the commands that widen already go through the module: `project mode <id> live`, `project bypass <id> on`, `project add --to <live project>` and the new `permissions bypass`. In a terminal the owner types the target back; Claude's shell gets a card. The daemon no longer journals modes and the bypass itself: `settings.jsonl` carries every change with its origin.
+- [ ] T122 [US9] `rusuban mcp`: a stdio MCP server with the tools of `contracts/mcp.md`, refused inside a run, no card answers
+- [ ] T123 [P] [US9] MCP tests in `test/mcp.test.mjs`: each tool; widening waits, narrowing applies; refused inside a run
+- [ ] T124 [US9] `init` registers the MCP server (`claude mcp add --scope user`), with T073
+- [ ] T125 [US9] A `config.json` changed outside the settings module is flagged in the journal (the residual risk of `security.md` made visible)
+
+---
+
 ## Checkpoint: OpenScreen runs on the generic product (SC-002)
 
 - [ ] T047 Write OpenScreen's rules from `.claude/pilot/tasks/judge.md`, `act.md` and its constitution into `examples/rules/openscreen/rules/*.md` and `locks.json`
@@ -207,7 +226,8 @@ show in the journal.
 **Independent test**: a Desktop session about PR #N in a project worktree shows under #N within a minute;
 an answer from the phone appears in its transcript.
 
-- [ ] T104 [US4] Mockups of the conversations list and reader, desktop and phone, validated by Etienne before T061
+- [x] T104 [US4] Mockups of the conversations list and reader, desktop and phone, validated by Etienne before T061
+  - Validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Conversations", source in `mockups/conversations/`. A filter by origin (All, Desktop, Terminal, Rusuban) and the index's age; the reader's button says "Answer in a fork" when the session lives elsewhere; "Open in terminal" on a desktop only.
 - [ ] T053 [P] [US4] Scrubbed transcript fixtures (Desktop, CLI, `sdk-cli`, with `custom-title`, `pr-link`, `relocated`, a corrupt line) in `test/fixtures/transcripts/`
 - [ ] T054 [US4] Discovery in `src/hub.mjs`: scan `~/.claude/projects/*/`; keep sessions whose `cwd` or `relocatedCwd` is inside a project folder (checkouts, their worktrees, extra folders); membership by `cwd`, never by folder slug
 - [ ] T055 [US4] Incremental parser in `src/hub.mjs`: byte offset per file in `hub/index.json`; title (`custom-title`, `agent-name`, first user text), origin from `entrypoint`, `firstAt`, `lastAt`, `branch`, `prs[]` from `pr-link`, cited `#N` and URLs; unknown line types skipped, parse errors recorded
@@ -251,7 +271,8 @@ frees the Mac at expiry.
 - [ ] T072 [US5] Live machine state in the prompt context of T028, in `src/agents.mjs` (one copy, not a second one)
 - [ ] T109 [US5] `machine list|probe|doctor` in `bin/rusuban.mjs`; setup scripts per OS (OpenSSH server, `rusuban` account, the host's key) in `docs/machines/`
 - [ ] T110 [US5] Desktop guard: a person's desktop alias is denied to every run that does not hold its lease (FR-063)
-- [ ] T111 [US5] Mockup of the machines view, validated by Etienne before T071
+- [x] T111 [US5] Mockup of the machines view, validated by Etienne before T071
+  - Validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/machines/`. Machines are a section of the Agents view; the button is "Release".
 - [ ] T112 [US5] Live proof of M4: two runs need macOS on the real Mac; the second waits; killing the first frees the Mac at expiry
 
 ---
@@ -267,6 +288,7 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 - [ ] T075 [P] [US1] `start`, `open`, `status`, and a desktop or menu shortcut per OS, in `bin/rusuban.mjs` and `src/service.mjs`
 - [ ] T076 [US1] `remote enable|disable`: `tailscale serve --bg --https=443 http://127.0.0.1:<port>`; `status` shows the tailnet URL; stores `owner.tailscaleLogin` from `tailscale status --json`
 - [ ] T077 [US1] Observe-only page in `web/app.js`: without rules, items and conversations show, with how to add rules and links to `examples/rules/`
+  - Its mockup was validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/observe-only/`: the banner of a project without rules, with two links.
 - [ ] T078 [US1] Timed clean-machine install on the three OSes (SC-001)
 - [ ] T113 [US1] Updates: `status` compares the installed version with npm; config and state files carry a version, migrated on load (FR-074)
 

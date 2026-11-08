@@ -7,7 +7,9 @@ file has **one writer**. `rusuban` is the product name.
 
 | Path | Writer | Content |
 |---|---|---|
-| `config.json` | CLI (`init`, `project`, `machine`, `channel`) | owner, host permissions, port, projects, machines, channels; the daemon reads it again when it changes |
+| `config.json` | the settings module (`src/settings.mjs`), for the owner's commands, the MCP and the dashboard's confirmations, under `settings.lock` | owner, host permissions, port, projects, machines, channels; the daemon reads it again when it changes |
+| `pending.json` | the settings module | `{ requests: [{ id, at, origin, by, change, project, card, said }] }`: settings that widen, waiting for the owner's confirmation (FR-092) |
+| `settings.jsonl` | the settings module | `{ at, kind: "setting", setting, project, origin, by, state, text, request?, notify? }`, `state` one of `applied`, `pending`, `confirmed`, `declined`; shown in the journal |
 | `projects/<p>/live.json` | daemon | per repo: `{ checkedAt, changedAt, prs[], issues[], merged[] }` |
 | `projects/<p>/rules.json` | daemon | per repo: `{ treeSha, text, locks, loadedAt }` from the default branch |
 | `projects/<p>/judgment.json` | agent CLI only | `{ items: { "<owner/repo#n>": Judgment } }` |
