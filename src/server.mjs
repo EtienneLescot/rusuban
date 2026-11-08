@@ -45,7 +45,7 @@ import {
 	todoOf,
 } from "./model.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
-import { confirmRequest, settingsCards, settingsLog } from "./settings.mjs";
+import { changeSetting, confirmRequest, settingsCards, settingsLog } from "./settings.mjs";
 import {
 	busyRun,
 	dueTasks,
@@ -916,14 +916,12 @@ async function post(ctx, path, body, res) {
 	if (path === "/api/automerge") {
 		if (typeof body.armed !== "boolean")
 			return json(res, 400, { error: "armed must be true or false" });
-		write("automerge.json", { armed: body.armed, at: new Date().toISOString(), by });
-		for (const p of ctx.config.projects)
-			journal(p.id, {
-				kind: "switch",
-				item: null,
-				text: body.armed ? "Merges armed" : "Merges paused",
-				by,
-			});
+		// The owner's click in the dashboard is the confirmation itself (FR-092); the settings module
+		// writes the switch and journals it for every project.
+		changeSetting(
+			{ kind: "switch", armed: body.armed },
+			{ origin: "dashboard", by, confirmed: true },
+		);
 		ctx.broadcast(true);
 		return json(res, 200, { armed: isArmed() });
 	}

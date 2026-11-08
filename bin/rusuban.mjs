@@ -3,6 +3,7 @@
 // they are the only writers of a project's judgment file and agent log, and each validates against the
 // live state and takes a short lock before writing (specs/001-autopilot/contracts/cli.md).
 import fs from "node:fs";
+import path from "node:path";
 import readline from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { executeRun, listRuns, OWNER_COMMANDS, readRun } from "../src/agents.mjs";
@@ -31,6 +32,7 @@ const out = (v) => console.log(JSON.stringify(v, null, 1));
 const USAGE = `rusuban ${version}
 
   start [--dry]                 runs the daemon and its dashboard in the foreground
+  mcp                           Rusuban's MCP server on stdio, for Claude (every setting, the state)
   project add <owner/repo> [--checkout <path>] [--to <project>]
                                 adds a repo, to a new project (in shadow mode) or to an existing one
   project list | project remove <id>
@@ -45,6 +47,8 @@ A change that widens what agents may do is confirmed by typing its target in a t
 terminal (Claude's shell, a script) it waits as a card in the dashboard's inbox.
   task list | task run <id>     the recurring tasks (tasks/<id>.md in the instance home), or one
                                 started now
+  task add <file.md> | task remove <id>
+                                a task written into the instance (it widens: confirmed), or set aside
 
 Agent commands, inside a run (an item is owner/repo#n, or #n when the project has one repo):
   todo                          what the agents must do, each with its reason
@@ -104,6 +108,8 @@ function withLock(p, fn) {
 		fs.rmSync(dir, { recursive: true, force: true });
 	}
 }
+
+const TASK_USAGE = "usage: task list | task run <id> | task add <file.md> | task remove <id>";
 
 // ── Projects and the host profile (the owner's) ───────────────────────────────────────────────
 const PROJECT_USAGE =
@@ -334,10 +340,19 @@ const commands = {
 		out(readJsonl(`${p.dir}/asks.jsonl`).slice(read(`${p.dir}/consumed.json`, {}).asks ?? 0));
 	},
 	// The owner's: the daemon journals how the run ended, as for a task started at its time.
-	task([sub, id]) {
+	async task([sub, id, ...rest]) {
 		const config = loadConfig();
 		if (sub === "list") return out(tasksState(config));
-		if (sub !== "run" || !id) throw new Error("usage: task list | task run <id>");
+		// Writing a task widens what agents do (FR-092): a typed confirmation, or a card.
+		if (sub === "add" && id && !rest.length) {
+			const file = path.resolve(id);
+			const text = fs.readFileSync(file, "utf8");
+			const tid = path.basename(file).replace(/\.md$/, "");
+			return setting({ kind: "task.write", id: tid, text }, tid, () => true);
+		}
+		if (sub === "remove" && id && !rest.length)
+			return setting({ kind: "task.remove", id }, id, () => true);
+		if (sub !== "run" || !id) throw new Error(TASK_USAGE);
 		const t = readTask(id, config);
 		if (!t) throw new Error(`no task "${id}": write ${homePath(`tasks/${id}.md`)}`);
 		if (t.error) throw new Error(`task ${id}: ${t.error}`);
@@ -345,6 +360,11 @@ const commands = {
 		if (busy) throw new Error(`task ${id} already waits or works (run ${busy.id}, ${busy.state})`);
 		const r = startTask(t, "manual");
 		console.log(`task ${id} ${r.state} (run ${r.id})`);
+	},
+	// Rusuban's MCP server on stdio, started by Claude Code (contracts/mcp.md).
+	async mcp() {
+		const { serveMcp } = await import("../src/mcp.mjs");
+		await serveMcp();
 	},
 	async start(args) {
 		const { startServer } = await import("../src/server.mjs");

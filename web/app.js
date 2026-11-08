@@ -903,7 +903,7 @@ function cardViewHtml(c) {
 			<div class="cv-free"><textarea id="cv-free" rows="2"></textarea><button type="button" class="send" data-send-free${ph ? ` aria-label="${T.send}"` : ""}>${ph ? ARROW : T.send}</button></div>`
 			}`;
 	}
-	return `<article class="cv" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${did}${body}</article>`;
+	return `<article class="cv${c.type === "setting" ? " setting" : ""}" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${did}${body}</article>`;
 }
 
 let inboxKey = "";

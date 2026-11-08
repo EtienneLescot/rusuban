@@ -19,6 +19,8 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `machine list` / `machine probe [<machine>]` / `machine doctor <machine>` | `doctor` rechecks SSH, the account, the workspace and the project's toolchain. |
 | `channel add <ntfy\|slack\|discord\|teams\|email> <target>` / `channel test <id>` / `channel list` | |
 | `task list` / `task run <id>` | The catalog with each task's slots, state and last runs; starts a task now, refused while one of its runs waits or works. |
+| `task add <file.md>` / `task remove <id>` | Writes a task into the instance (it widens: confirmed, FR-092), or sets one aside, its file kept as `<id>.md.removed`. |
+| `mcp` | Rusuban's MCP server on stdio (`contracts/mcp.md`). |
 | `remote enable` / `remote disable` | Runs `tailscale serve` for the dashboard, or stops it. |
 | `service install` / `service uninstall` | Autostart with restart on failure (Task Scheduler, launchd, systemd user). |
 

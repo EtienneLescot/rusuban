@@ -18,7 +18,8 @@ import {
 	saveConfig,
 	write,
 } from "./home.mjs";
-import { waiting } from "./tasks.mjs";
+import { lineDiff } from "./rules.mjs";
+import { parseTask, waiting } from "./tasks.mjs";
 
 const PENDING = "pending.json";
 const LOG = "settings.jsonl";
@@ -26,7 +27,18 @@ export const ORIGINS = {
 	terminal: "a terminal",
 	cli: "the command line, without a terminal",
 	mcp: "Claude, through the MCP",
+	dashboard: "the dashboard",
 };
+const TASK_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
+const textOf = (file) => {
+	try {
+		return fs.readFileSync(file, "utf8");
+	} catch {
+		return null;
+	}
+};
+const isArmedNow = () => read("automerge.json", { armed: false }).armed === true;
 export const MODE_SAYS = {
 	live: "its agents act as its rules say, and the server merges what they allow",
 	shadow: "its agents judge and propose, nothing is written on GitHub and nothing merges",
@@ -182,6 +194,119 @@ export function planOf(config, change) {
 				},
 			};
 		}
+		case "task.write": {
+			// A task runs claude -p on its schedule: writing one widens what agents do (FR-092), so its
+			// card shows the task, or the diff of its file.
+			const { id, text } = change;
+			if (!TASK_ID.test(id ?? ""))
+				throw new Error("a task's id is lowercase letters, digits and dashes");
+			const t = parseTask(id, String(text ?? ""), config);
+			if (t.error) throw new Error(`task ${id}: ${t.error}`);
+			const file = homePath(`tasks/${id}.md`);
+			const before = textOf(file);
+			if (before === text) return { project: t.project, same: `task ${id} is already so.` };
+			const when = t.schedule ? `It runs ${t.schedule}` : "It runs on a click";
+			return {
+				project: t.project,
+				widens: true,
+				config: false,
+				apply: () => {
+					fs.mkdirSync(path.dirname(file), { recursive: true });
+					fs.writeFileSync(file, text);
+				},
+				said: `task ${id} ${before === null ? "added" : "changed"}: ${t.title}. ${when}.`,
+				card:
+					before === null
+						? {
+								q: `Add the task “${t.title}” to ${t.project}?`,
+								ctx: `${when}, as a Claude session of ${t.project}. Its prompt:\n\n${t.prompt}`,
+								allow: `The task is added. ${when}.`,
+								deny: "Nothing changes.",
+							}
+						: {
+								q: `Change the task “${t.title}”?`,
+								ctx: `Its file changes:\n\n${lineDiff(before, text).join("\n")}`,
+								allow: "The task changes from its next run.",
+								deny: "The task stays as it is.",
+							},
+			};
+		}
+		case "task.remove": {
+			const file = homePath(`tasks/${change.id}.md`);
+			const text = TASK_ID.test(change.id ?? "") ? textOf(file) : null;
+			if (text === null) throw new Error(`no task "${change.id}"`);
+			return {
+				project: parseTask(change.id, text, config).project,
+				widens: false,
+				config: false,
+				// Kept beside the others, so a prompt someone wrote is never lost.
+				apply: () => fs.renameSync(file, `${file}.removed`),
+				said: `task ${change.id} removed; its file stays as tasks/${change.id}.md.removed.`,
+			};
+		}
+		case "switch": {
+			const armed = change.armed === true;
+			if (isArmedNow() === armed)
+				return { project: null, same: `merges are already ${armed ? "armed" : "paused"}.` };
+			return {
+				project: null,
+				widens: armed,
+				config: false,
+				apply: (_, { by }) => write("automerge.json", { armed, at: new Date().toISOString(), by }),
+				said: armed ? "Merges armed" : "Merges paused",
+				card: {
+					q: "Arm automatic merges?",
+					ctx: "Armed, the server merges alone what the rules and every lock allow, in every live project.",
+					allow: "Merges are armed.",
+					deny: "Merges stay paused.",
+				},
+			};
+		}
+		case "limits": {
+			const next = { ...config.limits };
+			for (const k of ["maxWorkers", "maxRunMinutes"])
+				if (change[k] !== undefined) {
+					if (!Number.isInteger(change[k]) || change[k] < 1)
+						throw new Error(`${k} is a positive integer`);
+					next[k] = change[k];
+				}
+			const was = config.limits;
+			if (next.maxWorkers === was.maxWorkers && next.maxRunMinutes === was.maxRunMinutes)
+				return { project: null, same: "the limits are already so." };
+			return {
+				project: null,
+				widens: next.maxWorkers > was.maxWorkers || next.maxRunMinutes > was.maxRunMinutes,
+				apply: (c) => {
+					c.limits = next;
+				},
+				said: `limits: ${next.maxWorkers} workers at most, ${next.maxRunMinutes} minutes a run.`,
+				card: {
+					q: `Raise the limits to ${next.maxWorkers} workers and ${next.maxRunMinutes} minutes a run?`,
+					ctx: `They are ${was.maxWorkers} workers and ${was.maxRunMinutes} minutes now. More agents at once, or longer runs, spend more of your Claude usage.`,
+					allow: "The new limits apply to the next runs.",
+					deny: "The limits stay.",
+				},
+			};
+		}
+		case "owner": {
+			if (!LOGIN.test(change.login ?? "")) throw new Error(`${change.login} is not a GitHub login`);
+			if (config.owner.login === change.login)
+				return { project: null, same: `@${change.login} already owns the instance.` };
+			return {
+				project: null,
+				widens: true,
+				apply: (c) => {
+					c.owner.login = change.login;
+				},
+				said: `owner: @${change.login}. Every card goes to them.`,
+				card: {
+					q: `Make @${change.login} the owner of this instance?`,
+					ctx: `Every card goes to the owner, and the dashboard answers as them. It is @${config.owner.login} now.`,
+					allow: `@${change.login} owns the instance.`,
+					deny: "Nothing changes.",
+				},
+			};
+		}
 		default:
 			throw new Error(`unknown setting "${change.kind}"`);
 	}
@@ -245,8 +370,8 @@ export function changeSetting(change, { origin, by, confirmed = false }) {
 			});
 			return { state: "pending", id, text: plan.card.q };
 		}
-		plan.apply(config);
-		saveConfig(config);
+		plan.apply(config, { by });
+		if (plan.config !== false) saveConfig(config);
 		log({ ...base, state: "applied", text: plan.said, ...(plan.widens ? { notify: true } : {}) });
 		return { state: "applied", text: plan.said };
 	});
@@ -282,8 +407,8 @@ export function confirmRequest(id, { allow, by }) {
 			throw Object.assign(e, { status: 409 });
 		}
 		if (!plan.same) {
-			plan.apply(config);
-			saveConfig(config);
+			plan.apply(config, { by });
+			if (plan.config !== false) saveConfig(config);
 		}
 		const text = `Allowed by @${by}: ${plan.same ?? plan.said}`;
 		log({ ...base, state: "confirmed", text, notify: true });

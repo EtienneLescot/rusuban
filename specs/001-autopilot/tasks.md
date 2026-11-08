@@ -196,8 +196,9 @@ allowed in the dashboard it applies; from inside a run, both are refused.
   - Validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/settings/`. No "Recommended" on these cards.
 - [x] T121 [US9] Layer 1 (FR-095): `mcp__rusuban` and every owner's command in each run's deny rules; the owner's commands refuse inside a run
   - With #12, the commands that widen already go through the module: `project mode <id> live`, `project bypass <id> on`, `project add --to <live project>` and the new `permissions bypass`. In a terminal the owner types the target back; Claude's shell gets a card. The daemon no longer journals modes and the bypass itself: `settings.jsonl` carries every change with its origin.
-- [ ] T122 [US9] `rusuban mcp`: a stdio MCP server with the tools of `contracts/mcp.md`, refused inside a run, no card answers
-- [ ] T123 [P] [US9] MCP tests in `test/mcp.test.mjs`: each tool; widening waits, narrowing applies; refused inside a run
+- [x] T122 [US9] `rusuban mcp`: a stdio MCP server with the tools of `contracts/mcp.md`, refused inside a run, no card answers
+- [x] T123 [P] [US9] MCP tests in `test/mcp.test.mjs`: each tool; widening waits, narrowing applies; refused inside a run
+  - JSON-RPC on stdio with no dependency. Reading: `state`, `project_state`, `runs`, `tasks`, `journal`. Settings: projects, modes, the bypass, the host profile, the merge switch, limits, the owner, tasks; channels, machines and remote access come with their phases. The dashboard's switch now goes through the settings module too, so `automerge.json` has one writer again. `task add|remove` on the command line.
 - [ ] T124 [US9] `init` registers the MCP server (`claude mcp add --scope user`), with T073
 - [ ] T125 [US9] A `config.json` changed outside the settings module is flagged in the journal (the residual risk of `security.md` made visible)
 
