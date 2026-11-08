@@ -3,16 +3,29 @@
 // Start menu shortcut. macOS: a launchd agent and an app in ~/Applications. Linux: a systemd user unit
 // and a .desktop entry. File contents are pure functions and commands go through `exec`, so every OS
 // is tested on every OS.
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { dashboardUrl as baseUrl } from "./pings.mjs";
 
 const NAME = "rusuban"; // the task, the launchd label and the systemd unit
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
 
-export const dashboardUrl = (port) => `http://127.0.0.1:${port}/`;
+// The dashboard on this machine: what the shortcuts, `open` and `status` show.
+export const dashboardUrl = (port) => `${baseUrl({ port })}/`;
+
+// Opens a URL in the default browser, without waiting for it.
+export function openUrl(url, { platform = process.platform, start = spawn } = {}) {
+	const [cmd, args] =
+		platform === "win32"
+			? ["cmd", ["/c", "start", "", url]] // the empty title: start reads a first quoted word as one
+			: [platform === "darwin" ? "open" : "xdg-open", [url]];
+	start(cmd, args, { detached: true, stdio: "ignore", windowsHide: true })
+		.on("error", () => {})
+		.unref();
+}
 
 // ── File contents ─────────────────────────────────────────────────────────────────────────────
 const ENTITIES = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" };
@@ -180,10 +193,20 @@ const setup = ({
 	uid = process.getuid?.(),
 } = {}) => ({ platform, exec, env, uid, ...places(platform, home, env) });
 
-// Installs the service and the shortcut, or replaces an earlier install, and starts the daemon.
-export function installService({ port, command = [process.execPath, BIN, "start"], ...options }) {
+// Installs the service and the shortcut, or replaces an earlier install, and starts the daemon. The
+// daemon writes what it says to daemon.log in the instance home: a service has no console to read.
+export function installService({
+	port,
+	command = [process.execPath, BIN, "start", "--log"],
+	...options
+}) {
 	if (!Number.isInteger(port) || port < 1)
 		throw new Error("the shortcut needs the dashboard on a fixed port: set port in config.json");
+	// npx runs a package from a cache npm empties: a service pointing there would stop one day.
+	if (command.some((part) => /[/]_npx[/]/.test(part)))
+		throw new Error(
+			"rusuban runs from npx's cache, which npm empties: npm i -g rusuban, then again",
+		);
 	const { platform, exec, env, uid, service, shortcut } = setup(options);
 	const url = dashboardUrl(port);
 	// launchd and systemd start the daemon with a short PATH of their own: it gets this one, to find

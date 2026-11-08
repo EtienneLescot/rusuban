@@ -21,6 +21,12 @@ import {
 	todoOf,
 } from "../src/model.mjs";
 import { dashboardUrl, messageOf, sendPing } from "../src/pings.mjs";
+import {
+	installService,
+	openUrl,
+	dashboardUrl as serviceUrl,
+	uninstallService,
+} from "../src/service.mjs";
 import { changeSetting, MODE_SAYS, maskTarget, planOf } from "../src/settings.mjs";
 import { busyRun, listTasks, readTask, startTask, tasksState } from "../src/tasks.mjs";
 import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
@@ -29,10 +35,41 @@ const { version } = JSON.parse(
 	fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
 const out = (v) => console.log(JSON.stringify(v, null, 1));
+const minutes = (ms) => {
+	const m = Math.max(0, Math.round(ms / 60e3));
+	return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+};
+
+// The service's daemon has no console to read: what it says goes to a log file too, the previous one
+// kept as <file>.1 once past 5 MB at a start. A crash is written there before the process ends.
+// ponytail: rotated at start only; a daemon that runs for months grows its log until it restarts.
+function logTo(file) {
+	try {
+		if (fs.statSync(file).size > 5e6) fs.renameSync(file, `${file}.1`);
+	} catch {}
+	const log = fs.createWriteStream(file, { flags: "a" });
+	for (const stream of [process.stdout, process.stderr]) {
+		const write = stream.write.bind(stream);
+		stream.write = (chunk, ...rest) => {
+			log.write(chunk);
+			return write(chunk, ...rest);
+		};
+	}
+	process.on("uncaughtException", (e) => {
+		console.error(new Date().toISOString(), "crashed:", e?.stack ?? e);
+		log.end(() => process.exit(1));
+	});
+}
 
 const USAGE = `rusuban ${version}
 
-  start [--dry]                 runs the daemon and its dashboard in the foreground
+  start [--dry] [--log]         runs the daemon and its dashboard in the foreground; --log also
+                                writes what it says to daemon.log (what the service runs)
+  status                        the dashboard's URL, the daemon's uptime, projects, agents at work
+  open                          opens the dashboard
+  service install | service uninstall
+                                starts the daemon at logon and again when it stops, with a menu
+                                shortcut to the dashboard; or removes both
   mcp                           Rusuban's MCP server on stdio, for Claude (every setting, the state)
   project add <owner/repo> [--checkout <path>] [--to <project>]
                                 adds a repo, to a new project (in shadow mode) or to an existing one
@@ -433,8 +470,57 @@ const commands = {
 		await serveMcp();
 	},
 	async start(args) {
+		if (args.includes("--log")) logTo(homePath("daemon.log"));
 		const { startServer } = await import("../src/server.mjs");
 		await startServer({ dry: args.includes("--dry") || process.env.RUSUBAN_DRY === "1" });
+	},
+	async status() {
+		const config = loadConfig();
+		const url = dashboardUrl({ owner: config.owner, port: config.port });
+		const state = await fetch(`${url}/api/state`, { signal: AbortSignal.timeout(3000) })
+			.then((r) => (r.ok ? r.json() : null))
+			.catch(() => null);
+		const log = homePath("daemon.log");
+		if (!state) {
+			console.log(`rusuban is not answering on ${url}/: see ${log}`);
+			process.exitCode = 1;
+			return;
+		}
+		const { tailnetName } = await import("../src/server.mjs");
+		const tailnet = config.owner.tailscaleLogin ? await tailnetName() : null;
+		const ago = (at) => minutes(Date.now() - Date.parse(at));
+		const runs = listRuns().filter((r) => r.state === "running");
+		const projects = config.projects.map(
+			(p) => `${p.id} (${p.mode}${p.bypassApproval ? ", approval bypass on" : ""})`,
+		);
+		console.log(
+			[
+				`rusuban ${state.version}${state.dry ? " (dry)" : ""}, up ${ago(state.startedAt)}, on ${url}/`,
+				...(tailnet ? [`from your tailnet: https://${tailnet}/`] : []),
+				`merges ${state.armed ? "armed" : "paused"}; projects: ${projects.join(", ") || "none"}`,
+				`agents at work: ${runs.map((r) => `${r.title ?? r.kind} in ${r.project}, ${ago(r.startedAt)}`).join("; ") || "none"}`,
+				`log: ${log}`,
+			].join("\n"),
+		);
+	},
+	open() {
+		const config = loadConfig();
+		const url = serviceUrl(config.port);
+		openUrl(url);
+		console.log(url);
+	},
+	service([sub, ...rest]) {
+		if (rest.length || !["install", "uninstall"].includes(sub))
+			throw new Error("usage: service install | service uninstall");
+		if (sub === "uninstall") {
+			const r = uninstallService();
+			return console.log(`service removed: ${r.service}, and the shortcut ${r.shortcut}.`);
+		}
+		const config = loadConfig();
+		const r = installService({ port: config.port });
+		console.log(
+			`service installed: ${r.service}; the shortcut ${r.shortcut} opens ${serviceUrl(config.port)}`,
+		);
 	},
 	// Internal: the detached process that executes one run (src/agents.mjs).
 	async _run([id]) {

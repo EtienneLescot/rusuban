@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { setTimeout as sleep } from "node:timers/promises";
+import { fileURLToPath } from "node:url";
 import {
 	appleScript,
 	dashboardUrl,
 	desktopEntry,
 	installService,
 	launchdPlist,
+	openUrl,
 	systemdUnit,
 	taskXml,
 	uninstallService,
@@ -261,6 +265,89 @@ test("install refuses a dashboard without a fixed port, and an OS it does not kn
 	);
 	assert.deepEqual(calls, []);
 	assert.deepEqual(fs.readdirSync(home), []);
+});
+
+test("install refuses npx's cache, and the daemon it installs writes its log", () => {
+	const { calls, exec } = fake();
+	const home = tmp();
+	const npx = [
+		"/usr/bin/node",
+		"/home/a/.npm/_npx/1f2e/node_modules/rusuban/bin/rusuban.mjs",
+		"start",
+	];
+	assert.throws(
+		() => installService({ port: 8788, platform: "linux", exec, home, env: {}, command: npx }),
+		/npx's cache, which npm empties: npm i -g rusuban/,
+	);
+	assert.deepEqual(calls, []);
+	const { service } = installService({ port: 8788, platform: "linux", exec, home, env: {} });
+	assert.match(fs.readFileSync(service, "utf8"), /rusuban\.mjs" "start" "--log"\n/);
+});
+
+test("a service's daemon writes what it says to daemon.log, and status reads it from the daemon", async () => {
+	const home = tmp();
+	const port = await new Promise((resolve) => {
+		const s = net.createServer().listen(0, "127.0.0.1", () => {
+			const free = s.address().port;
+			s.close(() => resolve(free));
+		});
+	});
+	fs.writeFileSync(
+		path.join(home, "config.json"),
+		JSON.stringify({
+			version: 1,
+			owner: { login: "alice" },
+			port,
+			permissions: { mode: "allowlist" },
+			limits: { maxWorkers: 1, maxRunMinutes: 10 },
+			projects: [{ id: "demo", mode: "shadow", repos: [{ slug: "o/r" }] }],
+		}),
+	);
+	const env = {
+		...process.env,
+		RUSUBAN_HOME: home,
+		RUSUBAN_DRY: "1",
+		RUSUBAN_CLAUDE_PROJECTS: tmp(),
+	};
+	const bin = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
+	const cli = (...args) => spawnSync(process.execPath, [bin, ...args], { env, encoding: "utf8" });
+	const down = cli("status");
+	assert.equal(down.status, 1);
+	assert.equal(
+		down.stdout,
+		`rusuban is not answering on http://127.0.0.1:${port}/: see ${path.join(home, "daemon.log")}\n`,
+	);
+	const daemon = spawn(process.execPath, [bin, "start", "--log"], { env, stdio: "ignore" });
+	try {
+		const log = path.join(home, "daemon.log");
+		const banner = `on http://127.0.0.1:${port}/ (dry`;
+		for (let i = 0; i < 150 && !fs.readFileSync(log, { flag: "a+" }).includes(banner); i++)
+			await sleep(100);
+		assert.ok(fs.readFileSync(log, "utf8").includes(banner), "the banner is in the log");
+		const up = cli("status");
+		assert.equal(up.status, 0, up.stderr);
+		assert.match(
+			up.stdout,
+			/^rusuban \S+ \(dry\), up 0 min, on http:\/\/127\.0\.0\.1:\d+\/\nmerges paused; projects: demo \(shadow\)\nagents at work: none\nlog: /,
+		);
+	} finally {
+		daemon.kill();
+	}
+});
+
+test("open: the default browser, never waited for", () => {
+	const started = [];
+	const start = (cmd, args, options) => {
+		started.push([cmd, ...args].join(" "));
+		assert.deepEqual([options.detached, options.stdio], [true, "ignore"]);
+		return { on: () => ({ unref: () => {} }) };
+	};
+	for (const platform of ["win32", "darwin", "linux"]) openUrl(DASHBOARD, { platform, start });
+	assert.deepEqual(started, [
+		`cmd /c start  ${DASHBOARD}`,
+		`open ${DASHBOARD}`,
+		`xdg-open ${DASHBOARD}`,
+	]);
 });
 
 // Task Scheduler's own parser, in memory: the definition is read back and never registered.

@@ -7,8 +7,8 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | Command | Effect |
 |---|---|
 | `init` | Checks `gh` and `claude` logins, takes the owner login from `gh`, asks the host permission mode and whether to arm automatic merges (no default for either), adds a first project, installs the service, prints and opens the URL. |
-| `start` | Runs the daemon in the foreground (what the service calls). |
-| `status` | URL (local and tailnet), uptime, projects, running agents. |
+| `start [--dry] [--log]` | Runs the daemon in the foreground. The service calls it with `--log`: what the daemon says, and a crash, also go to `daemon.log` in the instance home. |
+| `status` | URL (local and tailnet), uptime, the switch, projects, running agents, the log's path; exit 1 when the daemon does not answer. |
 | `open` | Opens the dashboard. |
 | `project add <owner/repo> [--checkout <path>] [--to <project>]` | Adds a repo, to a new project (in `shadow` mode, its id from the repo's name) or to an existing one. A repo belongs to one project. |
 | `project list` / `project remove <id>` | `remove` refuses while a run of the project waits or works, deletes no file and says where they stay. |
@@ -22,7 +22,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `task add <file.md>` / `task remove <id>` | Writes a task into the instance (it widens: confirmed, FR-092), or sets one aside, its file kept as `<id>.md.removed`. |
 | `mcp` | Rusuban's MCP server on stdio (`contracts/mcp.md`). |
 | `remote enable` / `remote disable` | Runs `tailscale serve` for the dashboard, or stops it. |
-| `service install` / `service uninstall` | Autostart with restart on failure (Task Scheduler, launchd, systemd user). |
+| `service install` / `service uninstall` | Autostart with restart on failure (Task Scheduler, launchd, systemd user), and a menu shortcut to the dashboard. Refused from npx's cache, which npm empties: `npm i -g rusuban` first. |
 
 The `project` commands write `config.json`; a running daemon reads it again within seconds, without a
 restart. Each command asks that daemon whether it applied the change and says so. The owner's commands
