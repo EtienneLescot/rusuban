@@ -304,7 +304,8 @@ frees the Mac at expiry.
   - Each machine with how to reach it, its workspace, its tags, its desktop owner and its last probe, from `leases/probes.json`.
 - [ ] T109 [US5] `machine list|probe|doctor` in `bin/rusuban.mjs`; setup scripts per OS (OpenSSH server, `rusuban` account, the host's key) in `docs/machines/`
   - The commands are done. The setup scripts in `docs/machines/` are left.
-- [ ] T110 [US5] Desktop guard: a person's desktop alias is denied to every run that does not hold its lease (FR-063)
+- [x] T110 [US5] Desktop guard: a person's desktop alias is denied to every run that does not hold its lease (FR-063)
+  - A PreToolUse hook rather than deny rules, which are fixed when a run starts (research R3). `rusuban guard` refuses a Bash command naming the alias, as a host, a user@host or a tailnet name, unless the run holds the lease. A lease it cannot read refuses too, and so does a guard that cannot judge. A desktop added during a run guards the runs started after it.
 - [x] T111 [US5] Mockup of the machines view, validated by Etienne before T071
   - Validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/machines/`. Machines are a section of the Agents view; the button is "Release".
 - [ ] T112 [US5] Live proof of M4: two runs need macOS on the real Mac; the second waits; killing the first frees the Mac at expiry

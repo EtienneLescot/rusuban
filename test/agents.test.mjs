@@ -469,3 +469,18 @@ test("the context lists the machines as the daemon last probed them, a desktop's
 		/- Machines: none registered\./,
 	);
 });
+
+test("with a person's desktop registered, every Bash command of a run passes the desktop guard first", () => {
+	const settingsOf = (args) => {
+		const at = args.indexOf("--settings");
+		return at < 0 ? null : JSON.parse(args[at + 1]);
+	};
+	for (const mode of ["bypass", "allowlist"]) {
+		assert.equal(settingsOf(permissionArgs({ mode }, { home: HOME })), null, mode);
+		assert.deepEqual(settingsOf(permissionArgs({ mode }, { home: HOME, guard: true })), {
+			hooks: {
+				PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "rusuban guard" }] }],
+			},
+		});
+	}
+});

@@ -17,6 +17,7 @@ import {
 	checkMachine,
 	detectOs,
 	enrollMachine,
+	guardCommand,
 	probeMachines,
 	releaseLease,
 	validateMachines,
@@ -613,6 +614,23 @@ const commands = {
 			`leased ${m.name} until ${new Date(r.lease.expires).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}: ssh -l ${m.agentUser} ${m.ssh ?? "(this host)"}`,
 		);
 		if (r.worktree) console.log(`worktree: ${r.worktree}`);
+	},
+	// Internal (T110): Claude Code's PreToolUse hook on a run's Bash commands. Exit 2 refuses the
+	// command and tells Claude why. A guard that cannot judge refuses too.
+	async guard() {
+		let input = "";
+		for await (const chunk of process.stdin) input += chunk;
+		let why;
+		try {
+			const o = JSON.parse(input);
+			if (o.tool_name !== "Bash") return;
+			why = await guardCommand(loadConfig(), o.tool_input?.command, process.env.RUSUBAN_RUN);
+		} catch (e) {
+			why = `the desktop guard could not judge this command: ${e.message}`;
+		}
+		if (!why) return;
+		console.error(why);
+		process.exitCode = 2;
 	},
 	// The run's own lease; from the owner's terminal (no run), whoever holds the machine.
 	async release([name, ...rest]) {

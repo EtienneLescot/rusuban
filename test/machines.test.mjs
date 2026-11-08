@@ -14,6 +14,7 @@ import {
 	desktopAsks,
 	detectOs,
 	enrollMachine,
+	guardCommand,
 	probeMachines,
 	pruneAsks,
 	releaseLease,
@@ -714,4 +715,38 @@ test("the daemon tends, then probes; the page gets each machine, Release ends a 
 	} finally {
 		await srv.close();
 	}
+});
+
+test("the desktop guard: its alias only for the run that holds its lease; the lease itself always", async () => {
+	const f = fleet("desk", "mac");
+	const c = config(mac("mac"), { name: "desk", os: "windows", ssh: "desk", owner: "alice" });
+	const guard = (command, run = "worker-1") => guardCommand(c, command, run, { exec: f.exec });
+	for (const command of ["ls", "ssh mac uname", "cat desktop.txt", "echo deskside"])
+		assert.equal(await guard(command), null, command);
+	for (const command of [
+		"rusuban lease desk --reason measure",
+		"rusuban lease desk --wait 20m --reason measure > lease.log 2>&1 &",
+		"rusuban release desk",
+	])
+		assert.equal(await guard(command), null, command);
+	const refused = /desk is alice's desktop: lease it first/;
+	for (const command of [
+		"ssh desk uname",
+		"ssh -l rusuban desk",
+		"scp out.mp4 rusuban@desk:/tmp",
+		"git push desk:repo HEAD",
+		"ssh DESK.tail1234.ts.net",
+		"rusuban lease desk --reason x; ssh desk",
+		"rusuban lease desk --reason x && ssh desk",
+	])
+		assert.match(await guard(command), refused, command);
+	f.disks.desk.lease = JSON.stringify({ run: "worker-1", machine: "desk" });
+	assert.equal(await guard("ssh desk uname"), null);
+	assert.match(await guard("ssh desk uname", "worker-2"), refused);
+	assert.match(await guard("ssh desk", null), /only a run that holds its lease reaches it/);
+	f.disks.desk.offline = true;
+	assert.match(
+		await guard("ssh desk uname"),
+		/its lease cannot be read: ssh: connect to host desk/,
+	);
 });
