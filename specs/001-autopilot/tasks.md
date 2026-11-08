@@ -263,8 +263,10 @@ frees the Mac at expiry.
 dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 
 - [ ] T073 [US1] `init` in `bin/rusuban.mjs`: checks the `gh` and `claude` logins, owner login from `gh`, asks the host permission mode and whether to arm automatic merges (no default for either), writes `limits` explicitly, adds a first project, installs the service, prints and opens the URL
-- [ ] T074 [P] [US1] Service installers in `src/service.mjs`: Task Scheduler at logon with restart on failure (Windows), launchd agent with `KeepAlive` (macOS), `systemd --user` unit with `Restart=on-failure` (Linux); `service install|uninstall`
+- [x] T074 [P] [US1] Service installers in `src/service.mjs`: Task Scheduler at logon with restart on failure (Windows), launchd agent with `KeepAlive` (macOS), `systemd --user` unit with `Restart=on-failure` (Linux); `service install|uninstall`
+  - `installService` and `uninstallService`; the `service` command that calls them comes with T075. On Windows a trigger every minute, ignored while the daemon runs, does the restarting: Task Scheduler's restart on failure only covers a task that fails to start.
 - [ ] T075 [P] [US1] `start`, `open`, `status`, and a desktop or menu shortcut per OS, in `bin/rusuban.mjs` and `src/service.mjs`
+  - Shortcut done in `src/service.mjs`, installed and removed with the service: a Start menu `.url`, `~/Applications/Rusuban.app` from `osacompile`, a `.desktop` entry. Left: the commands in `bin/rusuban.mjs`.
 - [ ] T076 [US1] `remote enable|disable`: `tailscale serve --bg --https=443 http://127.0.0.1:<port>`; `status` shows the tailnet URL; stores `owner.tailscaleLogin` from `tailscale status --json`
 - [ ] T077 [US1] Observe-only page in `web/app.js`: without rules, items and conversations show, with how to add rules and links to `examples/rules/`
 - [ ] T078 [US1] Timed clean-machine install on the three OSes (SC-001)
