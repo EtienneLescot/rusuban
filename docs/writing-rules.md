@@ -125,3 +125,4 @@ journaled and flagged too (see [locks](locks.md#validation)).
 |---|---|
 | [`cautious`](../examples/rules/cautious/) | Judge, test and prepare. Every item comes to the owner on a card, and every path is locked: only the owner's merge order merges. |
 | [`solo-maintainer`](../examples/rules/solo-maintainer/) | Fix bugs, and merge fixes, docs, tests and maintenance within path and size locks. Features, API changes and dependencies come to the owner. |
+| [`openscreen`](../examples/rules/openscreen/) | A real project's rules: fix bugs and merge fixes, translations, docs, tests and maintenance from any author; capture, preview and export changes need a pixel and timing proof; features, interface and architecture come to the owner; a third party is waited for two days at most. |
