@@ -50,9 +50,14 @@ const HOME = WIN ? "C:\\Users\\a\\.rusuban" : "/home/a/.rusuban";
 const POSIX_HOME = WIN ? "//c/Users/a/.rusuban" : "//home/a/.rusuban";
 
 test("the built-in deny rules come with both profiles, and the owner's deny rules only add", () => {
-	const context = { home: HOME, defaultBranches: ["main", "main", "trunk"] };
+	const context = { home: HOME, defaultBranches: ["main", "main", "trunk"], port: 8790 };
 	const builtIn = builtInDeny(context);
 	for (const rule of [
+		"Bash(*:8790*)",
+		"Bash(*.ts.net*)",
+		"Bash(*.rusuban*config.json*)",
+		"Bash(*automerge.json*)",
+		"Bash(*answers.jsonl*)",
 		"Bash(gh pr merge*)",
 		"Bash(gh api*merge*)",
 		"Bash(git push* main)",
