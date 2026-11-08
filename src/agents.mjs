@@ -147,6 +147,8 @@ const PARTS = {
 	act: ["act", "formats"],
 	task: ["task", "formats"],
 	worker: ["worker"],
+	// A reply to a conversation is not assembled: the person's text goes as is to the resumed session.
+	reply: [],
 };
 const promptOf = (name) => fs.readFileSync(new URL(`${name}.md`, PROMPTS), "utf8").trim();
 export const coordinatorLock = (project) => `${project}.coordinator`;
@@ -403,6 +405,8 @@ const queueName = (lock) => `runs/locks/${lock}.queue.json`;
 const LIMIT = "runs/limit.json";
 const limitedUntil = () => Date.parse(read(LIMIT, {}).until ?? 0) || 0;
 const BACKOFF_MIN = [5, 15, 60];
+// Thrown past the prompt assembly by a reply, whose prompt is the person's own text.
+const REPLY = Symbol("reply");
 
 export const newRunId = (kind) =>
 	`${kind}-${new Date().toISOString().replace(/\D/g, "").slice(0, 14)}-${crypto.randomBytes(2).toString("hex")}`;
@@ -472,6 +476,8 @@ export function requestRun({
 	attempt = 1,
 	retryOf = null,
 	task = null,
+	resume = null,
+	fork = false,
 }) {
 	if (!PARTS[kind]) throw new Error(`a run is ${Object.keys(PARTS).join(", ")}`);
 	if (![project, lock].every((s) => SAFE.test(s ?? "")))
@@ -495,6 +501,7 @@ export function requestRun({
 		attempt,
 		retryOf,
 		task,
+		...(resume ? { resume, forkOf: fork ? resume : null } : {}),
 		state: "queued",
 		createdAt: new Date().toISOString(),
 		startedAt: null,
@@ -598,6 +605,8 @@ export function kickQueues(now = Date.now()) {
 			attempt: (r.attempt ?? 1) + 1,
 			retryOf: r.id,
 			task: r.task ?? null,
+			resume: r.resume ?? null,
+			fork: !!r.forkOf,
 		});
 		write(statusName(r.id), { ...r, retriedBy: again.id });
 	}
@@ -698,6 +707,11 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			}
 			status.cwd ??= scratchOf(s.project);
 			fs.mkdirSync(status.cwd, { recursive: true });
+			if (s.kind === "reply") {
+				prompt = fs.readFileSync(homePath(`runs/${id}/mission.md`), "utf8");
+				fs.writeFileSync(homePath(`runs/${id}/prompt.md`), prompt);
+				throw REPLY;
+			}
 			if (s.kind === "act") pending = pendingOf(s.project);
 			// A run asked for while another worked may find its work done: it ends without a session.
 			const dir = `projects/${s.project}`;
@@ -728,7 +742,8 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			});
 			fs.writeFileSync(homePath(`runs/${id}/prompt.md`), prompt);
 		} catch (e) {
-			return end({ state: "failed", exitCode: -1, summary: `Could not start: ${firstLine(e)}` });
+			if (e !== REPLY)
+				return end({ state: "failed", exitCode: -1, summary: `Could not start: ${firstLine(e)}` });
 		}
 		write(statusName(id), status);
 		let flushTimer = null;
@@ -740,7 +755,10 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			prompt,
 			cwd: status.cwd,
 			logFile: homePath(`runs/${id}/${status.log}`),
-			args,
+			// A reply resumes its session, in place, or as a fork that leaves the original as it was.
+			args: s.resume
+				? [...args, "--resume", s.resume, ...(s.forkOf ? ["--fork-session"] : [])]
+				: args,
 			command,
 			maxMinutes: config.limits?.maxRunMinutes,
 			env: runEnv(id, s.project),

@@ -3,8 +3,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
-import { validateConfig, write } from "../src/home.mjs";
-import { listConversations, readPage, scanHub, slugOf } from "../src/hub.mjs";
+import { read, validateConfig, write } from "../src/home.mjs";
+import {
+	hubState,
+	listConversations,
+	readPage,
+	replyTo,
+	scanHub,
+	slugOf,
+	terminalCommand,
+} from "../src/hub.mjs";
 
 const FIXTURES = new URL("./fixtures/transcripts/", import.meta.url);
 const RUN = "worker-20261104-0915-ab12";
@@ -358,3 +366,118 @@ test(
 		assert.deepEqual(paged, texts);
 	},
 );
+
+test("a title: custom, else agent name, else the one Claude Code wrote, which cites nothing", async () => {
+	live([], [issue(7)]);
+	const checkout = path.join(work, "widgets");
+	const line = (o) => `${JSON.stringify(o)}\n`;
+	place(
+		"ai",
+		checkout,
+		said("ai", checkout, "Look at the save path") +
+			line({ type: "ai-title", aiTitle: "Save path crash on #7", sessionId: "ai" }) +
+			said("ai", checkout, "And the next one"),
+	);
+	place(
+		"named",
+		checkout,
+		said("named", checkout, "Hello") +
+			line({ type: "agent-name", agentName: "Saver" }) +
+			line({ type: "ai-title", aiTitle: "Later title", sessionId: "named" }),
+	);
+	const { sessions } = await scanHub({ config, root });
+	assert.equal(sessions.ai.title, "Save path crash on #7");
+	assert.deepEqual(sessions.ai.items, []);
+	assert.equal(sessions.named.title, "Saver");
+});
+
+test("the view: origins as the page names them, a run's title over its prompt, a fork under its session", async () => {
+	placeFixtures();
+	const checkout = path.join(work, "widgets");
+	write(`runs/${RUN}/status.json`, {
+		...read(`runs/${RUN}/status.json`),
+		title: "Fix the keyframes",
+	});
+	const REPLY = "reply-20261105-1000-cd34";
+	write(`runs/${REPLY}/status.json`, {
+		id: REPLY,
+		kind: "reply",
+		project: "widgets",
+		items: ["acme/widgets#1480"],
+		session: "fork",
+		cwd: checkout,
+		forkOf: "desktop",
+		title: "Keyframes",
+		state: "done",
+		createdAt: "2026-11-05T10:00:00.000Z",
+	});
+	place("fork", checkout, said("fork", checkout, "Also check the easing"));
+	const index = await scanHub({ config, root });
+	const state = hubState(index, config);
+	const by = Object.fromEntries(state.conversations.map((c) => [c.id, c]));
+	assert.equal(by["sdk-cli"].title, "Fix the keyframes");
+	assert.equal(by["sdk-cli"].origin, "rusuban");
+	assert.equal(by["sdk-cli"].runKind, "worker");
+	assert.equal(by.desktop.origin, "desktop");
+	assert.equal(by.cli.origin, "terminal");
+	assert.equal(by.fork.forkOf, "desktop");
+	assert.equal(by.fork.title, "Keyframes");
+	assert.deepEqual(state.items["acme/widgets#1480"], { type: "pr", title: undefined });
+	assert.equal(state.items["acme/widgets#1475"].type, "issue");
+	assert.equal(state.indexedAt, index.scannedAt);
+	const terminal = hubState(index, config, { origin: "terminal" }).conversations;
+	assert.deepEqual(
+		terminal.map((c) => c.id),
+		["cli"],
+	);
+});
+
+test("an answer resumes in place a session whose Rusuban run has ended, and forks any other", async () => {
+	placeFixtures();
+	const index = await scanHub({ config, root });
+	const asked = [];
+	const request = (r) => {
+		asked.push(r);
+		return { id: `reply-${asked.length}` };
+	};
+	const s = index.sessions["sdk-cli"];
+	assert.deepEqual(replyTo(index, "sdk-cli", "Go on", request), {
+		run: "reply-1",
+		forked: false,
+		title: s.title,
+		project: "widgets",
+	});
+	assert.deepEqual(asked[0], {
+		kind: "reply",
+		project: "widgets",
+		mission: "Go on",
+		items: s.items,
+		title: s.title,
+		cwd: s.cwd,
+		resume: "sdk-cli",
+		fork: false,
+		lock: "widgets.reply.sdk-cli",
+		trigger: "button",
+	});
+	assert.equal(replyTo(index, "desktop", "Also this", request).forked, true);
+	const running = { state: "running", pid: process.pid }; // a live process
+	write(`runs/${RUN}/status.json`, { ...read(`runs/${RUN}/status.json`), ...running });
+	assert.equal(replyTo(index, "sdk-cli", "And this", request).forked, true); // its run is at work
+	assert.throws(() => replyTo(index, "desktop", "  ", request), { status: 400 });
+	assert.throws(() => replyTo(index, "nope", "Hi", request), { status: 404 });
+	assert.equal(asked.length, 3);
+});
+
+test("a terminal opens on the session's folder, a quote in its path kept", () => {
+	const linux = terminalCommand({ id: "abc", cwd: "/w/it's" }, "linux");
+	assert.deepEqual(linux[1], [
+		"-e",
+		"sh",
+		"-c",
+		"cd '/w/it'\\''s' && claude --resume abc; exec sh",
+	]);
+	assert.deepEqual(terminalCommand({ id: "abc", cwd: "C:\\w" }, "win32"), [
+		"wt.exe",
+		["-d", "C:\\w", "cmd", "/k", "claude --resume abc"],
+	]);
+});

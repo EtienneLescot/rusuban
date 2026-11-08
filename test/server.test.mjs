@@ -173,3 +173,22 @@ test("forged writes are refused: no header, foreign origin, foreign host, a stra
 	assert.equal(big.status, 413);
 	assert.equal(read("automerge.json").armed, true);
 });
+
+test("conversations: the list with the index's age, an unknown one is 404, a terminal opens only here", async () => {
+	const list = JSON.parse((await call("GET", "/api/conversations?project=demo")).text);
+	assert.deepEqual(list, { indexedAt: null, items: {}, conversations: [], error: null });
+	assert.equal((await call("GET", "/api/conversations/nope")).status, 404);
+	const terminal = (headers) =>
+		call("POST", "/api/conversations/nope/terminal", { headers, body: "{}" });
+	const fromTailnet = await terminal({
+		...ours(),
+		host: TAILNET,
+		origin: `https://${TAILNET}`,
+		"tailscale-user-login": "alice@example.com",
+	});
+	assert.deepEqual(
+		[fromTailnet.status, JSON.parse(fromTailnet.text).error],
+		[403, "a terminal opens only from this machine"],
+	);
+	assert.equal((await terminal(ours())).status, 404);
+});
