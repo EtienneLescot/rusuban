@@ -317,7 +317,9 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   GitHub write is denied, no worker is started and nothing is merged (used for the switch from the
   OpenScreen pilot).
 - **FR-029**: A project MAY have an approval bypass: a setting of the instance's config, off by default,
-  that only the owner turns on (confirmed outside Claude, FR-092), never a repo, a PR, a rule or an agent. It applies only to a
+  that only the owner turns on (confirmed outside Claude, FR-092), never a repo, a PR, a rule or an agent
+  through the settings (under the bypass host profile, an agent's shell remains a residual risk,
+  FR-095). It applies only to a
   merge the server would make anyway (a live project, the switch armed, FR-021 and FR-044 met): the
   server then merges with GitHub's admin bypass, the head pinned. It skips the approval and nothing
   else: the server first reads the base branch's rules from GitHub and merges only if every check they
@@ -405,7 +407,9 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   without one, the MCP, or the owner's confirmation in the dashboard.
 - **FR-095**: Rusuban's runs MUST NOT reach the settings: the MCP server is in every run's disallowed
   tools, the owner's commands in its deny rules, and both refuse to run inside a run. The security model
-  (`security.md`) states what this stops and what it does not.
+  (`security.md`) states what this stops and what it does not: under the bypass host profile an agent
+  has the user's shell, and cheap deny rules on the dashboard's port and the owner's files slow it
+  without stopping it. That residual risk covers the confirmation card of FR-092 too.
 
 **Team (P3, after v1)**
 

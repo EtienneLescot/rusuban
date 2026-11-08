@@ -29,8 +29,9 @@ profile. Your own `permissions.deny` adds to them; nothing removes them.
 |---|---|
 | Merging | `gh pr merge`; any `gh api` call whose text holds `merge` or `Merge` (the REST merge endpoints, GraphQL merges, auto-merge). |
 | Pushing to a default branch | `git push` naming a repo's default branch (`main`, `:main`, `+main`, `refs/heads/main`); `git push --all` and `--mirror`; `gh api` on `git/refs/heads/<default branch>`. |
-| The owner's commands | `rusuban project`, `rusuban task`, `rusuban start`. The CLI also refuses them inside a run. |
+| The owner's commands | `rusuban project`, `task`, `start`, `permissions`, `machine`, `channel`, `remote`, `service`, `init`, `mcp`, and Rusuban's MCP server (`mcp__rusuban`). The CLI and the MCP server also refuse to run inside a run. |
 | The instance's state | Edits to `config.json`, `automerge.json`, `projects/`, `runs/`, `hub/`, `leases/`, `tasks/` and `bin/` in the instance home. Agents keep their own folders there: `scratch/`, `worktrees/`, `repos/`. |
+| The dashboard and your files, from the shell | Any shell command that names the dashboard's port (`:<port>`) or a tailnet address (`.ts.net`), `config.json` next to the home's name, `automerge.json`, `answers.jsonl` or `pending.json`. A speed bump, not a wall: see the residual risks. |
 | GitHub writes, in a shadow project | Every `gh` write (comments, reviews, closes, edits, labels, releases, workflows, secrets); `gh api` with a method, a field or a body; every `git push`. |
 
 A denied call is refused, and the run's log says so.
@@ -119,11 +120,16 @@ These go to the journal and to your inbox's "Flagged for you", for 7 days:
   an interpreter or a raw HTTP call is not matched. The server flags a merge or a push it did not make,
   after the fact; it does not prevent it.
 - **An agent's shell reaches what the deny rules do not cover.** The state's deny rules bind Claude
-  Code's file tools, not shell commands, and the dashboard takes any request from this machine as
-  yours: its identity check stops other machines and web pages, not local processes. Under `bypass`, a
-  shell command can write `config.json`, to turn a project live or its approval bypass on, or call the
-  dashboard, to answer a card (a merge order included) or arm the switch. The daemon journals these as
-  yours; the bypass turned on is flagged.
+  Code's file tools; against the shell there are only the cheap rules above, which match text. The
+  dashboard takes any request from this machine as yours: its identity check stops other machines and
+  web pages, not local processes, which can send any `Origin` and `x-rusuban`. Under `bypass`, a shell
+  command that gets past the rules can write `config.json`, to turn a project live or its approval
+  bypass on, or call the dashboard, to answer a card (a merge order included), allow a setting's card
+  (one asked through the MCP included) or arm the switch. The daemon journals these as yours; the
+  bypass turned on is flagged.
+- **The real barrier comes after v1**: agents under an OS account of their own, or in Claude Code's
+  sandbox where it exists, out of reach of your files and the dashboard; and a GitHub token reserved
+  for agents, without admin rights. Until then, a repo you do not trust gets the `allowlist` profile.
 - **A worker runs the code it works on**, in a worktree, under your account: the repo's tests and
   scripts, and a contributor's when it rebases, finishes or measures their PR. The rules decide which
   PRs agents work on; the host profile decides what they may run.

@@ -86,10 +86,21 @@ export const OWNER_COMMANDS = [
 	"mcp",
 ];
 
+// The files of the owner's settings and answers, denied to the shell too: whoever writes them answers
+// a card or arms the switch. These names are Rusuban's own; `config.json` is denied only next to the
+// home's name, being a common file name in the repos workers change.
+const SHELL_STATE = ["automerge.json", "answers.jsonl", "pending.json"];
+
 // ponytail: deny rules match command text; an agent that hides a merge or a push behind a variable
-// or another tool gets through. The server flags merges and pushes it did not make (research R3); an
-// agent-only token without admin rights closes the gap later.
-export function builtInDeny({ home = homeDir(), defaultBranches = [], shadow = false } = {}) {
+// or another tool gets through, and so does one that reaches the dashboard or the owner's files by a
+// spelling the rules do not name. The server flags merges and pushes it did not make (research R3);
+// an agent-only token, and agents under their own OS account or a sandbox, close the gap after v1.
+export function builtInDeny({
+	home = homeDir(),
+	defaultBranches = [],
+	shadow = false,
+	port = null,
+} = {}) {
 	const rules = [
 		"Bash(gh pr merge*)",
 		"Bash(gh api*merge*)", // REST /merge and /merges, GraphQL mergePullRequest
@@ -101,6 +112,12 @@ export function builtInDeny({ home = homeDir(), defaultBranches = [], shadow = f
 		...OWNER_COMMANDS.map((c) => `Bash(rusuban ${c}*)`),
 		"mcp__rusuban",
 		...STATE.map((name) => editRule(path.join(home, name), !name.endsWith(".json"))),
+		// The shell reaches neither the dashboard's API, on this machine or through the tailnet, nor
+		// the owner's files: a speed bump under the bypass profile, not a barrier (docs/security.md).
+		...(port ? [`Bash(*:${port}*)`] : []),
+		"Bash(*.ts.net*)",
+		`Bash(*${path.basename(home)}*config.json*)`,
+		...SHELL_STATE.map((name) => `Bash(*${name}*)`),
 	];
 	for (const b of new Set(defaultBranches.filter(Boolean)))
 		rules.push(
@@ -658,6 +675,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			home: homeDir(),
 			defaultBranches: Object.values(live.repos ?? {}).map((r) => r.defaultBranch),
 			shadow: mode !== "live", // a project no longer configured gets the shadow rules too
+			port: config.port,
 		});
 		if (!takeLock(s.lock, id)) {
 			enqueue(s.lock, id);
