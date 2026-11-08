@@ -57,8 +57,8 @@ after it checks the branch's other rules.
 
 ### How do I stop everything?
 
-- **The switch** in the dashboard's header pauses the server's merges in every project. A merge order
-  you give on a card still runs.
+- **The switch** in the dashboard's header pauses the server's merges in every project, the merge
+  orders you give on cards included: they wait until it is armed again.
 - **The Agents view** stops a run.
 - **`rusuban project mode <id> shadow`** stops the project's merges and denies every GitHub write to
   its next runs.

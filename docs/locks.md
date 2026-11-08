@@ -56,13 +56,14 @@ see.
 A PR's card may offer an option with `"merge": true`. When you pick it, the server merges the PR on
 the head the card was written on, once:
 
+- merges are armed: a paused switch holds the order until it is armed again;
 - CI is green on that head, with the `requiredChecks` and `ignoredChecks` of `locks.json`;
 - no review thread is open;
 - the PR is mergeable, with no conflict;
 - the head has not moved since the card.
 
 Your order lifts the rest, for that head only: the Reviews, Judgment, Locks and Evidence gates, the
-`.rusuban/` lock included. An order is carried out while merges are paused, never in shadow mode.
+`.rusuban/` lock included. An order is never carried out in shadow mode.
 
 ### The approval bypass
 

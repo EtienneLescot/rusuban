@@ -287,7 +287,8 @@ test("off, the server never merges with --admin; on, it does only what it merges
 	write("automerge.json", { armed: true });
 	await runCycle(ctxOf(), project({ mode: "shadow" }), liveOf([pr(2)]), rulesOf(), deps);
 	assert.deepEqual(merged, []);
-	// A person's merge order is carried out while paused, but never through the bypass.
+	// A person's merge order waits while paused too; armed again, it is a merge the server makes
+	// anyway, so it goes through the bypass, the branch's rules met.
 	const order = {
 		id: "o/r#2@1",
 		head: "sha2",
@@ -307,7 +308,10 @@ test("off, the server never merges with --admin; on, it does only what it merges
 	});
 	write("automerge.json", { armed: false });
 	await runCycle(ctxOf(), project(), liveOf([pr(2)]), rulesOf(), deps);
-	assert.deepEqual(merged, [{ slug: REPO, n: 2, method: "rebase", head: "sha2", admin: false }]);
+	assert.deepEqual(merged, [], "paused: the order waits");
+	write("automerge.json", { armed: true });
+	await runCycle(ctxOf(), project(), liveOf([pr(2)]), rulesOf(), deps);
+	assert.deepEqual(merged, [{ slug: REPO, n: 2, method: "rebase", head: "sha2", admin: true }]);
 });
 
 test("a required check missing or red stops the bypass, said once per head; ignored checks count", async () => {

@@ -365,9 +365,9 @@ async function bypassStopsOf(pr, method, deps) {
 	}
 }
 
-// The server's merge (T030, T093), one per cycle and never in a shadow project. A person's merge
-// order comes first; then a PR judged `auto` whose every gate passes, the switch read again just
-// before. A head GitHub refused is not tried again (T116), the journal being the record: only an order
+// The server's merge (T030, T093), one per cycle, never in a shadow project and never while the
+// switch is paused, read again just before. A person's merge order comes first; then a PR judged
+// `auto` whose every gate passes. A head GitHub refused is not tried again (T116), the journal being the record: only an order
 // given after the refusal, or the bypass turned on since, tries it once more.
 async function mergeOne(ctx, p, { live, judgment, answers, rules }, deps) {
 	if (p.mode !== "live") return;
@@ -377,7 +377,7 @@ async function mergeOne(ctx, p, { live, judgment, answers, rules }, deps) {
 	const armed = isArmed();
 	const admin = p.bypassApproval === true && armed;
 	const refusals = (pr) => refused.get(`${keyOf(pr)}@${pr.head}`) ?? [];
-	const order = mergeOrdersOf({ live, judgment, answers, rules }).find(
+	const order = mergeOrdersOf({ live, judgment, answers, rules, armed }).find(
 		(o) => o.eligible && !refusals(o.pr).some((r) => Date.parse(r.at) >= Date.parse(o.at)),
 	);
 	let pick = order && { pr: order.pr, gates: order.gates, card: order.card, by: order.by };

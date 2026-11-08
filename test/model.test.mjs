@@ -473,6 +473,7 @@ test("a merge order lifts the project's locks and the judgment for its head, nev
 			judgment: j,
 			answers: a,
 			rules: { [REPO]: RULES },
+			armed: true,
 		});
 	// A locked path and a judgment that said no: lifted by the person's order.
 	const locked = pr(1, { files: [file(".github/workflows/ci.yml")] });
@@ -487,6 +488,17 @@ test("a merge order lifts the project's locks and the judgment for its head, nev
 	assert.deepEqual(stopped(pr(1, { head: "sha2" })), ["Head"]);
 	assert.deepEqual(stopped(pr(1, { threadsOpen: 1 })), ["Threads"]);
 	assert.deepEqual(stopped(pr(1, { mergeable: "CONFLICTING" })), ["Mergeable"]);
+	const [paused] = mergeOrdersOf({
+		live: { prs: [locked], issues: [] },
+		judgment: judgment(),
+		answers: answer(),
+		rules: { [REPO]: RULES },
+	});
+	assert.deepEqual(
+		[paused.eligible, paused.gates.find((g) => g.state !== "ok")?.name],
+		[false, "Switch"],
+		"a paused switch holds a person's order too",
+	);
 	assert.deepEqual(
 		stopped(pr(1, { checks: [{ name: "test", workflow: "CI", state: "failure" }] })),
 		["CI"],

@@ -344,8 +344,8 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
 - **FR-042**: Rules MUST decide who is pinged and how urgently; the person's settings decide where.
 - **FR-043**: Answering a card MUST start the coordinator at once.
 - **FR-044**: An answer that orders a merge MUST be carried out by the server, never by an agent. The
-  server still checks CI, threads, head and conflicts; the answer lifts the project's own locks (paths,
-  size, evidence) for that head only.
+  server still checks CI, threads, head and conflicts, and holds the order while the switch is paused;
+  the answer lifts the project's own locks (paths, size, evidence) for that head only.
 - **FR-045**: A ping MUST link straight to its card, on the tailnet address when remote access is on.
   In v1 every card goes to the owner; a card meant for another login says so.
 

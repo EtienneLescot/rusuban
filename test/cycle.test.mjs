@@ -104,7 +104,7 @@ test("the server merges one eligible PR per cycle, judged auto on its head, and 
 	assert.ok(entry.gates.includes("CI: CI green on the head") && entry.gates.length === 8);
 });
 
-test("nothing merges alone when paused or in shadow mode; a person's merge order still does, but not in shadow", async () => {
+test("nothing merges when paused or in shadow mode, not even a person's order; armed again, it does", async () => {
 	const live = liveOf([
 		pr(1),
 		pr(2, { files: [{ path: ".github/x.yml", additions: 1, deletions: 0, change: "MODIFIED" }] }),
@@ -133,8 +133,12 @@ test("nothing merges alone when paused or in shadow mode; a person's merge order
 		option: "merge",
 		by: "alice",
 	});
+	await runCycle(ctxOf(), project(), live, RULES, deps);
+	assert.deepEqual(merged, [], "paused: the order waits");
+	write("automerge.json", { armed: true });
 	await runCycle(ctxOf(), project("shadow"), live, RULES, deps);
 	assert.deepEqual(merged, [], "shadow: nothing merges at all");
+	write("projects/demo/judgment.json", { items: { "o/r#2": judged } });
 	await runCycle(ctxOf(), project(), live, RULES, deps);
 	assert.deepEqual(merged, [{ slug: REPO, n: 2, method: "squash", head: "sha2", admin: false }]);
 	const entry = journal().find((e) => e.kind === "merge");
