@@ -18,7 +18,7 @@ import {
 	requestRun,
 	stopRun,
 } from "./agents.mjs";
-import { mergePr, poll, readProject } from "./github.mjs";
+import { branchRules, headChecks, mergePr, poll, readProject } from "./github.mjs";
 import {
 	append,
 	homePath,
@@ -32,6 +32,7 @@ import {
 } from "./home.mjs";
 import {
 	buildModel,
+	bypassStops,
 	checkAnswer,
 	flatten,
 	gatesOf,
@@ -40,6 +41,7 @@ import {
 	keyOf,
 	mergeOrdersOf,
 	parseItem,
+	refusedOf,
 	todoOf,
 } from "./model.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
@@ -213,6 +215,7 @@ export function stateOf(ctx, projectId) {
 			id: p.id,
 			title: p.title,
 			mode: p.mode,
+			bypassApproval: p.bypassApproval,
 			repos,
 			observeOnly: repos.every((s) => rules[s]?.observeOnly !== false),
 		},
@@ -299,7 +302,15 @@ export function stateOf(ctx, projectId) {
 
 // ── One cycle, after each read of a project ───────────────────────────────────────────────────
 // What reads GitHub, merges and starts agents; tests replace any of them through startServer.
-const DEPS = { merge: mergePr, requestRun, requestCoordinator, read: readProject, loadRules };
+const DEPS = {
+	merge: mergePr,
+	requestRun,
+	requestCoordinator,
+	read: readProject,
+	loadRules,
+	branchRules,
+	headChecks,
+};
 const since = (iso, ref) => Date.parse(iso) >= Date.parse(ref);
 
 // A rules change applies at once, journaled with its diff for the owner (FR-027); so is a locks.json
@@ -332,21 +343,46 @@ export function journalRules(project, slug, prev, next) {
 		});
 }
 
+// The approval bypass (FR-029) merges with --admin, which skips every rule of the branch: the server
+// reads them first and merges only if they would let this head through but for the approval. What
+// stops it is journaled once per head, for the owner.
+async function bypassStopsOf(pr, method, deps) {
+	try {
+		const [branch, checks] = await Promise.all([
+			deps.branchRules(pr.repo, pr.base),
+			deps.headChecks(pr.repo, pr.head),
+		]);
+		return bypassStops({ ...branch, ...checks, method, pr });
+	} catch (e) {
+		return [`the branch's rules or the head's checks could not be read: ${firstLine(e)}`];
+	}
+}
+
 // The server's merge (T030, T093), one per cycle and never in a shadow project. A person's merge
 // order comes first; then a PR judged `auto` whose every gate passes, the switch read again just
-// before. A head GitHub refused is not tried again.
+// before. A head GitHub refused is not tried again (T116), the journal being the record: only an order
+// given after the refusal, or the bypass turned on since, tries it once more.
 async function mergeOne(ctx, p, { live, judgment, answers, rules }, deps) {
 	if (p.mode !== "live") return;
-	const tried = (pr) => ctx.mergeFailed.get(keyOf(pr)) === pr.head;
+	const dir = `projects/${p.id}`;
+	const said = readJsonl(`${dir}/journal.jsonl`);
+	const refused = refusedOf(said);
+	const armed = isArmed();
+	const admin = p.bypassApproval === true && armed;
+	const refusals = (pr) => refused.get(`${keyOf(pr)}@${pr.head}`) ?? [];
 	const order = mergeOrdersOf({ live, judgment, answers, rules }).find(
-		(o) => o.eligible && !tried(o.pr),
+		(o) => o.eligible && !refusals(o.pr).some((r) => Date.parse(r.at) >= Date.parse(o.at)),
 	);
 	let pick = order && { pr: order.pr, gates: order.gates, card: order.card, by: order.by };
-	if (!pick && isArmed())
+	if (!pick && armed)
 		for (const pr of live.prs) {
 			const j = judgment.items[keyOf(pr)];
 			const gates = gatesOf(pr, j, { rules: rules[pr.repo], armed: true });
-			if (j?.pr?.auto === true && isEligible(gates) && !tried(pr)) {
+			if (
+				j?.pr?.auto === true &&
+				isEligible(gates) &&
+				!refusals(pr).some((r) => r.admin === admin)
+			) {
 				pick = { pr, gates };
 				break;
 			}
@@ -357,34 +393,52 @@ async function mergeOne(ctx, p, { live, judgment, answers, rules }, deps) {
 	const method = rules[pr.repo]?.locks?.mergeMethod ?? "rebase";
 	const label = judgment.items[item]?.label || pr.title;
 	const sha = pr.head.slice(0, 7);
+	if (admin) {
+		const stops = await bypassStopsOf(pr, method, deps);
+		if (stops.length) {
+			if (!said.some((e) => e.kind === "bypass-stopped" && e.item === item && e.head === pr.head))
+				journal(p.id, {
+					kind: "bypass-stopped",
+					item,
+					text: `Not merged through the approval bypass on ${sha}: ${stops.join("; ")}.`,
+					href: pr.url,
+					by: "server",
+					head: pr.head,
+					notify: true,
+				});
+			return;
+		}
+	}
 	try {
-		await deps.merge({ slug: pr.repo, n: pr.n, method, head: pr.head });
+		await deps.merge({ slug: pr.repo, n: pr.n, method, head: pr.head, admin });
+		const how = admin ? " through the approval bypass (--admin)" : "";
 		journal(p.id, {
 			kind: "merge",
 			item,
 			text: card
-				? `Merged on @${pick.by ?? ctx.config.owner.login}'s order: ${label}. ${gates.map((g) => g.name).join(", ")} green on ${sha}.`
-				: `Merged alone: ${label}. Every gate green on ${sha}.`,
+				? `Merged on @${pick.by ?? ctx.config.owner.login}'s order${how}: ${label}. ${gates.map((g) => g.name).join(", ")} green on ${sha}.`
+				: `Merged alone${how}: ${label}. Every gate green on ${sha}.`,
 			href: pr.url,
 			by: "server",
 			head: pr.head,
 			method,
+			admin,
 			card: card ?? null,
 			gates: gates.map(({ name, detail }) => `${name}: ${detail}`),
 		});
-		ctx.say(`${item} merged (${method}, ${sha})`);
+		ctx.say(`${item} merged (${method}${admin ? ", --admin" : ""}, ${sha})`);
 		// The card of an order is closed by the coordinator, which sees it carried out.
 		if (card) deps.requestCoordinator(p.id, "merge");
 		setTimeout(() => ctx.loops.get(p.id)?.refresh(), 15000).unref();
 	} catch (e) {
-		ctx.mergeFailed.set(item, pr.head);
 		journal(p.id, {
 			kind: "merge-refused",
 			item,
-			text: `GitHub refused the merge of ${sha}: ${firstLine(e)}`,
+			text: `GitHub refused the merge of ${sha}${admin ? " through the approval bypass" : ""}: ${firstLine(e)}`,
 			href: pr.url,
 			by: "server",
 			head: pr.head,
+			admin,
 			notify: true,
 		});
 		ctx.say(`${item}: merge refused: ${firstLine(e)}`);
@@ -455,7 +509,8 @@ function triggerRuns(p, { live, judgment, rules }, deps) {
 		t[kind] = { sig, at: new Date().toISOString(), run: r.id };
 		return true;
 	};
-	const todo = todoOf({ live, judgment, rules });
+	const refused = refusedOf(readJsonl(`${dir}/journal.jsonl`));
+	const todo = todoOf({ live, judgment, rules, refused });
 	const judge =
 		todo.length > 0 &&
 		!busy(p.id, "judge") &&
@@ -622,6 +677,23 @@ function startLoop(ctx, p) {
 	ctx.loops.set(p.id, loop);
 }
 
+// The approval bypass (FR-029), journaled whenever it differs from the last state journaled: a change
+// made while the daemon was stopped is journaled when it starts. Turning it on is flagged.
+function journalBypass(ctx, p) {
+	const last = readJsonl(`projects/${p.id}/journal.jsonl`).findLast((e) => e.kind === "bypass");
+	if ((last?.on ?? false) === p.bypassApproval) return;
+	journal(p.id, {
+		kind: "bypass",
+		item: null,
+		on: p.bypassApproval,
+		text: p.bypassApproval
+			? "Approval bypass on: what the server merges anyway, it merges with --admin once every check the branch requires is green on the head"
+			: "Approval bypass off: no merge with --admin",
+		by: ctx.config.owner.login,
+		...(p.bypassApproval ? { notify: true } : {}),
+	});
+}
+
 function stopLoop(ctx, id) {
 	ctx.loops.get(id)?.stop();
 	ctx.loops.delete(id);
@@ -663,6 +735,7 @@ export function reloadConfig(ctx) {
 						: "Shadow mode: agents judge and propose, no GitHub write, no merge",
 				by: next.owner.login,
 			});
+		journalBypass(ctx, p);
 		stopLoop(ctx, p.id);
 		if (ctx.polling) startLoop(ctx, p);
 		ctx.say(`${p.id}: ${old ? "changed" : "added"}`);
@@ -938,7 +1011,6 @@ export async function startServer({
 		port: port ?? config.port,
 		owner: config.owner,
 		tailnet: tailnet === undefined ? await tailnetName() : tailnet,
-		mergeFailed: new Map(), // item → the head GitHub refused to merge
 		loops: new Map(),
 		errors: new Map(),
 		clients: new Set(),
@@ -1000,11 +1072,13 @@ export async function startServer({
 				ctx.tailnet = (await tailnetName()) ?? ctx.tailnet;
 			}, 300_000),
 		);
-	for (const p of config.projects)
+	for (const p of config.projects) {
 		cleanStale(
 			p.id,
 			p.repos.map((r) => r.slug),
 		);
+		journalBypass(ctx, p);
+	}
 	if (polling) for (const p of config.projects) startLoop(ctx, p);
 	// Recurring tasks: their slots are looked at every 30 s, and once at start for those missed.
 	const schedule = () => {

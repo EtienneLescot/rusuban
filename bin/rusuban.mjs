@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { executeRun, listRuns, readRun } from "../src/agents.mjs";
+import { executeRun, listRuns, OWNER_COMMANDS, readRun } from "../src/agents.mjs";
 import {
 	agentLog,
 	homePath,
@@ -26,6 +26,7 @@ import {
 	keyOf,
 	parseItem,
 	pendingAnswers,
+	refusedOf,
 	todoOf,
 } from "../src/model.mjs";
 import { busyRun, listTasks, readTask, startTask, tasksState, waiting } from "../src/tasks.mjs";
@@ -45,6 +46,8 @@ const USAGE = `rusuban ${version}
                                 the projects; one removed, its files kept
   project mode <id> <live|shadow>
                                 shadow: agents judge and propose, no GitHub write, no merge
+  project bypass <id> <on|off>  merges with --admin what the server merges anyway, once every
+                                check the base branch requires is green on the head
   task list | task run <id>     the recurring tasks (tasks/<id>.md in the instance home), or one
                                 started now
 
@@ -109,7 +112,7 @@ function withLock(p, fn) {
 
 // ── Projects (the owner's) ────────────────────────────────────────────────────────────────────
 const PROJECT_USAGE =
-	"usage: project add <owner/repo> [--checkout <path>] [--to <project>] | project list | project remove <id> | project mode <id> <live|shadow>";
+	"usage: project add <owner/repo> [--checkout <path>] [--to <project>] | project list | project remove <id> | project mode <id> <live|shadow> | project bypass <id> <on|off>";
 const MODE_SAYS = {
 	live: "its agents act as its rules say, and the server merges what they allow",
 	shadow: "its agents judge and propose, nothing is written on GitHub and nothing merges",
@@ -240,6 +243,28 @@ async function projectCommand([sub, ...args]) {
 			await daemonApplied(config, id, (s) => s.project?.id === id && s.project.mode === mode),
 		);
 	}
+	// FR-029: the owner's, here only; never in a repo, never by an agent.
+	if (sub === "bypass" && args.length === 2 && ["on", "off"].includes(args[1])) {
+		const [id, state] = args;
+		const p = find(id);
+		const on = state === "on";
+		if (p.bypassApproval === on)
+			return console.log(`project ${id}: the approval bypass is already ${state}.`);
+		p.bypassApproval = on;
+		saveConfig(config);
+		console.log(
+			on
+				? `project ${id}: approval bypass on. What the server merges anyway${p.mode === "live" ? "" : " once the project is live"}, with the merge switch armed, it merges with --admin, and only once every check the base branch requires is green on the head.`
+				: `project ${id}: approval bypass off. The server never merges with --admin.`,
+		);
+		return console.log(
+			await daemonApplied(
+				config,
+				id,
+				(s) => s.project?.id === id && s.project.bypassApproval === on,
+			),
+		);
+	}
 	throw new Error(PROJECT_USAGE);
 }
 
@@ -247,7 +272,14 @@ const commands = {
 	project: projectCommand,
 	todo() {
 		const p = project();
-		out(todoOf({ live: p.live(), judgment: p.judgment(), rules: read(`${p.dir}/rules.json`, {}) }));
+		out(
+			todoOf({
+				live: p.live(),
+				judgment: p.judgment(),
+				rules: read(`${p.dir}/rules.json`, {}),
+				refused: refusedOf(readJsonl(`${p.dir}/journal.jsonl`)),
+			}),
+		);
 	},
 	show([ref]) {
 		const p = project();
@@ -365,6 +397,10 @@ else if (!Object.hasOwn(commands, cmd)) {
 	process.exit(1);
 } else {
 	try {
+		// ponytail: the run comes from the environment, so this stops an agent's mistake; the deny rules
+		// stop the command text, and an agent-only token (research R3) is the real wall.
+		if (OWNER_COMMANDS.includes(cmd) && process.env.RUSUBAN_RUN)
+			throw new Error(`"${cmd}" is the owner's command, never run inside an agent run`);
 		await commands[cmd](args);
 	} catch (e) {
 		console.error(`refused: ${e.message}`);

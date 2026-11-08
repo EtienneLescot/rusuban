@@ -230,6 +230,86 @@ export function gatesOf(pr, j, { rules = {}, armed = false, shadow = false } = {
 
 export const isEligible = (gates) => gates.every((g) => g.state === "ok" || g.state === "na");
 
+// ── The approval bypass (FR-029) ──────────────────────────────────────────────────────────────
+// `--admin` skips every rule of the branch, not only its approval: what stops it is checked here, from
+// the branch's rules as GitHub returns them. Rules that never stop a merge pass; a rule this code does
+// not know stops the bypass, so a new kind of rule never slips through it.
+const PUSH_ONLY = ["creation", "deletion", "non_fast_forward"];
+const APPROVAL_ONLY = [
+	"required_approving_review_count",
+	"dismiss_stale_reviews_on_push",
+	"require_last_push_approval",
+	"require_extra_approval_for_unattributed_changes",
+	"required_reviewers",
+	"dismissal_restriction",
+];
+const PR_RULE_KEYS = [
+	...APPROVAL_ONLY,
+	"allowed_merge_methods",
+	"require_code_owner_review",
+	"required_review_thread_resolution",
+];
+
+// Every check the branch requires, with the app that must report it (null: any).
+export function requiredChecksOf({ rules = [], classic = null }) {
+	const out = rules
+		.filter((r) => r.type === "required_status_checks")
+		.flatMap((r) =>
+			r.parameters.required_status_checks.map((c) => ({
+				name: c.context,
+				app: c.integration_id ?? null,
+			})),
+		);
+	if (classic?.enabled) {
+		const c = classic.required_status_checks ?? {};
+		out.push(
+			...(c.checks?.length
+				? c.checks.map((x) => ({ name: x.context, app: x.app_id ?? null }))
+				: (c.contexts ?? []).map((name) => ({ name, app: null }))),
+		);
+	}
+	return out;
+}
+
+// Why the server may not merge `pr` with `--admin`: an empty list means it may. A required check
+// counts only from the app the rule names, in its latest run on the head, and only as `success`; a
+// status counts only where the rule names no app.
+export function bypassStops({ rules = [], classic = null, runs = [], statuses = [], method, pr }) {
+	const stops = [];
+	for (const r of rules) {
+		const p = r.parameters ?? {};
+		if (PUSH_ONLY.includes(r.type)) continue;
+		if (r.type === "required_linear_history") {
+			if (method === "merge")
+				stops.push("the branch requires a linear history, and the merge method is merge");
+		} else if (r.type === "required_status_checks") {
+			if (p.strict_required_status_checks_policy)
+				stops.push("the branch requires PRs up to date with it, which the bypass cannot check");
+		} else if (r.type === "pull_request") {
+			if (p.allowed_merge_methods && !p.allowed_merge_methods.includes(method))
+				stops.push(`the branch does not allow the ${method} method`);
+			if (p.require_code_owner_review) stops.push("the branch requires a code owner's review");
+			if (p.required_review_thread_resolution && pr.threadsOpen > 0)
+				stops.push("a review thread is open");
+			const unknown = Object.keys(p).filter((k) => !PR_RULE_KEYS.includes(k));
+			if (unknown.length) stops.push(`the branch's pull request rule has ${unknown.join(", ")}`);
+		} else stops.push(`the branch has a ${r.type} rule, which the bypass cannot check`);
+	}
+	for (const { name, app } of requiredChecksOf({ rules, classic })) {
+		const latest = runs
+			.filter((x) => x.name === name && (app === null || x.app === app))
+			.sort((a, b) => b.id - a.id)[0];
+		const status = app === null ? statuses.find((s) => s.context === name) : null;
+		const state = latest
+			? latest.status === "completed"
+				? latest.conclusion
+				: latest.status
+			: status?.state;
+		if (state !== "success") stops.push(`${name} is ${state ?? "missing"} on the head`);
+	}
+	return stops;
+}
+
 // ── State helpers ─────────────────────────────────────────────────────────────────────────────
 // live.json holds one entry per repo; the model works on the project's items side by side.
 export function flatten(liveFile) {
@@ -268,10 +348,22 @@ function conflicts(pr, j, rules = {}) {
 	return mergeableGate(pr, rules.locks?.mergeMethod).state === "fail";
 }
 
+// The merges GitHub refused, from the project's journal (T116): `owner/repo#n@head` → the refusals of
+// that head, oldest first, each with its time, whether it was through the bypass, and GitHub's reason.
+export function refusedOf(journal = []) {
+	const out = new Map();
+	for (const e of journal)
+		if (e.kind === "merge-refused" && e.head) {
+			const k = `${e.item}@${e.head}`;
+			out.set(k, [...(out.get(k) ?? []), { at: e.at, admin: e.admin === true, text: e.text }]);
+		}
+	return out;
+}
+
 // The reasons of contracts/cli.md, plus `conflict`. No delay is built in: an item comes back to the
 // agents at its judgment's revisitAt, which the agent sets from the project's rules. Items of repos
-// without rules never appear (FR-024).
-export function todoOf({ live, judgment, rules = {}, now = Date.now() }) {
+// without rules never appear (FR-024). A refusal comes once: a card written after it settles it.
+export function todoOf({ live, judgment, rules = {}, refused = new Map(), now = Date.now() }) {
 	const acting = actingRepos(rules);
 	const items = judgment.items ?? {};
 	const out = [];
@@ -283,9 +375,16 @@ export function todoOf({ live, judgment, rules = {}, now = Date.now() }) {
 		const item = keyOf(pr);
 		const j = items[item];
 		const stop = hasOpenCard(j) ? null : lockStop(pr, j, rules[pr.repo]);
+		const refusal = refused.get(`${item}@${pr.head}`)?.at(-1);
 		if (!j) out.push({ item, type: "pr", reason: "unjudged" });
 		else if (j.pr?.head !== pr.head)
 			out.push({ item, type: "pr", reason: "new-commit", head: pr.head });
+		else if (
+			refusal &&
+			!hasOpenCard(j) &&
+			(!j.decision || Date.parse(refusal.at) > Date.parse(j.decision.createdAt))
+		)
+			out.push({ item, type: "pr", reason: "merge-refused", head: pr.head, why: refusal.text });
 		else if (stop)
 			out.push({
 				item,
@@ -595,6 +694,7 @@ export function mergeOrdersOf({ live, judgment, answers = [], rules = {} }) {
 			pr,
 			card: d.id,
 			by: a.by ?? null,
+			at: a.at,
 			gates,
 			eligible: isEligible(gates),
 		});

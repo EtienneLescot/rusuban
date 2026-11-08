@@ -12,7 +12,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { append, homeDir, homePath, loadConfig, read, readJsonl, write } from "./home.mjs";
-import { flatten, pendingAnswers, todoOf } from "./model.mjs";
+import { flatten, pendingAnswers, refusedOf, todoOf } from "./model.mjs";
 import { prepareWorktree, removeWorktree } from "./workers.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
@@ -72,6 +72,9 @@ export const SHADOW_DENY = [
 	"Bash(git push*)",
 ];
 
+// The commands of contracts/cli.md that belong to the owner; the agent CLI refuses them inside a run.
+export const OWNER_COMMANDS = ["project", "task", "start"];
+
 // ponytail: deny rules match command text; an agent that hides a merge or a push behind a variable
 // or another tool gets through. The server flags merges and pushes it did not make (research R3); an
 // agent-only token without admin rights closes the gap later.
@@ -82,6 +85,8 @@ export function builtInDeny({ home = homeDir(), defaultBranches = [], shadow = f
 		"Bash(gh api*Merge*)", // GraphQL enablePullRequestAutoMerge and the like
 		"Bash(git push*--all*)",
 		"Bash(git push*--mirror*)",
+		// The owner's commands: no agent makes a project live, turns its bypass on or starts tasks.
+		...OWNER_COMMANDS.map((c) => `Bash(rusuban ${c}*)`),
 		...STATE.map((name) => editRule(path.join(home, name), !name.endsWith(".json"))),
 	];
 	for (const b of new Set(defaultBranches.filter(Boolean)))
@@ -691,6 +696,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 							live: flatten(live),
 							judgment: read(`${dir}/judgment.json`, { items: {} }),
 							rules: read(`${dir}/rules.json`, {}),
+							refused: refusedOf(readJsonl(`${dir}/journal.jsonl`)),
 						}).length;
 			if (idle)
 				return end({

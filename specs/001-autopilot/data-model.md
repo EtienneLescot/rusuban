@@ -53,12 +53,15 @@ file has **one writer**. `rusuban` is the product name.
 
 ### Project
 
-`{ id, title, mode: "live" | "shadow", repos: [{ slug: "owner/repo", checkout: "<path>" }], folders: ["<path>"], refreshSec: 90 }`
+`{ id, title, mode: "live" | "shadow", bypassApproval: false, repos: [{ slug: "owner/repo", checkout: "<path>" }], folders: ["<path>"], refreshSec: 90 }`
 
 - `mode`: `shadow` lets agents judge and propose while every GitHub write is denied and nothing is merged
   (FR-028). `project add` writes `shadow` for a new project; `project mode` makes it `live`.
 - A repo belongs to one project (slugs compared without case): two would read, judge and merge it each on
   their own.
+- `bypassApproval` (FR-029): off unless `project bypass <id> on` sets it; never read from a repo. The server
+  then merges with `--admin`, only after checking the base branch's rules itself. Its changes are
+  journaled (`bypass`, with `on`), a change made while the daemon was stopped when it starts.
 
 - `folders`: extra folders whose conversations belong to the project (a website checkout, a scratch dir).
   Each checkout's worktrees are included automatically.
@@ -144,7 +147,7 @@ firstAt, lastAt, live, branch, prs[], items[], parseError? }`
 Front matter `title`, `project`, `schedule` (`daily HH:MM,…`, optional), `lock` (group), `cwd`, then the
 prompt. Unchanged from today, plus `project`. Without `lock` a task is its own group; without `cwd` it
 works in its project's scratch folder. A dotted lock is a project's group and starts with the task's own
-project (`sandbox.coordinator`); a group shared across projects has no dot (`demo-factory`).
+project (`sandbox.coordinator`); a group shared across projects has no dot (`publishing`).
 
 ### Channel
 

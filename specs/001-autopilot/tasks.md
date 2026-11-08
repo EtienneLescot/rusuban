@@ -135,6 +135,7 @@ starts the coordinator, which applies the answer.
   - A card takes one answer: a second one is refused like a late one. An answer that orders a merge also starts a GitHub read, so the server carries it out at once.
 - [x] T038 [US2] Inbox in `web/app.js`: open cards of every project, newest first, answer by option or free note
   - The graph stays the main view; the inbox is the column beside it and a card opens in its place (`#card/<id>`, so a ping links to it). A phone gets the inbox first, a tab bar, and answers a card in three taps: open, option, Send.
+  - Since 2026-11-08 the phone's first tab is named after the view it shows, Graph or Kanban; Conversations or Agents picked in its row of view tabs moves the tab bar to their own tab.
 - [x] T039 [P] [US2] Card tests (replaced card refused, answer recorded once) in `test/cards.test.mjs`
 - [x] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
   - `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The runs view is the Agents drawer: runs at work first with a two-tap Stop, the last 30 with their conversation, the one a card points at lit.
@@ -189,8 +190,13 @@ show in the journal.
 - [ ] T048 Propose them to `getopenscreen/openscreen` as `.rusuban/` in a PR, which Etienne merges
 - [ ] T049 Configure Etienne's instance: the `openscreen` project; the `publications` and `n8n-series` tasks moved to `~/.rusuban/tasks/`
 - [ ] T050 Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge), judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
+- [x] T115 Approval bypass per project (FR-029): `project bypass <id> <on|off>` in `bin/rusuban.mjs`, off by default and never set by `project add`; `--admin` in `src/github.mjs` only on a merge the server makes anyway, the switch armed, after the base branch's rules are read and met (`src/model.mjs`); journaled in the project
+  - The guard reads the base branch's rulesets and, when on, its classic protection. Every required check must be on the head, from the app the rule names (a PR's own job named like the review app does not count), in its latest run, and `success`. Rules that only concern pushes pass; a linear history refuses the `merge` method; a code owner's review, an up-to-date requirement, or any rule it does not know stops it. What stops it is journaled once per head and flagged.
+  - Tried on `getopenscreen/openscreen` main, read only: #1506 would pass; #1505 (CodeRabbit cancelled) and #1478 (macOS jobs cancelled) would not, though both were merged under the old pilot.
+- [x] T116 A refused merge in `src/server.mjs` and `src/model.mjs`: never tried again on that head, a daemon restart included (the journal is the record); the todo reason `merge-refused` makes the agents put it on a card for the owner
+- [x] T117 The owner's commands (`project`, `task`, `start`) refused inside an agent run, and forbidden by the built-in deny rules, so no agent turns a project live or its bypass on
 - [ ] T051 Switch: the project goes `live`; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
-  - Decide first: the server merges without `--admin` (T030), so a branch protection that requires an approval comes back as a journaled refusal. The pilot merged with `--admin`: relax that protection on `getopenscreen/openscreen`, or add an opt-in.
+  - Decided on 2026-11-08: the approval bypass, set per project (T115). `getopenscreen/openscreen` requires an approval that agents' PRs, pushed under the owner's account, cannot get; the switch to `live` turns the bypass on.
 - [ ] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)
 
 ---

@@ -83,9 +83,45 @@ export const pushesOf = (commits) =>
 			author: c.author?.user?.login ?? c.author?.name ?? null,
 		}));
 
-// The server's merge, and the only one (T030): exactly the head it judged, or nothing.
-export const mergePr = ({ slug, n, method, head }) =>
-	gh(["pr", "merge", String(n), "--repo", slug, `--${method}`, "--match-head-commit", head]);
+// The server's merge, and the only one (T030): exactly the head it judged, or nothing. `admin` is the
+// project's approval bypass (FR-029), passed only once the branch's rules were checked (bypassStops).
+export const mergePr = ({ slug, n, method, head, admin = false }) =>
+	gh([
+		"pr",
+		"merge",
+		String(n),
+		"--repo",
+		slug,
+		`--${method}`,
+		"--match-head-commit",
+		head,
+		...(admin ? ["--admin"] : []),
+	]);
+
+// What the approval bypass needs to know before it merges, read only: the base branch's rules (its
+// rulesets, and its classic protection when that is on), and every check run and status of the head.
+const api = async (endpoint, jq) => (await gh(["api", "--paginate", endpoint, "--jq", jq])).trim();
+const lines = (text) => (text ? text.split("\n").map((l) => JSON.parse(l)) : []);
+export async function branchRules(slug, branch) {
+	const b = encodeURIComponent(branch);
+	return {
+		rules: lines(await api(`repos/${slug}/rules/branches/${b}`, ".[]")),
+		classic: JSON.parse(await api(`repos/${slug}/branches/${b}`, ".protection")),
+	};
+}
+export async function headChecks(slug, sha) {
+	return {
+		runs: lines(
+			await api(
+				`repos/${slug}/commits/${sha}/check-runs?per_page=100`,
+				".check_runs[] | {id, name, app: .app.id, status, conclusion}",
+			),
+		),
+		statuses: lines(
+			await api(`repos/${slug}/commits/${sha}/status`, ".statuses[] | {context, state}"),
+		),
+	};
+}
 
 // ── Normalizing, pure ─────────────────────────────────────────────────────────────────────────
 const STATUS = {

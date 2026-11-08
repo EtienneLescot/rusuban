@@ -293,6 +293,15 @@ rules route each decision to the right person.
   diff and the owner is pinged. No rule can widen the instance's permission profile.
 - **FR-028**: A project MUST have a mode: `live`, or `shadow`, where agents judge and propose but every
   GitHub write is denied and nothing is merged (used for the switch from the OpenScreen pilot).
+- **FR-029**: A project MAY have an approval bypass: a setting of the instance's config, off by default,
+  that only the owner's command turns on, never a repo, a PR, a rule or an agent. It applies only to a
+  merge the server would make anyway (a live project, the switch armed, FR-021 and FR-044 met): the
+  server then merges with GitHub's admin bypass, the head pinned. It skips the approval and nothing
+  else: the server first reads the base branch's rules from GitHub and merges only if every check they
+  require is on the head, from the app they name, and `success` (checks the locks file ignores
+  included), the merge method is one they allow, and they hold no rule it cannot check. Each change of
+  the setting and each merge through it is journaled. With or without it, a merge GitHub refuses is
+  never tried again on that head, and the agents put the refusal on a card for the owner.
 
 **Agents**
 

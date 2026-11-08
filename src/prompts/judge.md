@@ -35,6 +35,10 @@ live state and its judgment. An item is `owner/repo#n`, or `#n` when the project
   rebased. Start a worker to rebase it on its base, keeping its author's commits. When agents cannot
   push to its branch (a fork that refuses maintainer edits), ask its author on GitHub (`owner:
   "third"`).
+- **`merge-refused`**: the server tried to merge this head and GitHub refused, for the reason the
+  entry gives (often a branch rule: an approval, a required check). The server never tries that head
+  again on its own. Write a card for the owner that says what GitHub refused and what would let it
+  through; when the cause is fixed, the owner's merge order (`"merge": true`) tries once more.
 
 More than five items to read: hand the reading to subagents, read-only and in parallel, then judge and
 write yourself.
