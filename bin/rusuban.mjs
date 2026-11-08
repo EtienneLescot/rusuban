@@ -20,7 +20,8 @@ import {
 	refusedOf,
 	todoOf,
 } from "../src/model.mjs";
-import { changeSetting, MODE_SAYS, planOf } from "../src/settings.mjs";
+import { dashboardUrl, messageOf, sendPing } from "../src/pings.mjs";
+import { changeSetting, MODE_SAYS, maskTarget, planOf } from "../src/settings.mjs";
 import { busyRun, listTasks, readTask, startTask, tasksState } from "../src/tasks.mjs";
 import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
 
@@ -43,6 +44,9 @@ const USAGE = `rusuban ${version}
                                 check the base branch requires is green on the head
   permissions <bypass|allowlist>
                                 the host profile: what agents may run on this machine
+  channel add <type> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM]
+          | channel list | channel test <id> | channel remove <id>
+                                where cards ping you: ntfy, Slack, Discord, Teams, e-mail
 A change that widens what agents may do is confirmed by typing its target in a terminal; without a
 terminal (Claude's shell, a script) it waits as a card in the dashboard's inbox.
   task list | task run <id>     the recurring tasks (tasks/<id>.md in the instance home), or one
@@ -233,6 +237,64 @@ async function projectCommand([sub, ...args]) {
 	throw new Error(PROJECT_USAGE);
 }
 
+// ── Channels (T065): where pings go. Adding one widens where data goes: a typed confirmation, or a
+// card. Their targets hold secrets: shown masked, kept only in config.json (mode 600).
+const CHANNEL_USAGE =
+	"usage: channel add <ntfy|slack|discord|teams|email> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM] [--smtp <url>] [--from <address>] | channel list | channel test <id> | channel remove <id>";
+async function channelCommand([sub, ...args]) {
+	const config = loadConfig();
+	if (sub === "list" && !args.length)
+		return out(
+			config.channels.map(({ smtp, ...c }) => ({
+				...c,
+				target: maskTarget(c),
+				...(smtp ? { smtp: "…" } : {}),
+			})),
+		);
+	if (sub === "add") {
+		const { values, positionals } = parseArgs({
+			args,
+			options: {
+				urgency: { type: "string" },
+				quiet: { type: "string" },
+				digest: { type: "string" },
+				smtp: { type: "string" },
+				from: { type: "string" },
+			},
+			allowPositionals: true,
+		});
+		const [type, target, extra] = positionals;
+		if (!type || !target || extra) throw new Error(CHANNEL_USAGE);
+		const change = {
+			kind: "channel.add",
+			type,
+			target,
+			urgency: values.urgency?.split(","),
+			quietHours: values.quiet,
+			digestAt: values.digest,
+			smtp: values.smtp,
+			from: values.from,
+		};
+		return setting(change, type, () => true);
+	}
+	if (sub === "remove" && args.length === 1)
+		return setting({ kind: "channel.remove", id: args[0] }, args[0], () => true);
+	if (sub === "test" && args.length === 1) {
+		const channel = config.channels.find((c) => c.id === args[0]);
+		if (!channel) throw new Error(`no channel "${args[0]}"`);
+		const base = dashboardUrl({ owner: config.owner, port: config.port });
+		const test = {
+			project: null,
+			item: null,
+			label: "A test",
+			card: { id: "test", q: "A test from Rusuban: this channel works.", to: config.owner.login },
+		};
+		await sendPing(channel, messageOf([test], { base, owner: config.owner.login }));
+		return console.log(`channel ${channel.id}: a test went to ${maskTarget(channel)}.`);
+	}
+	throw new Error(CHANNEL_USAGE);
+}
+
 // The host profile (FR-025): what agents may run on this machine.
 async function permissionsCommand([mode, ...rest]) {
 	if (!["bypass", "allowlist"].includes(mode) || rest.length)
@@ -243,6 +305,7 @@ async function permissionsCommand([mode, ...rest]) {
 const commands = {
 	project: projectCommand,
 	permissions: permissionsCommand,
+	channel: channelCommand,
 	todo() {
 		const p = project();
 		out(

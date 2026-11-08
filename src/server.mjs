@@ -45,6 +45,7 @@ import {
 	refusedOf,
 	todoOf,
 } from "./model.mjs";
+import { dispatch, sendPing } from "./pings.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
 import { changeSetting, confirmRequest, settingsCards, settingsLog } from "./settings.mjs";
 import {
@@ -314,6 +315,8 @@ const DEPS = {
 	headChecks,
 	scanHub,
 	openTerminal,
+	dispatch,
+	sendPing,
 };
 const since = (iso, ref) => Date.parse(iso) >= Date.parse(ref);
 
@@ -862,6 +865,36 @@ function converse(ctx, id, what, body, res, req) {
 	}
 }
 
+// ── Pings (T065) ──────────────────────────────────────────────────────────────────────────────
+// The inbox's cards go to the channels by their urgency (src/pings.mjs). The dispatcher's state
+// between two calls is pings.json, the daemon's; a dry daemon pings no one. A card of the instance
+// itself (a setting) journals a failed ping in the first project.
+export async function pingOnce(ctx) {
+	if (ctx.dry || ctx.pinging) return;
+	ctx.pinging = true;
+	try {
+		const fallback = ctx.config.projects[0]?.id;
+		const state = await depsOf(ctx).dispatch(
+			{
+				config: ctx.config,
+				cards: inboxState(ctx).cards,
+				state: read("pings.json", {}),
+				port: ctx.port,
+				tailnet: ctx.tailnet,
+			},
+			{
+				send: depsOf(ctx).sendPing,
+				journal: (project, entry) => (project ?? fallback) && journal(project ?? fallback, entry),
+			},
+		);
+		write("pings.json", state);
+	} catch (e) {
+		ctx.say(`pings: ${firstLine(e)}`);
+	} finally {
+		ctx.pinging = false;
+	}
+}
+
 // A setting's card (FR-092): allowed, the change applies; declined, nothing changes. Never a note.
 function confirmSetting(ctx, body, res) {
 	if (!["allow", "deny"].includes(body.option))
@@ -1146,6 +1179,11 @@ export async function startServer({
 	if (polling) {
 		passHub();
 		timers.push(setInterval(passHub, 30_000));
+	}
+	// Pings (T065): every minute, never two at once.
+	if (polling && !dry) {
+		pingOnce(ctx);
+		timers.push(setInterval(() => pingOnce(ctx), 60_000));
 	}
 	// Recurring tasks: their slots are looked at every 30 s, and once at start for those missed.
 	const schedule = () => {

@@ -69,6 +69,7 @@ export const PROJECT_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 export const SLUG = /^[\w.-]+\/[\w.-]+$/;
 const MODES = ["bypass", "allowlist"];
 const PROJECT_MODES = ["live", "shadow"];
+export const CHANNEL_TYPES = ["ntfy", "slack", "discord", "teams", "email"];
 
 const isStrings = (v) => Array.isArray(v) && v.every((x) => typeof x === "string" && x.length > 0);
 
@@ -143,6 +144,22 @@ export function validateConfig(raw) {
 	}
 	for (const k of ["machines", "channels"])
 		if (c[k] !== undefined && !Array.isArray(c[k])) errors.push(`${k} must be a list`);
+	// Channels (FR-041): where pings go. Their targets hold secrets, which is why the file is mode 600.
+	const channelIds = new Set();
+	for (const [i, ch] of (Array.isArray(c.channels) ? c.channels : []).entries()) {
+		const at = `channels[${i}]`;
+		if (!PROJECT_ID.test(ch?.id ?? ""))
+			errors.push(`${at}.id must be lowercase letters, digits and dashes`);
+		else if (channelIds.has(ch.id)) errors.push(`${at}.id "${ch.id}" is used twice`);
+		else channelIds.add(ch.id);
+		if (!CHANNEL_TYPES.includes(ch?.type))
+			errors.push(`${at}.type must be ${CHANNEL_TYPES.join(", ")}`);
+		if (typeof ch?.target !== "string" || !ch.target.trim()) errors.push(`${at}.target is missing`);
+		if (!isStrings(ch?.urgency) || !ch.urgency.every((u) => ["now", "digest"].includes(u)))
+			errors.push(`${at}.urgency must list now, digest or both`);
+		if (ch?.type === "email" && !ch.smtp)
+			errors.push(`${at}: an e-mail channel needs its smtp server`);
+	}
 	if (errors.length) throw new Error(`invalid config.json:\n- ${errors.join("\n- ")}`);
 	return {
 		version: CONFIG_VERSION,

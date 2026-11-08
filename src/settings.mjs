@@ -9,6 +9,7 @@ import path from "node:path";
 import { listRuns } from "./agents.mjs";
 import {
 	append,
+	CHANNEL_TYPES,
 	homePath,
 	loadConfig,
 	PROJECT_ID,
@@ -39,6 +40,16 @@ const textOf = (file) => {
 	}
 };
 const isArmedNow = () => read("automerge.json", { armed: false }).armed === true;
+// A channel's target holds its secret (a webhook URL, a topic): only its host, or the address of an
+// e-mail channel, is ever shown.
+export function maskTarget(channel) {
+	if (channel.type === "email") return channel.target;
+	try {
+		return `${new URL(channel.target).host}/…`;
+	} catch {
+		return "…";
+	}
+}
 export const MODE_SAYS = {
 	live: "its agents act as its rules say, and the server merges what they allow",
 	shadow: "its agents judge and propose, nothing is written on GitHub and nothing merges",
@@ -286,6 +297,51 @@ export function planOf(config, change) {
 					allow: "The new limits apply to the next runs.",
 					deny: "The limits stay.",
 				},
+			};
+		}
+		case "channel.add": {
+			// A channel sends cards out to its target: it widens where data goes (FR-092).
+			const { type, target } = change;
+			if (!CHANNEL_TYPES.includes(type))
+				throw new Error(`a channel is ${CHANNEL_TYPES.join(", ")}`);
+			if (!String(target ?? "").trim()) throw new Error("a channel needs its target");
+			const urgency = change.urgency?.length ? change.urgency : ["now", "digest"];
+			const ids = [type, ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => `${type}-${n}`)];
+			const id = ids.find((x) => !config.channels.some((c) => c.id === x));
+			if (!id) throw new Error(`too many ${type} channels`);
+			const channel = {
+				id,
+				type,
+				target,
+				urgency,
+				...(change.quietHours ? { quietHours: change.quietHours } : {}),
+				...(change.digestAt ? { digestAt: change.digestAt } : {}),
+				...(change.smtp ? { smtp: change.smtp } : {}),
+				...(change.from ? { from: change.from } : {}),
+			};
+			return {
+				project: null,
+				widens: true,
+				apply: (c) => c.channels.push(channel),
+				said: `channel ${id} added: ${type} to ${maskTarget(channel)}, for ${urgency.join(" and ")} cards.`,
+				card: {
+					q: `Send your cards to ${type}, ${maskTarget(channel)}?`,
+					ctx: `The question, the item and a link of each ${urgency.join(" and ")} card will leave this machine for that target.`,
+					allow: `The ${type} channel is added; \`rusuban channel test ${id}\` sends it a test.`,
+					deny: "Nothing changes.",
+				},
+			};
+		}
+		case "channel.remove": {
+			if (!config.channels.some((c) => c.id === change.id))
+				throw new Error(`no channel "${change.id}"`);
+			return {
+				project: null,
+				widens: false,
+				apply: (c) => {
+					c.channels = c.channels.filter((x) => x.id !== change.id);
+				},
+				said: `channel ${change.id} removed.`,
 			};
 		}
 		case "owner": {
