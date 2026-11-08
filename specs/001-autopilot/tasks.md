@@ -227,11 +227,17 @@ an answer from the phone appears in its transcript.
 **Goal**: the owner is pinged where they chose, with a link to the card.
 **Independent test**: `channel test` on each type; a new card pings at once, a digest card at `digestAt`.
 
-- [ ] T062 [P] [US2] Channel payloads in `src/pings.mjs`: ntfy (POST, `Title`, `Click`), Slack (incoming webhook, blocks), Discord (webhook, embed), Teams (Workflows webhook, Adaptive Card), e-mail (`nodemailer`, SMTP)
-- [ ] T063 [P] [US2] One payload test per channel (card in, payload with the card link out) in `test/pings.test.mjs`
-- [ ] T064 [US2] Dispatch in `src/pings.mjs`: a new card for the owner goes to the channels of its urgency; digest at `digestAt`; quiet hours; a failed send retried, then journaled
+- [x] T062 [P] [US2] Channel payloads in `src/pings.mjs`: ntfy (POST, `Title`, `Click`), Slack (incoming webhook, blocks), Discord (webhook, embed), Teams (Workflows webhook, Adaptive Card), e-mail (`nodemailer`, SMTP)
+  - An e-mail channel's `target` is its address; it also needs `smtp`, its server as nodemailer takes it (`smtps://user:password@host:465`), and may name `from`. nodemailer loads only when an e-mail goes out.
+  - Slack's markup is escaped and Discord parses no mention, so a card's text pings no one. A send's error never names its target.
+- [x] T063 [P] [US2] One payload test per channel (card in, payload with the card link out) in `test/pings.test.mjs`
+- [x] T064 [US2] Dispatch in `src/pings.mjs`: a new card for the owner goes to the channels of its urgency; digest at `digestAt`; quiet hours; a failed send retried, then journaled
+  - Functions with their effects injected: `dispatch({ config, cards, state, now, port, tailnet }, { send, journal })`, one message per channel. The daemon keeps the state between calls (a `pings.json` of its own, not yet in data-model.md) and never runs two at once; that wiring is left for T065.
+  - Quiet hours hold only what can wait: an urgent card pings at once (US2 scenario 3). A digest card waits for a `digestAt` passed since it came; without one it goes as it comes, outside quiet hours. A new channel does not replay the inbox. Three tries (at once, 1 then 5 minutes later), then a `ping-failed` entry with `notify`.
+  - Only cards ping: the journal's `notify` flags (T031, T092, T094) have no urgency to route them by.
 - [ ] T065 [US2] `channel add|test|list` in `bin/rusuban.mjs`; secrets only in `config.json` (mode 600)
-- [ ] T107 [US2] Ping links straight to the card (`/#card/<id>`), on the tailnet address when remote access is on; in v1 every card goes to the owner (FR-045)
+- [x] T107 [US2] Ping links straight to the card (`/#card/<id>`), on the tailnet address when remote access is on; in v1 every card goes to the owner (FR-045)
+  - Remote access counts as on when `owner.tailscaleLogin` is stored and Tailscale names the machine, so `remote disable` (T076) must remove that login. A digest links each card on its own line and opens the inbox.
 - [ ] T108 [US2] Live proof of M3: a real card pings a phone and is answered in three taps (SC-004)
 
 ---
