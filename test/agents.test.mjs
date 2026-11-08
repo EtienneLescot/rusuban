@@ -415,3 +415,57 @@ test("a reply sends the person's text as is to the session it resumes, in a fork
 	]);
 	assert.ok(!again.includes("--fork-session"));
 });
+
+test("the context lists the machines as the daemon last probed them, a desktop's owner named", () => {
+	const machines = [
+		{
+			name: "mac",
+			os: "macos",
+			ssh: "mac",
+			caps: ["gpu"],
+			workspace: "~/rusuban",
+			agentUser: "rusuban",
+		},
+		{
+			name: "desk",
+			os: "windows",
+			ssh: "desk",
+			caps: [],
+			workspace: "~/rusuban",
+			agentUser: "rusuban",
+			owner: "alice",
+		},
+		{ name: "ci", os: "linux", ssh: "ci", caps: [], workspace: "/srv/r", agentUser: "rusuban" },
+		{ name: "new", os: "linux", ssh: "new", caps: [], workspace: "~/r", agentUser: "rusuban" },
+	];
+	write("leases/probes.json", {
+		at: "2026-11-08T10:00:00.000Z",
+		probes: [
+			{ name: "mac", state: "online", lease: { run: "w-1", expires: "2026-11-08T10:30:00.000Z" } },
+			{ name: "desk", state: "online", lease: null },
+			{ name: "ci", state: "offline", lease: null },
+		],
+	});
+	const p = assemblePrompt({
+		kind: "worker",
+		project: "demo",
+		config: { ...config, machines },
+		run: "w-2",
+		mission: "Measure it.",
+	});
+	assert.match(p, /- Machines, each taken with `rusuban lease`/);
+	assert.match(
+		p,
+		/ {2}- mac: macOS, `ssh -l rusuban mac`, workspace `~\/rusuban`, gpu; held by run `w-1` until 2026-11-08T10:30:00.000Z\./,
+	);
+	assert.match(
+		p,
+		/ {2}- desk: Windows, `ssh -l rusuban desk`, workspace `~\/rusuban`, @alice's desktop: a lease asks them first; free\./,
+	);
+	assert.match(p, / {2}- ci: Linux, .*; offline\./);
+	assert.match(p, / {2}- new: Linux, .*; not probed yet\./);
+	assert.match(
+		assemblePrompt({ kind: "judge", project: "demo", config, run: "j" }),
+		/- Machines: none registered\./,
+	);
+});

@@ -259,3 +259,36 @@ test("the agent commands read and write a project's files", () => {
 	assert.match(run("--version").stdout, /^rusuban \d+\.\d+\.\d+/);
 	assert.equal(run("nope").status, 1);
 });
+
+test("lease and release: a run's commands, with a machine or an OS, a reason and a duration", () => {
+	const home = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-lease-"));
+	fs.writeFileSync(
+		path.join(home, "config.json"),
+		JSON.stringify({
+			version: 1,
+			owner: { login: "alice" },
+			permissions: { mode: "allowlist" },
+			limits: { maxWorkers: 3, maxRunMinutes: 150 },
+			projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
+			machines: [{ name: "mac", os: "macos", ssh: "mac" }],
+		}),
+	);
+	const cli = (env, ...args) =>
+		spawnSync(process.execPath, [BIN, ...args], {
+			encoding: "utf8",
+			env: { ...process.env, RUSUBAN_HOME: home, RUSUBAN_RUN: "", RUSUBAN_PROJECT: "", ...env },
+		});
+	assert.match(cli({}, "lease", "mac", "--reason", "x").stderr, /lease is a run's command/);
+	const inRun = (...args) => cli({ RUSUBAN_RUN: "w-1" }, ...args).stderr;
+	assert.match(inRun("lease", "mac", "--os", "macos", "--reason", "x"), /usage: lease/);
+	assert.match(inRun("lease", "--reason", "x"), /usage: lease/);
+	assert.match(inRun("lease", "mac", "--wait", "soon", "--reason", "x"), /soon is not a duration/);
+	// A run that is not running holds nothing: the lease lasts as long as its run.
+	assert.match(inRun("lease", "mac", "--reason", "measure"), /run w-1 is not running/);
+	assert.match(inRun("release"), /usage: release <machine>/);
+	assert.match(cli({}, "machine", "doctor", "nope").stderr, /no machine named nope/);
+	assert.deepEqual(
+		JSON.parse(cli({}, "machine", "list").stdout).map((m) => [m.name, m.agentUser]),
+		[["mac", "rusuban"]],
+	);
+});

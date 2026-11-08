@@ -49,7 +49,7 @@ the only writers of the judgment file; each validates and locks before writing.
 | `answers` / `asks` | Answers and requests not handled yet. |
 | `worker start <worker> <item> <mission.md>` | Starts a worker in its own worktree; at most the configured number at once. |
 | `worker stop <worker>` / `worker list` | |
-| `lease <machine> \| --os <os> [--caps a,b]` `[--wait 20m] --reason <text>` | Waits for and takes an exclusive lease, held on the machine itself (atomic `mkdir`) and capped at `maxLeaseMin`; prints the machine. A person's desktop opens a card first. |
+| `lease <machine> \| --os <os> [--caps a,b]` `[--repo <owner/repo>] [--wait 20m] --reason <text>` | Waits for and takes an exclusive lease, held on the machine itself (atomic `mkdir`) and capped at `maxLeaseMin`. It prints how to reach the machine and, with `--repo`, the run's worktree there. A person's desktop opens a card first, and a no ends the wait. |
 | `release <machine>` | Ends the lease. A run's leases are released when the run ends anyway. |
 
 Agents never get a merge command: the server merges (research R3).

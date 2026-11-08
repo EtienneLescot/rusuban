@@ -22,6 +22,7 @@ import {
 	validateConfig,
 	write,
 } from "./home.mjs";
+import { validateMachines } from "./machines.mjs";
 import { lineDiff } from "./rules.mjs";
 import { parseTask, waiting } from "./tasks.mjs";
 
@@ -35,6 +36,7 @@ export const ORIGINS = {
 };
 const TASK_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
+const OS_NAME = { windows: "Windows", macos: "macOS", linux: "Linux" };
 const textOf = (file) => {
 	try {
 		return fs.readFileSync(file, "utf8");
@@ -359,6 +361,29 @@ export function planOf(config, change) {
 					q: `Send your cards to ${type}, ${maskTarget(channel)}?`,
 					ctx: `The question, the item and a link of each ${urgency.join(" and ")} card will leave this machine for that target.`,
 					allow: `The ${type} channel is added; \`rusuban channel test ${id}\` sends it a test.`,
+					deny: "Nothing changes.",
+				},
+			};
+		}
+		case "machine.add": {
+			// A machine is one more place where agents run code (FR-092). A desktop asks its owner before
+			// each lease, in the dashboard: in v1 that is the instance's owner, the one person it knows.
+			const m = change.machine ?? {};
+			if (m.owner !== undefined && m.owner !== config.owner.login)
+				throw new Error(
+					`a desktop here is ${config.owner.login}'s: ${m.owner} has no dashboard to say yes in`,
+				);
+			const machine = validateMachines([...config.machines, m]).at(-1);
+			const where = `${OS_NAME[machine.os]}, ${machine.ssh ?? "this host"}`;
+			return {
+				project: null,
+				widens: true,
+				apply: (c) => c.machines.push(machine),
+				said: `machine ${machine.name} added (${where})${machine.owner ? ": your desktop, each lease asks you first" : ""}.`,
+				card: {
+					q: `Let the agents work on ${machine.name} (${where})?`,
+					ctx: `A run leases it, alone, for ${machine.maxLeaseMin} min at most, and works there as ${machine.agentUser} in ${machine.workspace}.${machine.owner ? " It is your desktop: each lease asks you first." : ""}`,
+					allow: `${machine.name} is added; \`rusuban machine probe ${machine.name}\` checks it.`,
 					deny: "Nothing changes.",
 				},
 			};

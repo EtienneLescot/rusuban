@@ -8,7 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { test as base } from "@playwright/test";
 import { runner } from "../../src/agents.mjs";
-import { homePath, loadConfig, saveConfig, write } from "../../src/home.mjs";
+import { homePath, loadConfig, read, saveConfig, write } from "../../src/home.mjs";
 import { scanHub, slugOf } from "../../src/hub.mjs";
 import { applyJudgment } from "../../src/model.mjs";
 import { startServer } from "../../src/server.mjs";
@@ -105,6 +105,11 @@ export function seed(busyPid, checkout) {
 		projects: [
 			{ id: "acme", title: "Acme", mode: "live", repos: [{ slug: "acme/widgets", checkout }] },
 			{ id: "orbit", title: "Orbit", mode: "shadow", repos: [{ slug: "orbit/site" }] },
+		],
+		machines: [
+			{ name: "mac", os: "macos", ssh: "mac", caps: ["gpu"] },
+			{ name: "desk", os: "windows", ssh: "desk", owner: "alice" },
+			{ name: "ci", os: "linux", ssh: "ci" },
 		],
 	});
 	const acme = project("acme", "acme/widgets", {
@@ -254,6 +259,30 @@ export function seed(busyPid, checkout) {
 		new Date("2026-11-01T10:05:00Z"),
 		new Date("2026-11-01T10:05:00Z"),
 	);
+	// The machines as the daemon probed them: mac held by a run, alice's desktop free, ci offline.
+	const lease = {
+		machine: "mac",
+		run: "worker-20261108-1000-ab12",
+		project: "acme",
+		since: NOW,
+		expires: new Date(Date.now() + 24 * 60e3).toISOString(),
+		reason: "Measure the export",
+	};
+	write("leases/probes.json", {
+		at: NOW,
+		probes: [
+			{ name: "mac", state: "online", checkedAt: NOW, lease, tailnet: null },
+			{ name: "desk", state: "online", checkedAt: NOW, lease: null, tailnet: null },
+			{
+				name: "ci",
+				state: "offline",
+				checkedAt: NOW,
+				lease: null,
+				said: "ssh: connect to host ci port 22: Connection timed out",
+				tailnet: null,
+			},
+		],
+	});
 	return { cards: { acme, orbit } };
 }
 
@@ -274,7 +303,18 @@ export const test = base.extend({
 			await scanHub({ config: loadConfig() });
 			runner.launch = (id) =>
 				children.push(spawn(process.execPath, [RUN, id], { stdio: "ignore" }));
-			const srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
+			// No machine is reached: their probe is the seeded one, and a lease ends when asked.
+			const srv = await startServer({
+				port: 0,
+				polling: false,
+				quiet: true,
+				tailnet: null,
+				deps: {
+					tendLeases: async () => [],
+					probeMachines: async () => read("leases/probes.json").probes,
+					releaseLease: async () => true,
+				},
+			});
 			await page.goto(`http://127.0.0.1:${srv.port}/`);
 			await use(seeded);
 			await srv.close();

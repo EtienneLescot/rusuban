@@ -11,11 +11,11 @@ dashboard's origin (local or `ts.net`) and the `x-rusuban: 1` header, and a body
 |---|---|---|
 | GET | `/`, `/app.js`, `/app.css` | the page, no build |
 | GET | `/api/state?project=<id>` | the project's model: nodes, edges, cards, runs, freshness, journal |
-| GET | `/api/inbox` | open cards of every project, and the settings waiting for a confirmation (`type: "setting"`, card id `setting:<id>`), newest first |
-| GET | `/api/events` | SSE: `state`, `inbox`, `agents` (every project's runs and the tasks) and `hub` (every project's conversations, the index's age) on each change, `: ping` every 15 s |
+| GET | `/api/inbox` | open cards of every project, the settings waiting for a confirmation (`type: "setting"`, card id `setting:<id>`) and the desktops a run asks for (`type: "lease"`, card id `lease:<run>:<machine>`), newest first; both are answered allow or deny |
+| GET | `/api/events` | SSE: `state`, `inbox`, `agents` (every project's runs, the tasks and the machines) and `hub` (every project's conversations, the index's age) on each change, `: ping` every 15 s |
 | GET | `/api/conversations?project=&item=&origin=&q=` | Conversation list, newest activity first, with the index's age and the titles of the items they name |
 | GET | `/api/conversations/<id>?before=<offset>` | one page of a transcript: user text, assistant text, tool calls (name and short input), results cut to 2 KB; its `before` is the byte offset of the page before it, null at the start |
-| GET | `/api/machines` | machines, probe state, leases, queues |
+| GET | `/api/machines` | `{ checkedAt, error, machines }`: each machine of the registry with its last `probe` (its lease included) and its `queue` |
 | GET | `/api/runs?project=` | runs, running first: kind, items, step, age, summary, conversation |
 | GET | `/api/runs/<id>/log` | the run's log, as text: what its conversation did, until the hub shows transcripts |
 | GET | `/api/tasks` | the task catalog and last runs |

@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { validateMachines } from "./machines.mjs";
 
 export const homeDir = () => process.env.RUSUBAN_HOME || path.join(os.homedir(), ".rusuban");
 export const homePath = (name) => path.join(homeDir(), name);
@@ -142,8 +143,15 @@ export function validateConfig(raw) {
 		if (!Number.isInteger(every) || every < 30)
 			errors.push(`${at}.refreshSec must be an integer of 30 or more`);
 	}
-	for (const k of ["machines", "channels"])
-		if (c[k] !== undefined && !Array.isArray(c[k])) errors.push(`${k} must be a list`);
+	if (c.channels !== undefined && !Array.isArray(c.channels))
+		errors.push("channels must be a list");
+	// Machines (FR-060): checked and filled by their own module, their errors told with the others.
+	let machines = [];
+	try {
+		machines = validateMachines(c.machines);
+	} catch (e) {
+		errors.push(...e.message.split("\n- ").slice(1));
+	}
 	// Channels (FR-041): where pings go. Their targets hold secrets, which is why the file is mode 600.
 	const channelIds = new Set();
 	for (const [i, ch] of (Array.isArray(c.channels) ? c.channels : []).entries()) {
@@ -179,7 +187,7 @@ export function validateConfig(raw) {
 			folders: p.folders ?? [],
 			refreshSec: p.refreshSec ?? 90,
 		})),
-		machines: c.machines ?? [],
+		machines,
 		channels: c.channels ?? [],
 	};
 }

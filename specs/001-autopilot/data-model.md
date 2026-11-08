@@ -23,7 +23,10 @@ file has **one writer**. `rusuban` is the product name.
 | `runs/<run>/<ts>.log` | the run's launcher | readable live steps |
 | `hub/index.json` | daemon | `{ version, scannedAt, sessions: { "<id>": Conversation }, files: { "<path>": { size, offset, mtime } } }`; an index of another version is read again from scratch |
 | `<workspace>/.lease/` on each machine | lease module (agent CLI and daemon, same code) | Lease, created by an atomic `mkdir` over SSH: the machine arbitrates |
-| `leases/queue.json` | lease module, under a host lock | `{ "<machine>": [runId] }`, FIFO |
+| `leases/queue.json` | lease module, under a host lock | `{ "<machine>": [{ run, pid, since }] }`, FIFO; a waiter whose `lease` command died loses its place |
+| `leases/probes.json` | daemon | `{ at, probes: [{ name, state, checkedAt, lease, said?, tailnet }] }`: the last probe, which the page and the agents' context read |
+| `leases/requests.json` | `lease` command, under the host lock | `{ "<run>": { run, project, reason, asks: [{ machine, owner }], at } }`: the desktops a run asks for (T070) |
+| `leases/answers.json` | daemon, under the host lock | `{ "<run> <machine>": { yes, by, at } }`: the owner's answers, which the waiting command reads |
 | `tasks/<id>.md` | the user | Task |
 | `worktrees/<p>/<run>/` | worker launcher | git worktree of a worker |
 
@@ -147,9 +150,10 @@ firstAt, lastAt, live, branch, prs[], items[], parseError? }`
 
 - **Machine**: `{ name, os: "windows" | "macos" | "linux", ssh: "<alias>" | null, caps: ["display",
   "gpu", "webcam"], workspace, agentUser: "rusuban", owner?: "<login>", maxLeaseMin: 60 }`. `ssh: null`
-  is the host itself. The workspace holds `<project>/mirror.git` and one worktree per run.
+  is the host itself. The workspace holds one bare mirror per repo, `<project>/<repo>.git`, and one worktree per run.
 - **Probe state** (in memory, pushed to the page): `online | offline | unknown`, `checkedAt`.
-- **Lease**: `{ machine, run, pid, since, expires, reason }`. Transitions: `free → held → released |
+- **Lease**: `{ machine, run, instance, pid, project, since, expires, reason }`, in
+  `<workspace>/.lease` on the machine. Transitions: `free → held → released |
   expired`; a person's desktop goes `requested → held` only through an accepted card.
 
 ### Task (`tasks/<id>.md`)

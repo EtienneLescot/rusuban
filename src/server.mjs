@@ -32,6 +32,18 @@ import {
 } from "./home.mjs";
 import { hubState, lastIndex, openTerminal, readPage, replyTo, scanHub } from "./hub.mjs";
 import {
+	answerDesktop,
+	answerOf,
+	desktopAsks,
+	lastProbes,
+	probeMachines,
+	pruneAsks,
+	queueOf,
+	releaseLease,
+	saveProbes,
+	tendLeases,
+} from "./machines.mjs";
+import {
 	buildModel,
 	bypassStops,
 	checkAnswer,
@@ -318,6 +330,9 @@ const DEPS = {
 	headChecks,
 	scanHub,
 	openTerminal,
+	tendLeases,
+	probeMachines,
+	releaseLease,
 	dispatch,
 	sendPing,
 };
@@ -758,10 +773,13 @@ export function inboxState(ctx) {
 		.concat(settingsLog().filter((e) => e.notify && Date.parse(e.at) > week))
 		.sort((a, b) => String(b.at).localeCompare(String(a.at)))
 		.slice(0, 50);
-	// The settings that wait for the owner (FR-092) are cards like the others, newest first with them.
-	const cards = [...inboxOf(projects), ...settingsCards(ctx.config)].sort((a, b) =>
-		String(b.card.createdAt).localeCompare(String(a.card.createdAt)),
-	);
+	// The settings that wait for the owner (FR-092) and the desktops a run asks for (T070) are cards
+	// like the others, newest first with them.
+	const cards = [
+		...inboxOf(projects),
+		...settingsCards(ctx.config),
+		...desktopCards(ctx.config),
+	].sort((a, b) => String(b.card.createdAt).localeCompare(String(a.card.createdAt)));
 	return { cards, flags };
 }
 
@@ -788,11 +806,109 @@ export const runsOf = (project = null) =>
 			conversation: r.session ?? null,
 		}));
 
-// The Agents view: every project's runs and the recurring tasks, pushed like the inbox (T043).
+// ── Machines (T067, T070, T071) ───────────────────────────────────────────────────────────────
+// Each machine of the registry with its last probe and its queue, for the page and /api/machines.
+export function machinesState(ctx) {
+	const last = ctx.machines ?? lastProbes();
+	const probes = new Map((last?.probes ?? []).map((p) => [p.name, p]));
+	const queue = queueOf();
+	return {
+		checkedAt: last?.at ?? null,
+		error: ctx.machinesError ?? null,
+		machines: ctx.config.machines.map((m) => ({
+			...m,
+			probe: probes.get(m.name) ?? null,
+			queue: queue[m.name] ?? [],
+		})),
+	};
+}
+
+// A run that only a person's desktop fits asks that person (FR-063): one card per desktop, until
+// answered. The `lease` command waiting for it reads the answer.
+function desktopCards(config) {
+	return Object.values(desktopAsks()).flatMap((r) =>
+		r.asks
+			.filter((a) => !answerOf(r.run, a.machine))
+			.map((a) => {
+				const m = config.machines.find((x) => x.name === a.machine);
+				const q = `Can a run take your desktop ${a.machine}?`;
+				return {
+					project: r.project,
+					projectTitle: config.projects.find((p) => p.id === r.project)?.title ?? r.project,
+					item: null,
+					type: "lease",
+					label: q,
+					kind: null,
+					author: null,
+					url: null,
+					itemOpen: true,
+					judgedBy: null,
+					evidence: null,
+					card: {
+						id: `lease:${r.run}:${a.machine}`,
+						to: a.owner,
+						urgency: "now",
+						q,
+						ctx: `Run ${r.run} asks for it: ${r.reason}. It works there as ${m?.agentUser ?? "its own account"}, ${m?.maxLeaseMin ?? 60} min at most.`,
+						done: [],
+						rec: null,
+						why: null,
+						options: [
+							{ id: "allow", label: "Lend it", effect: "The run takes it at its next try." },
+							{
+								id: "deny",
+								label: "Not now",
+								effect: "The run is told no and goes on without it.",
+							},
+						],
+						createdAt: r.at,
+					},
+				};
+			}),
+	);
+}
+
+// The owner's answer to a desktop's card: the `lease` command takes it, or stops waiting on a no.
+async function confirmLease(ctx, body, res) {
+	if (!["allow", "deny"].includes(body.option))
+		return json(res, 400, { error: "a desktop's card is answered allow or deny" });
+	const [, run, machine] = String(body.card).split(":");
+	const r = desktopAsks()[run];
+	if (!r?.asks.some((a) => a.machine === machine) || answerOf(run, machine))
+		return json(res, 409, { error: "this request is answered or over" });
+	const yes = body.option === "allow";
+	await answerDesktop(run, machine, yes, ctx.config.owner.login);
+	journal(r.project, {
+		kind: "lease",
+		item: null,
+		text: yes ? `Lent ${machine} to run ${run}` : `Kept ${machine} from run ${run}`,
+		by: ctx.config.owner.login,
+		machine,
+		run,
+	});
+	ctx.broadcast(true);
+	return json(res, 200, { ok: true });
+}
+
+// "Release" in the Agents view: the lease ends whoever holds it, journaled as the owner's.
+async function releaseMachine(ctx, name, res) {
+	if (!ctx.config.machines.some((m) => m.name === name))
+		return json(res, 404, { error: `no machine named ${name}` });
+	const by = ctx.config.owner.login;
+	const released = await depsOf(ctx).releaseLease(ctx.config, name, null, {
+		log: (project, entry) => journal(project, { ...entry, by }),
+	});
+	ctx.passMachines?.();
+	return json(res, 200, { released });
+}
+
+// The Agents view: every project's runs, the recurring tasks and the machines, pushed like the inbox
+// (T043).
 export const agentsState = (ctx) => ({
 	dry: ctx.dry,
 	runs: runsOf().slice(0, 40),
 	tasks: tasksState(ctx.config),
+	machines: machinesState(ctx),
 });
 
 // A run's log and a task's file, as text the page opens in a tab. A log's name comes from the run's
@@ -941,6 +1057,7 @@ function confirmSetting(ctx, body, res) {
 
 function answer(ctx, body, res) {
 	if (String(body.card ?? "").startsWith("setting:")) return confirmSetting(ctx, body, res);
+	if (String(body.card ?? "").startsWith("lease:")) return confirmLease(ctx, body, res);
 	const p = ctx.config.projects.find((x) => x.id === body.project);
 	if (!p) return json(res, 404, { error: "unknown project" });
 	const dir = `projects/${p.id}`;
@@ -1010,6 +1127,8 @@ async function post(ctx, path, body, res, req) {
 	const by = ctx.config.owner.login;
 	if (path === "/api/answer") return answer(ctx, body, res);
 	if (path === "/api/ask") return ask(ctx, body, res);
+	const releasing = /^\/api\/machines\/([^/]+)\/release$/.exec(path);
+	if (releasing) return releaseMachine(ctx, decodeURIComponent(releasing[1]), res);
 	const stopping = /^\/api\/runs\/([^/]+)\/stop$/.exec(path);
 	if (stopping) return stop(ctx, decodeURIComponent(stopping[1]), res);
 	const running = /^\/api\/tasks\/([^/]+)\/run$/.exec(path);
@@ -1059,6 +1178,8 @@ async function handle(ctx, req, res) {
 		}
 		if (req.method === "GET" && url.pathname === "/api/tasks")
 			return json(res, 200, { tasks: tasksState(ctx.config) });
+		if (req.method === "GET" && url.pathname === "/api/machines")
+			return json(res, 200, machinesState(ctx));
 		if (req.method === "GET" && url.pathname === "/api/runs")
 			return json(res, 200, { runs: runsOf(url.searchParams.get("project")) });
 		const log = req.method === "GET" && /^\/api\/runs\/([\w-]+)\/log$/.exec(url.pathname);
@@ -1206,6 +1327,29 @@ export async function startServer({
 	if (polling) {
 		passHub();
 		timers.push(setInterval(passHub, 30_000));
+	}
+	// Machines (T067): every 2 min, the leases tended first (renewed, or freed when their run died or
+	// ran out), then every machine probed. The probe is saved for the agents' context too.
+	let probing = false;
+	ctx.passMachines = async () => {
+		if (probing || !ctx.config.machines.length) return;
+		probing = true;
+		try {
+			const deps = depsOf(ctx);
+			await deps.tendLeases(ctx.config);
+			await pruneAsks();
+			ctx.machines = saveProbes(await deps.probeMachines(ctx.config));
+			ctx.machinesError = null;
+		} catch (e) {
+			ctx.machinesError = firstLine(e);
+		} finally {
+			probing = false;
+			ctx.broadcast();
+		}
+	};
+	if (polling) {
+		ctx.passMachines();
+		timers.push(setInterval(ctx.passMachines, 120_000));
 	}
 	// Pings (T065): every minute, never two at once.
 	if (polling && !dry) {

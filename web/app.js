@@ -231,6 +231,22 @@ const T = {
 	cardGone: "This card is closed: it was answered or replaced.",
 	answerSent: "Answer sent",
 	setting: "Setting",
+	lease: "Machine",
+	machines: "Machines",
+	probed: (age) => `probed ${age} ago`,
+	notProbed: "Not probed yet.",
+	desktopOf: (login) => `${login}'s desktop`,
+	machineFree: "Free.",
+	machineFreeAsks: (login) => `Free · each lease asks ${login} first.`,
+	machineOffline: (since, said) =>
+		`Offline${since ? ` for ${since}` : ""}: ${String(said ?? "no answer").replace(/\.$/, "")}.`,
+	heldBy: (run, ref, left, next) =>
+		`Held by <b>${run}</b>${ref ? ` for ${ref}` : ""}, ${left} left.${next ? ` Next: <b>${next.run}</b>, waiting ${next.wait}.` : ""}`,
+	leaseUnreadable: "Held, by a lease that cannot be read: Release frees it.",
+	release: "Release",
+	confirmRelease: "Release it?",
+	released: (name) => `${name} released`,
+	releaseFailed: (e) => `Not released: ${e}`,
 	answerFailed: (error) => `Answer refused: ${error}`,
 	flagged: "Flagged for you",
 	issueRef: (n) => `Issue #${n}`,
@@ -314,6 +330,7 @@ let HUB = { indexedAt: null, conversations: [], items: {} }; // every project's 
 let READER = null; // the conversation open in the reader, a page of it
 let chosen = null; // the option picked on the open card, waiting for Send
 let stopArmed = null; // the run whose Stop was pressed once
+let releaseArmed = null; // the machine whose Release was pressed once
 let runFocus = null; // the runs the Agents view highlights: a run id, or an item's runs
 const openTasks = new Set(); // the tasks unfolded in the Agents view
 
@@ -833,8 +850,11 @@ function renderKanban() {
 const safeUrl = (u) => (/^https?:\/\//i.test(String(u ?? "")) ? u : null);
 const BACK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>';
 const ARROW = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>';
+// A setting and a desktop asked for are allowed or not, never answered in words.
+const yesOrNo = (c) => c.type === "setting" || c.type === "lease";
 const refOf = (c) => {
 	if (c.type === "setting") return T.setting;
+	if (c.type === "lease") return T.lease;
 	const n = String(c.item).split("#")[1];
 	return c.type === "pr" ? T.prRef(n) : T.issueRef(n);
 };
@@ -934,13 +954,13 @@ function cardViewHtml(c) {
 			${pick ? `<div class="cv-confirm"><button type="button" class="send-option" data-send>${esc(T.sendOption(pick.label))}</button>${pick.message ? `<small>${T.postsOnGitHub} ${esc(pick.message)}</small>` : ""}</div>` : ""}
 			${
 				// A setting is allowed or not, never answered in words (the validated mockup).
-				c.type === "setting"
+				yesOrNo(c)
 					? ""
 					: `<label for="cv-free" class="cv-free-label">${ph ? T.ownWordsShort : T.ownWords}</label>
 			<div class="cv-free"><textarea id="cv-free" rows="2"></textarea><button type="button" class="send" data-send-free${ph ? ` aria-label="${T.send}"` : ""}>${ph ? ARROW : T.send}</button></div>`
 			}`;
 	}
-	return `<article class="cv${c.type === "setting" ? " setting" : ""}" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${did}${body}</article>`;
+	return `<article class="cv${yesOrNo(c) ? " setting" : ""}" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${did}${body}</article>`;
 }
 
 let inboxKey = "";
@@ -982,7 +1002,7 @@ async function sendAnswer(c, option, note = "") {
 		draft = { card: null, text: "" };
 		toast(T.answerSent);
 		// A setting allowed or declined is done with: back to the inbox.
-		if (c.type === "setting") location.hash = "inbox";
+		if (yesOrNo(c)) location.hash = "inbox";
 	} catch (err) {
 		toast(T.answerFailed(err.message), true);
 	}
@@ -1252,6 +1272,41 @@ function recentHtml(r, ph) {
 
 let agentsHtml = "";
 let scrolledTo = null;
+// ── Machines (T071, the validated mockup): a card each in the Agents view ────────────────────
+const OS_NAME = { windows: "Windows", macos: "macOS", linux: "Linux" };
+const runById = (id) => AGENTS.runs.find((r) => r.id === id);
+const leaseRunName = (id) => esc(runById(id) ? runLabel(runById(id)) : id);
+const sinceNow = (iso) => span(Math.abs(Date.parse(iso) - Date.now()));
+function machineHtml(m) {
+	const p = m.probe;
+	const lease = p?.state === "online" ? p.lease : null;
+	const state = !p ? "unknown" : p.state === "offline" ? "off" : lease ? "held" : "free";
+	let line = T.notProbed;
+	if (state === "off")
+		line = esc(T.machineOffline(p.tailnet?.lastSeen ? sinceNow(p.tailnet.lastSeen) : null, p.said));
+	else if (lease?.unreadable) line = esc(T.leaseUnreadable);
+	else if (lease) {
+		const r = runById(lease.run);
+		const next = m.queue.find((q) => q.run !== lease.run);
+		line = T.heldBy(
+			leaseRunName(lease.run),
+			r ? esc(runRef(r)) : "",
+			sinceNow(lease.expires),
+			next ? { run: leaseRunName(next.run), wait: sinceNow(next.since) } : null,
+		);
+	} else if (state === "free") line = esc(m.owner ? T.machineFreeAsks(m.owner) : T.machineFree);
+	const armed = releaseArmed === m.name;
+	const r = lease && !lease.unreadable ? runById(lease.run) : null;
+	const actions = lease
+		? `<div class="ag-actions">${r ? conversationLink(r) : ""}<span class="grow"></span><button type="button" class="ag-stop${armed ? " armed" : ""}" data-release="${esc(m.name)}">${armed ? T.confirmRelease : T.release}</button></div>`
+		: "";
+	return `<div class="ag-run mc ${state}" id="machine-${esc(m.name)}">
+		<div class="ag-head"><i class="mc-dot ${state}"></i><b class="ag-name">${esc(m.name)}</b><span>${OS_NAME[m.os] ?? esc(m.os)}</span>${m.owner ? `<span class="mc-desk">${esc(T.desktopOf(m.owner))}</span>` : ""}<span class="grow"></span>${p ? `<span>${esc(T.probed(sinceNow(p.checkedAt)))}</span>` : ""}</div>
+		<div class="mc-tags">${[m.os, ...m.caps].map((t) => `<span>${esc(t)}</span>`).join("")}</div>
+		<span class="mc-state ${state}">${line}</span>${actions}
+	</div>`;
+}
+
 function renderAgents() {
 	const el = $("agents-view");
 	if (el.hidden) return;
@@ -1266,6 +1321,7 @@ function renderAgents() {
 		: `<div class="ag-grid ag-cols"><span>${T.colTask}</span><span>${T.colSchedule}</span><span>${T.colNext}</span><span>${T.colLastRun}</span><span></span></div>`;
 	const html = `
 		<section aria-label="${T.runningNow}"><h2>${T.runningNow}</h2>${live.length ? `<div class="ag-running">${live.map(runCardHtml).join("")}</div>` : `<p class="ag-empty">${T.nothingRunning}</p>`}</section>
+		${AGENTS.machines?.machines.length ? `<section aria-label="${T.machines}"><h2>${T.machines}</h2><div class="ag-running">${AGENTS.machines.machines.map(machineHtml).join("")}</div></section>` : ""}
 		<section aria-label="${T.recurringTasks}"><h2>${T.recurringTasks}</h2>${AGENTS.tasks.length ? cols + AGENTS.tasks.map((t) => taskHtml(t, ph)).join("") : `<p class="ag-empty">${T.noTasks}</p>`}</section>
 		<section aria-label="${T.recentRuns}"><h2>${T.recentRuns}<span class="grow"></span><button type="button" class="linkish" data-journal>${T.journalAndRules}</button></h2>${recent.map((r) => recentHtml(r, ph)).join("") || `<p class="ag-empty">${T.none}</p>`}</section>`;
 	// Rebuilt only when it changes, keeping its scroll; the times at work tick in place.
@@ -1730,6 +1786,15 @@ function cardClick(t) {
 		post(`/api/runs/${encodeURIComponent(d.stop)}/stop`)
 			.then(() => toast(T.runStopped))
 			.catch((err) => toast(T.stopFailed(err.message), true));
+	} else if (d.release) {
+		if (releaseArmed !== d.release) {
+			releaseArmed = d.release;
+			return renderAgents();
+		}
+		releaseArmed = null;
+		post(`/api/machines/${encodeURIComponent(d.release)}/release`)
+			.then(() => toast(T.released(d.release)))
+			.catch((err) => toast(T.releaseFailed(err.message), true));
 	} else if (d.runTask) {
 		const t = AGENTS.tasks.find((x) => x.id === d.runTask);
 		post(`/api/tasks/${encodeURIComponent(d.runTask)}/run`)
@@ -1783,11 +1848,15 @@ document.addEventListener("click", (e) => {
 	if (e.target.closest("a[href]")) return;
 	// The tab bar's own buttons only: <body> carries the current tab too, and every click reaches it.
 	const card = e.target.closest(
-		"[data-card],[data-back],[data-option],[data-send],[data-send-free],[data-stop],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],[data-conv],[data-conv-back],[data-origin],[data-earlier],[data-reply],[data-terminal],#tabbar [data-tab]",
+		"[data-card],[data-back],[data-option],[data-send],[data-send-free],[data-stop],[data-release],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],[data-conv],[data-conv-back],[data-origin],[data-earlier],[data-reply],[data-terminal],#tabbar [data-tab]",
 	);
 	// A Stop pressed once is forgotten at the next click elsewhere.
 	if (stopArmed && !card?.dataset.stop) {
 		stopArmed = null;
+		renderAgents();
+	}
+	if (releaseArmed && !card?.dataset.release) {
+		releaseArmed = null;
 		renderAgents();
 	}
 	if (card && cardClick(card)) return;

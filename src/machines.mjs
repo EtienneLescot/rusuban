@@ -722,3 +722,52 @@ export async function tendLeases(config, deps = {}) {
 		return freed.filter(Boolean);
 	});
 }
+
+// ── What the daemon shares (T067, T070, T071) ─────────────────────────────────────────────────
+// The last probe of every machine, written by the daemon; the page and the agents' context read it.
+const PROBES = "leases/probes.json";
+export const lastProbes = () => read(PROBES, null);
+export const saveProbes = (probes) => {
+	const state = { at: new Date().toISOString(), probes };
+	write(PROBES, state);
+	return state;
+};
+export const queueOf = () => read(QUEUE, {});
+
+// A person's yes (T070). While it waits, the `lease` command asks in requests.json; the dashboard
+// shows each ask as a card, and its answer goes to answers.json, which the command reads.
+const REQUESTS = "leases/requests.json"; // { "<run>": { run, project, reason, asks, at } }
+const ANSWERS = "leases/answers.json"; // { "<run> <machine>": { yes, by, at } }
+export const desktopAsks = () => read(REQUESTS, {});
+export const answerOf = (run, machine) => read(ANSWERS, {})[`${run} ${machine}`] ?? null;
+export const askDesktop = ({ run, project, reason, asks }) =>
+	withLeaseLock(() => {
+		const all = read(REQUESTS, {});
+		all[run] = { run, project, reason, asks, at: all[run]?.at ?? new Date().toISOString() };
+		write(REQUESTS, all);
+	});
+export const answerDesktop = (run, machine, yes, by) =>
+	withLeaseLock(() =>
+		write(ANSWERS, {
+			...read(ANSWERS, {}),
+			[`${run} ${machine}`]: { yes, by, at: new Date().toISOString() },
+		}),
+	);
+
+// The asks and answers of runs that no longer run go, at each probe.
+export const pruneAsks = (alive = isAlive) =>
+	withLeaseLock(() => {
+		const runs = (id) => {
+			const s = read(`runs/${id}/status.json`, null);
+			return s?.state === "running" && alive(s.pid);
+		};
+		const keep = (o, run) => Object.fromEntries(Object.entries(o).filter(([k]) => runs(run(k))));
+		write(
+			REQUESTS,
+			keep(read(REQUESTS, {}), (k) => k),
+		);
+		write(
+			ANSWERS,
+			keep(read(ANSWERS, {}), (k) => k.split(" ")[0]),
+		);
+	});
