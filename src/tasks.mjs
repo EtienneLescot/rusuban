@@ -61,7 +61,7 @@ export function parseTask(id, text, config, since = 0) {
 	const lock = meta.lock || `${meta.project}.task.${id}`;
 	if (!SAFE.test(lock)) errors.push("lock is letters, digits, dots, dashes");
 	// A dotted lock is a project's groups (`sandbox.coordinator`): a task joins its own project's,
-	// never another's. A group shared across projects has no dot (`demo-factory`).
+	// never another's. A group shared across projects has no dot (`publishing`).
 	else if (lock.includes(".") && !lock.startsWith(`${meta.project}.`))
 		errors.push(`lock ${lock} is another project's: a dotted lock starts with "${meta.project}."`);
 	// Without a folder of its own, a task works in its project's scratch folder, made when it runs.
