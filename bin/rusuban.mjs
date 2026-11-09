@@ -495,6 +495,7 @@ const commands = {
 				judgment: p.judgment(),
 				rules: read(`${p.dir}/rules.json`, {}),
 				refused: refusedOf(readJsonl(`${p.dir}/journal.jsonl`)),
+				examined: read(`${p.dir}/triggers.json`, {}).examined,
 			}),
 		);
 	},

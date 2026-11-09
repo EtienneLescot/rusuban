@@ -541,8 +541,16 @@ function triggerRuns(p, { live, judgment, rules }, deps) {
 		t[kind] = { sig, at: new Date().toISOString(), run: r.id };
 		return true;
 	};
+	// A judge that ended well examined the CI approvals it was handed: each comes back on a new head.
+	const last = t.judge?.approvals && readRun(t.judge.run);
+	if (last?.state === "done") {
+		const open = new Set(live.prs.map(keyOf));
+		const examined = Object.entries({ ...t.examined, ...t.judge.approvals });
+		t.examined = Object.fromEntries(examined.filter(([item]) => open.has(item)));
+		delete t.judge.approvals;
+	}
 	const refused = refusedOf(readJsonl(`${dir}/journal.jsonl`));
-	const todo = todoOf({ live, judgment, rules, refused });
+	const todo = todoOf({ live, judgment, rules, refused, examined: t.examined });
 	const judge =
 		todo.length > 0 &&
 		!busy(p.id, "judge") &&
@@ -574,7 +582,9 @@ function triggerRuns(p, { live, judgment, rules }, deps) {
 		waiting.length > 0 &&
 		!busy(p.id, "act") &&
 		fire("act", hash(waiting.join()), () => deps.requestCoordinator(p.id, "change"));
-	if (judge || act) write(`${dir}/triggers.json`, t);
+	const approvals = todo.filter((x) => x.reason === "ci-approval").map((x) => [x.item, x.head]);
+	if (judge && approvals.length) t.judge.approvals = Object.fromEntries(approvals);
+	if (judge || act || last?.state === "done") write(`${dir}/triggers.json`, t);
 }
 
 export async function runCycle(ctx, p, liveFile, rules, deps = DEPS) {

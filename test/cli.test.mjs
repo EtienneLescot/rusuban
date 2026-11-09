@@ -224,6 +224,13 @@ test("the agent commands read and write a project's files", () => {
 	assert.equal(judged.status, 0, judged.stderr);
 	assert.match(judged.stdout, /1 judgment written: o\/r#1/);
 	assert.deepEqual(todo(), ["o/r#10:unjudged"]);
+	// A fork's CI approval a judge ended on is not listed again while its head stays.
+	const liveFile = JSON.parse(fs.readFileSync(path.join(home, "projects/demo/live.json"), "utf8"));
+	liveFile.repos["o/r"].prs[0].ci = { state: "action_required", runIds: [7], waiting: [] };
+	put("projects/demo/live.json", liveFile);
+	assert.deepEqual(todo(), ["o/r#1:ci-approval", "o/r#10:unjudged"]);
+	put("projects/demo/triggers.json", { examined: { "o/r#1": "abc" } });
+	assert.deepEqual(todo(), ["o/r#10:unjudged"]);
 	const shown = JSON.parse(run("show", "#1").stdout);
 	assert.deepEqual([shown.item, shown.judgment.judgedBy], ["o/r#1", "agent:judge-1"]);
 

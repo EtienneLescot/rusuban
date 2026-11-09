@@ -416,8 +416,16 @@ export function refusedOf(journal = []) {
 
 // The reasons of contracts/cli.md, plus `conflict`. No delay is built in: an item comes back to the
 // agents at its judgment's revisitAt, which the agent sets from the project's rules. Items of repos
-// without rules never appear (FR-024). A refusal comes once: a card written after it settles it.
-export function todoOf({ live, judgment, rules = {}, refused = new Map(), now = Date.now() }) {
+// without rules never appear (FR-024). A refusal comes once: a card written after it settles it. A
+// fork's CI approval comes once per head: `examined` holds, per PR, the head a judge ended on.
+export function todoOf({
+	live,
+	judgment,
+	rules = {},
+	refused = new Map(),
+	examined = {},
+	now = Date.now(),
+}) {
 	const acting = actingRepos(rules);
 	const items = judgment.items ?? {};
 	const out = [];
@@ -449,7 +457,7 @@ export function todoOf({ live, judgment, rules = {}, refused = new Map(), now = 
 			});
 		else if (!hasOpenCard(j) && conflicts(pr, j, rules[pr.repo]))
 			out.push({ item, type: "pr", reason: "conflict", head: pr.head, base: pr.base });
-		if (pr.ci.state === "action_required")
+		if (pr.ci.state === "action_required" && examined[item] !== pr.head)
 			out.push({
 				item,
 				type: "pr",

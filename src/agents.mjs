@@ -820,6 +820,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 							judgment: read(`${dir}/judgment.json`, { items: {} }),
 							rules: read(`${dir}/rules.json`, {}),
 							refused: refusedOf(readJsonl(`${dir}/journal.jsonl`)),
+							examined: read(`${dir}/triggers.json`, {}).examined,
 						}).length;
 			if (idle)
 				return end({
