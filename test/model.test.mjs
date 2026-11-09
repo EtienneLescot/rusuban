@@ -277,6 +277,20 @@ test("todo lists every reason, and skips observe-only repos", () => {
 	assert.deepEqual(todoOf({ live, judgment, rules: { [REPO]: { observeOnly: true } }, now }), []);
 });
 
+test("a fork's CI approval comes once per head", () => {
+	const ci = { state: "action_required", runId: 7, runIds: [7], waiting: ["CI"] };
+	const todo = (over) =>
+		todoOf({
+			live: { prs: [pr(1, { ci })], issues: [] },
+			judgment: { items: { "o/r#1": fix(1) } },
+			rules: { [REPO]: RULES },
+			...over,
+		}).map((t) => `${t.reason}@${t.head}`);
+	assert.deepEqual(todo(), ["ci-approval@sha1"]);
+	assert.deepEqual(todo({ examined: { "o/r#1": "sha1" } }), [], "examined on this head");
+	assert.deepEqual(todo({ examined: { "o/r#1": "sha0" } }), ["ci-approval@sha1"], "a new head");
+});
+
 test("lock-blocked: a PR judged mergeable alone that a project lock or .rusuban/ stops", () => {
 	const todo = (p, j, rules = RULES) =>
 		todoOf({

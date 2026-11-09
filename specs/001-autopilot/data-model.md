@@ -17,6 +17,7 @@ file has **one writer**. `rusuban` is the product name.
 | `projects/<p>/asks.jsonl` | daemon | `{ at, text, item?, by }` |
 | `projects/<p>/journal.jsonl` | daemon | `{ at, kind, item?, text, href?, by }` |
 | `projects/<p>/agent-log.jsonl` | agent CLI, under the judgment lock | same shape; the dashboard shows both files as one journal |
+| `projects/<p>/triggers.json` | daemon | what started the last judge and coordinator, `{ sig, at, run }` each, and `examined: { "<owner/repo#n>": head }`: the fork CI approvals a judge ended on, which come back on a new head only |
 | `pings.json` | daemon | the pings' state between two calls of the dispatcher: per channel, since when it pings and what it sent or retries |
 | `automerge.json` | the settings module (the dashboard's switch, the MCP) | the merge switch: `{ armed, at, by }`; `init` asks whether to arm it; arming it from Claude waits for the owner (FR-092) |
 | `runs/<run>/status.json` | the run's launcher | Run |

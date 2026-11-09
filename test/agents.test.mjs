@@ -471,6 +471,12 @@ test("a run that finds its work done when it starts ends without a session", asy
 		[judge.state, judge.session, judge.summary],
 		["done", null, "Nothing to judge when the run started."],
 	);
+	// Nor is a fork's CI approval a judge ended on, while its head stays.
+	const fork = { ...PR, ci: { state: "action_required", runIds: [7], waiting: [] } };
+	write("projects/demo/live.json", { repos: { "o/r": { defaultBranch: "main", prs: [fork] } } });
+	write("projects/demo/triggers.json", { examined: { "o/r#1": "abc" } });
+	const examined = await executeRun(request().id, { config, command: FAKE });
+	assert.equal(examined.summary, "Nothing to judge when the run started.");
 	const act = await executeRun(request({ kind: "act" }).id, { config, command: FAKE });
 	assert.deepEqual([act.state, act.summary], ["done", "Nothing waited when the run started."]);
 });

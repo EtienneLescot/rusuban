@@ -243,6 +243,25 @@ test("agents start on change: a judge when the todo changes, a coordinator when 
 	assert.deepEqual(coordinators, ["change"]);
 });
 
+test("a fork's CI waiting for an approval starts one judge per head, not one per change", async () => {
+	const ci = { state: "action_required", runId: 7, runIds: [7], waiting: ["CI"] };
+	const fork = (head = "sha1") => pr(1, { head, ci });
+	const judged = (n) => auto(n, { pr: { head: `sha${n}`, auto: false } });
+	const ended = (id) => write(`runs/${id}/status.json`, { id, project: "demo", state: "done" });
+	write("projects/demo/judgment.json", { items: { "o/r#1": judged(1) } });
+	await runCycle(ctxOf(), project(), liveOf([fork()]), RULES, deps);
+	assert.deepEqual(runs.at(-1).items, ["o/r#1"]);
+	ended("run-1");
+	await runCycle(ctxOf(), project(), liveOf([fork(), pr(2)]), RULES, deps);
+	assert.deepEqual(runs.at(-1).items, ["o/r#2"], "the approval examined is not handed out again");
+	ended("run-2");
+	write("projects/demo/judgment.json", { items: { "o/r#1": judged(1), "o/r#2": judged(2) } });
+	await runCycle(ctxOf(), project(), liveOf([fork(), pr(2)]), RULES, deps);
+	assert.equal(runs.length, 2, "nothing left but the approval examined on this head");
+	await runCycle(ctxOf(), project(), liveOf([fork("sha1b"), pr(2)]), RULES, deps);
+	assert.deepEqual(runs.at(-1).items, ["o/r#1"], "a new head is examined again");
+});
+
 test("a project without rules and a dry daemon start nothing", async () => {
 	const observe = { [REPO]: { ...RULES[REPO], observeOnly: true, files: [] } };
 	await runCycle(ctxOf(), project(), liveOf([pr(1)]), observe, deps);
