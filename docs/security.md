@@ -32,8 +32,6 @@ profile. Your own `permissions.deny` adds to them; nothing removes them.
 | The owner's commands | `rusuban project`, `task`, `start`, `permissions`, `machine`, `channel`, `remote`, `service`, `init`, `mcp`, and Rusuban's MCP server (`mcp__rusuban`). The CLI and the MCP server also refuse to run inside a run. |
 | The instance's state | Edits to `config.json`, `automerge.json`, `projects/`, `runs/`, `hub/`, `leases/`, `tasks/` and `bin/` in the instance home. Agents keep their own folders there: `scratch/`, `worktrees/`, `repos/`. |
 | The dashboard and your files, from the shell | Any shell command that names the dashboard's port (`:<port>`) or a tailnet address (`.ts.net`), `config.json` next to the home's name, `automerge.json`, `answers.jsonl` or `pending.json`. A speed bump, not a wall: see the residual risks. |
-| GitHub writes, in a shadow project | Every `gh` write (comments, reviews, closes, edits, labels, releases, workflows, secrets); `gh api` with a method, a field or a body; every `git push`. |
-
 A denied call is refused, and the run's log says so.
 
 ## Only your settings reach a run
@@ -86,7 +84,7 @@ the agents' PRs, pushed under your account, cannot get your approval. The approv
 
 - **Off for every project** until you run `rusuban project bypass <id> on`, which sets `bypassApproval`
   in `config.json`. No repo, rule, PR or agent sets it.
-- **It merges only what the server merges anyway**: in a live project, with the merge switch armed,
+- **It merges only what the server merges anyway**: with the merge switch armed,
   every gate green or your merge order given. It then merges with `gh pr merge --admin`.
 - **`--admin` skips every rule of the branch**, so the server first reads the base branch's rulesets,
   its classic protection in full, and the head's checks. It merges only if:
@@ -145,6 +143,6 @@ Each lock has a test that tries to break it:
 
 - the gates, and adversarial PRs (the rules edited in the PR, injected instructions, red CI, a moved
   head, a locked path, a missing proof): `test/merge-gate.test.mjs` and `test/fixtures/prs/`;
-- the deny rules, under both profiles and in shadow mode: `test/agents.test.mjs`;
+- the deny rules, under both profiles: `test/agents.test.mjs`;
 - the identity check and forged writes: `test/server.test.mjs`;
 - the approval bypass and the owner's commands: `test/bypass.test.mjs`.

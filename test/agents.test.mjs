@@ -18,7 +18,6 @@ import {
 	readRun,
 	requestRun,
 	runner,
-	SHADOW_DENY,
 	scratchOf,
 	stopRun,
 	usageLimitOf,
@@ -106,32 +105,13 @@ test("path rules are POSIX, a Windows drive written /c", () => {
 	assert.equal(editRule(path.join(HOME, "config.json"), false), `Edit(${POSIX_HOME}/config.json)`);
 });
 
-test("a shadow project's runs are denied every GitHub write", () => {
-	for (const rule of [
-		"Bash(gh pr comment*)",
-		"Bash(gh pr review*)",
-		"Bash(gh issue close*)",
-		"Bash(gh pr edit*)",
-		"Bash(gh api* -X*)",
-		"Bash(gh api* --method*)",
-		"Bash(gh api* -f*)",
-		"Bash(git push*)",
-	])
-		assert.ok(SHADOW_DENY.includes(rule), rule);
-	assert.ok(!builtInDeny({ home: HOME }).some((r) => SHADOW_DENY.includes(r)));
-	assert.deepEqual(
-		builtInDeny({ home: HOME, shadow: true }).slice(-SHADOW_DENY.length),
-		SHADOW_DENY,
-	);
-});
-
 const config = {
 	version: 1,
 	owner: { login: "alice" },
 	port: 0,
 	permissions: { mode: "bypass", allow: [], deny: [] },
 	limits: { maxWorkers: 3, maxRunMinutes: 150 },
-	projects: [{ id: "demo", title: "Demo", mode: "live", repos: [{ slug: "o/r" }] }],
+	projects: [{ id: "demo", title: "Demo", repos: [{ slug: "o/r" }] }],
 	machines: [],
 	channels: [],
 };
@@ -234,7 +214,6 @@ test("a run builds its prompt when it starts, works in its folder with rusuban o
 	assert.ok(reported.args.includes("--dangerously-skip-permissions"));
 	for (const rule of builtInDeny({ home: process.env.RUSUBAN_HOME, defaultBranches: ["main"] }))
 		assert.ok(reported.args.includes(rule), rule);
-	assert.ok(!reported.args.includes("Bash(git push*)"), "a live project gets no shadow rules");
 	assert.match(
 		fs.readFileSync(homePath(`runs/${id}/prompt.md`), "utf8"),
 		/# Your mission\n\nLook at #1 first\./,
@@ -246,14 +225,11 @@ test("a run builds its prompt when it starts, works in its folder with rusuban o
 	assert.equal(holder("demo.coordinator"), null);
 });
 
-test("a run of a shadow project gets the shadow rules; a project no longer configured does not start", async () => {
-	const run = async (projects) => {
-		const { id } = request();
-		return executeRun(id, { config: { ...config, projects }, command: FAKE });
-	};
-	const shadow = await run([{ ...config.projects[0], mode: "shadow" }]);
-	assert.ok(JSON.parse(shadow.summary).args.includes("Bash(git push*)"));
-	const gone = await run([]);
+test("a run of a project no longer configured does not start", async () => {
+	const gone = await executeRun(request().id, {
+		config: { ...config, projects: [] },
+		command: FAKE,
+	});
 	assert.deepEqual(
 		[gone.state, gone.summary],
 		["failed", 'Could not start: unknown project "demo"'],

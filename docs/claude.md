@@ -21,15 +21,15 @@ it**. Claude tells you it is pending.
 
 What widens:
 
-- a project made live, its approval bypass turned on, the merge switch armed;
+- a project added, or a repo added to one: agents act on a repo as its rules say;
+- a project's approval bypass turned on, the merge switch armed;
 - the host profile set to `bypass`;
-- a repo added to a live project;
 - the limits raised, a new owner;
 - a task written or changed: its card shows the task, or the diff of its file;
 - a channel added, since cards leave for its target;
 - remote access turned on.
 
-What narrows applies at once: shadow mode, the bypass off, the switch paused, the limits lowered, a
+What narrows applies at once: the bypass off, the switch paused, the limits lowered, a
 project, a channel or a task removed, remote access off.
 
 In a terminal, `rusuban` asks you to type the change's target instead of making a card. Claude's own

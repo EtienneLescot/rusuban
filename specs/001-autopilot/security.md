@@ -18,8 +18,8 @@ This file is about the settings: Claude can set Rusuban up (US9), and Rusuban gi
    - The change waits as a card that the owner allows in the dashboard. In a terminal, a typed
      confirmation is enough.
    - FR-092 lists what widens.
-3. **What narrows applies at once**: shadow mode, the bypass off, the switch disarmed, a project, a
-   channel or a machine removed.
+3. **What narrows applies at once**: the bypass off, the switch disarmed, a project, a channel or a
+   machine removed.
 
 Every change, either way, goes to `settings.jsonl` with its origin: a terminal, the command line
 without one, the MCP, or a confirmation in the dashboard. The page shows it in the journal.

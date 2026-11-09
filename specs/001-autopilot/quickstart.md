@@ -25,7 +25,7 @@ rusuban init
 | Criterion | How it is checked |
 |---|---|
 | SC-001 install under 10 min | A clean VM per OS (Windows, macOS, Linux) with `gh` and `claude` logged in: time from `npm i -g rusuban` to the dashboard showing a public repo. |
-| SC-002 OpenScreen with no specific code | `grep -ri openscreen src/ web/ bin/` finds nothing; the OpenScreen project runs from its rules, locks, machines and tasks only, and matches the old pilot's judgments during the shadow week. |
+| SC-002 OpenScreen with no specific code | `grep -ri openscreen src/ web/ bin/` finds nothing; the OpenScreen project runs from its rules, locks, machines and tasks only. The shadow week that compared its judgments with the old pilot's was dropped on 2026-11-08: Etienne's own trials replace it. |
 | SC-003 conversations within 1 min, 90 % linked | Open sessions in Desktop and the terminal on 10 known items; measure the time until they appear and count the correct links. |
 | SC-004 3 taps from a ping | On a phone over Tailscale: notification → card → option. |
 | SC-005 no merge with a lock broken | Adversarial fixtures in the test suite: a PR editing `.rusuban/`, injected instructions in a body, red CI, a moved head, a locked path, a missing evidence. Each must stay unmerged, with the gate that stopped it. |
@@ -39,8 +39,9 @@ rusuban init
 2. Move the `publications` and `n8n-series` tasks to the instance. OpenScreen's rules describe its
    machines as text, as today; the registry (`mac`, `vivobook`, `sarae`, Etienne's desktop with
    `--owner EtienneLescot`) comes with Phase 9.
-3. Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge); its
-   judgments are compared daily with the old pilot's.
-4. Switch: the project goes `live`; the `OpenScreenDashboard` Windows task is repointed to
+3. Trials: Etienne tries Rusuban on OpenScreen himself (decided 2026-11-08, in place of a shadow week;
+   shadow mode itself was removed on 2026-11-09).
+4. Switch: the `"mode"` key goes from OpenScreen's project in `config.json` (the daemon refuses to
+   start while it is there), at the same time as the old pilot stops; the `OpenScreenDashboard` Windows task is repointed to
    `rusuban start`, `OpenScreenTasks` is removed (the daemon schedules tasks), the shortcuts are
    repointed, and `.claude/pilot` is archived read-only.

@@ -308,7 +308,7 @@ test("a service's daemon writes what it says to daemon.log, and status reads it 
 			port,
 			permissions: { mode: "allowlist" },
 			limits: { maxWorkers: 1, maxRunMinutes: 10 },
-			projects: [{ id: "demo", mode: "shadow", repos: [{ slug: "o/r" }] }],
+			projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 		}),
 	);
 	const env = {
@@ -337,7 +337,7 @@ test("a service's daemon writes what it says to daemon.log, and status reads it 
 		assert.equal(up.status, 0, up.stderr);
 		assert.match(
 			up.stdout,
-			/^rusuban \S+ \(dry\), up 0 min, on http:\/\/127\.0\.0\.1:\d+\/\nmerges paused; projects: demo \(shadow\)\nagents at work: none\nlog: /,
+			/^rusuban \S+ \(dry\), up 0 min, on http:\/\/127\.0\.0\.1:\d+\/\nmerges paused; projects: demo\nagents at work: none\nlog: /,
 		);
 		// A newer release on npm is said; status never installs it.
 		const registry = http.createServer((req, res) =>

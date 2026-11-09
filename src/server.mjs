@@ -245,7 +245,6 @@ export function stateOf(ctx, projectId) {
 		project: {
 			id: p.id,
 			title: p.title,
-			mode: p.mode,
 			bypassApproval: p.bypassApproval,
 			repos,
 			observeOnly: repos.every((s) => rules[s]?.observeOnly !== false),
@@ -259,7 +258,6 @@ export function stateOf(ctx, projectId) {
 			journal: journalAll,
 			runs,
 			armed,
-			shadow: p.mode === "shadow",
 			me,
 		}),
 		freshness: {
@@ -397,12 +395,11 @@ async function bypassStopsOf(pr, method, deps) {
 	}
 }
 
-// The server's merge (T030, T093), one per cycle, never in a shadow project and never while the
-// switch is paused, read again just before. A person's merge order comes first; then a PR judged
+// The server's merge (T030, T093), one per cycle, never while the switch is paused, read again just
+// before. A person's merge order comes first; then a PR judged
 // `auto` whose every gate passes. A head GitHub refused is not tried again (T116), the journal being the record: only an order
 // given after the refusal, or the bypass turned on since, tries it once more.
 async function mergeOne(ctx, p, { live, judgment, answers, rules }, deps) {
-	if (p.mode !== "live") return;
 	const dir = `projects/${p.id}`;
 	const said = readJsonl(`${dir}/journal.jsonl`);
 	const refused = refusedOf(said);

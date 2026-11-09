@@ -85,7 +85,6 @@ const LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;
 export const PROJECT_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 export const SLUG = /^[\w.-]+\/[\w.-]+$/;
 const MODES = ["bypass", "allowlist"];
-const PROJECT_MODES = ["live", "shadow"];
 export const CHANNEL_TYPES = ["ntfy", "slack", "discord", "teams", "email"];
 
 const isStrings = (v) => Array.isArray(v) && v.every((x) => typeof x === "string" && x.length > 0);
@@ -94,8 +93,8 @@ export const CONFIG_VERSION = 1; // migrations key off it
 const isCount = (v) => Number.isInteger(v) && v > 0;
 
 // Checks config.json and fills the defaults that are not policy (port, refresh interval, empty
-// lists). The host permission mode, the limits and each project's mode have no default: the owner's
-// config states them (FR-025, FR-028; `init` writes the limits explicitly).
+// lists). The host permission mode and the limits have no default: the owner's config states them
+// (FR-025; `init` writes the limits explicitly).
 export function validateConfig(raw) {
 	const c = raw && typeof raw === "object" ? raw : {};
 	const errors = [];
@@ -134,9 +133,10 @@ export function validateConfig(raw) {
 			errors.push(`${at}.id must be lowercase letters, digits and dashes`);
 		else if (ids.has(p.id)) errors.push(`${at}.id "${p.id}" is used twice`);
 		else ids.add(p.id);
-		if (!PROJECT_MODES.includes(p?.mode))
+		// Shadow mode is gone (2026-11-09): a project that was in it must not start acting unasked.
+		if (p?.mode !== undefined)
 			errors.push(
-				`${at}.mode must be "live" or "shadow" (judge only, no GitHub write, no merge): there is no default`,
+				`${at}.mode is no longer read: every project acts on GitHub as its repos' rules say. Remove "mode" from config.json once this project may act`,
 			);
 		if (p?.bypassApproval !== undefined && typeof p.bypassApproval !== "boolean")
 			errors.push(`${at}.bypassApproval must be true or false`);
@@ -196,7 +196,6 @@ export function validateConfig(raw) {
 		projects: projects.map((p) => ({
 			id: p.id,
 			title: p.title || p.id,
-			mode: p.mode,
 			// FR-029: off unless the owner's `project bypass` turned it on.
 			bypassApproval: p.bypassApproval === true,
 			repos: p.repos.map((r) => ({ slug: r.slug, checkout: r.checkout ?? null })),

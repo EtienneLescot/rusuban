@@ -114,9 +114,8 @@ journaled and flagged too (see [locks](locks.md#validation)).
 
 ## Trying them
 
-- **Shadow mode.** A project added with `rusuban project add` starts in shadow mode: agents judge and
-  propose, every GitHub write is denied, nothing merges. Read their judgments, adjust the rules, then
-  run `rusuban project mode <id> live`.
+- **The switch paused.** Agents act as the rules say, and nothing merges until you arm the switch in
+  the dashboard's header. Read their judgments and adjust the rules first.
 - **Start from an example.** Each folder of [`examples/rules/`](../examples/rules/) is a `.rusuban/`
   folder: copy its `rules/` and its `locks.json` into `.rusuban/` at the root of your repo, then edit
   them.

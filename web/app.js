@@ -22,8 +22,6 @@ const T = {
 	observeText: (branch) =>
 		`No rules in <span class="mono">.rusuban/rules/</span> on ${branch ? esc(branch) : "the default branch"}: agents read this project and never act.`,
 	dry: "Dry mode: the server starts no agent and writes nothing on GitHub.",
-	shadow:
-		"Shadow mode: agents judge and propose, nothing is written on GitHub and nothing is merged.",
 	offline: "Server unreachable: the display is frozen.",
 	filters: "Filters",
 	areaFrames: "Area frames",
@@ -66,7 +64,6 @@ const T = {
 	waitsForYou: "Waits for your answer",
 	readyNext: "Ready: merges at the next read",
 	readyPaused: "Ready, auto-merge paused",
-	readyShadow: "Ready, shadow mode",
 	observedOnly: "Observed only: this repo has no rules",
 	yoursToDecide: (kind) => `${kind} · yours to decide`,
 	waitsFor: (kind, who) => `${kind} · waits for ${who}`,
@@ -396,7 +393,7 @@ function subOf(n) {
 		// The switch is a banner of its own: the line under a PR names what else stops it.
 		const gates = n.gates.filter((g) => g.name !== "Switch");
 		if (gates.every((g) => g.state === "ok" || g.state === "na"))
-			return { t: S.project?.mode === "shadow" ? T.readyShadow : T.readyPaused, c: "#fbbf24" };
+			return { t: T.readyPaused, c: "#fbbf24" };
 		const g =
 			gates.find((x) => x.state === "fail") ??
 			gates.find((x) => x.state === "wait") ??
@@ -1566,7 +1563,6 @@ function render() {
 	$("observe").hidden = !S.project?.observeOnly;
 	$("observe-text").innerHTML = T.observeText(S.project?.defaultBranch);
 	$("dry").hidden = !S.dry;
-	$("shadow").hidden = S.project?.mode !== "shadow";
 	// On a phone, Conversations and Agents have tabs of their own; the first tab shows the graph or the
 	// kanban, picked in its row of view tabs, and is named after the one it shows.
 	const board = ui.view === "kanban" ? "kanban" : "graph";

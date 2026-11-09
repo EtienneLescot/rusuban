@@ -40,7 +40,6 @@ const mergeable = () => ({
 	j: { type: "pr", kind: "bug", owner: "agent", pr: { head: HEAD, auto: true, why: "small fix" } },
 	opts: {
 		armed: true,
-		shadow: false,
 		rules: {
 			observeOnly: false,
 			errors: [],
@@ -71,7 +70,6 @@ const CASES = [
 	// Built-in locks (FR-021)
 	["an open review thread", "Threads", (c) => (c.pr.threadsOpen = 1)],
 	["merges paused", "Switch", (c) => (c.opts.armed = false)],
-	["a shadow project", "Switch", (c) => (c.opts.shadow = true)],
 	["a conflict", "Mergeable", (c) => (c.pr.mergeable = "CONFLICTING")],
 	["mergeability not computed yet", "Mergeable", (c) => (c.pr.mergeable = "UNKNOWN")],
 	["not rebaseable for a rebase merge", "Mergeable", (c) => (c.pr.canBeRebased = false)],

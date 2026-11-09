@@ -10,9 +10,8 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `start [--dry] [--log]` | Runs the daemon in the foreground. The service calls it with `--log`: what the daemon says, and a crash, also go to `daemon.log` in the instance home. |
 | `status` | URL (local and tailnet), uptime, the switch, projects, running agents, the log's path; exit 1 when the daemon does not answer. |
 | `open` | Opens the dashboard. |
-| `project add <owner/repo> [--checkout <path>] [--to <project>]` | Adds a repo, to a new project (in `shadow` mode, its id from the repo's name) or to an existing one. A repo belongs to one project. |
+| `project add <owner/repo> [--checkout <path>] [--to <project>]` | Adds a repo, to a new project (its id from the repo's name) or to an existing one; agents act on it as its rules say, so it is confirmed (FR-092). A repo belongs to one project. |
 | `project list` / `project remove <id>` | `remove` refuses while a run of the project waits or works, deletes no file and says where they stay. |
-| `project mode <id> <live\|shadow>` | `shadow`: agents judge and propose, every GitHub write is denied, nothing is merged. Runs at work keep the mode they started in. |
 | `project bypass <id> <on\|off>` | The approval bypass (FR-029): the server merges with `--admin` what it would merge anyway, once every check the base branch requires is green on the head. Off for every new project. |
 | `permissions <bypass\|allowlist>` | The host profile (FR-025): what agents may run on this machine. `bypass` widens it. |
 | `machine add <alias> [--os] [--caps a,b] [--workspace <path>] [--owner <login>]` | Checks SSH, the `rusuban` account, git and the workspace, creates the bare mirror, then registers the machine. `--owner` marks a person's desktop. |

@@ -43,14 +43,7 @@ import {
 	dashboardUrl as serviceUrl,
 	uninstallService,
 } from "../src/service.mjs";
-import {
-	changeSetting,
-	FIRST_LIMITS,
-	initInstance,
-	MODE_SAYS,
-	maskTarget,
-	planOf,
-} from "../src/settings.mjs";
+import { changeSetting, FIRST_LIMITS, initInstance, maskTarget, planOf } from "../src/settings.mjs";
 import { busyRun, listTasks, readTask, startTask, tasksState } from "../src/tasks.mjs";
 import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
 
@@ -127,11 +120,10 @@ const USAGE = `rusuban ${version}
                                 shortcut to the dashboard; or removes both
   mcp                           Rusuban's MCP server on stdio, for Claude (every setting, the state)
   project add <owner/repo> [--checkout <path>] [--to <project>]
-                                adds a repo, to a new project (in shadow mode) or to an existing one
+                                adds a repo, to a new project or to an existing one: its agents act
+                                on it as its rules say, and only read it until it has some
   project list | project remove <id>
                                 the projects; one removed, its files kept
-  project mode <id> <live|shadow>
-                                shadow: agents judge and propose, no GitHub write, no merge
   project bypass <id> <on|off>  merges with --admin what the server merges anyway, once every
                                 check the base branch requires is green on the head
   permissions <bypass|allowlist>
@@ -220,7 +212,7 @@ const TASK_USAGE = "usage: task list | task run <id> | task add <file.md> | task
 
 // ── Projects and the host profile (the owner's) ───────────────────────────────────────────────
 const PROJECT_USAGE =
-	"usage: project add <owner/repo> [--checkout <path>] [--to <project>] | project list | project remove <id> | project mode <id> <live|shadow> | project bypass <id> <on|off>";
+	"usage: project add <owner/repo> [--checkout <path>] [--to <project>] | project list | project remove <id> | project bypass <id> <on|off>";
 
 // The daemon reads config.json again when it changes. Whether the one running applied the change is
 // asked on its own port, so the command says it rather than promise it.
@@ -308,22 +300,6 @@ async function projectCommand([sub, ...args]) {
 		for (const t of listTasks(loadConfig()).filter((x) => x.project === id))
 			console.log(
 				`Task ${t.id} names it and will not run: edit or delete ${homePath(`tasks/${t.id}.md`)}`,
-			);
-		return;
-	}
-	if (sub === "mode" && args.length === 2) {
-		const [id, mode] = args;
-		if (!Object.hasOwn(MODE_SAYS, mode)) throw new Error(PROJECT_USAGE);
-		await setting(
-			{ kind: "project.mode", project: id, mode },
-			id,
-			(s) => s.project?.id === id && s.project.mode === mode,
-		);
-		// A run's permissions are set when it starts: those at work keep their mode until they end.
-		const working = listRuns(id).filter((r) => r.state === "running");
-		if (working.length)
-			console.log(
-				`Runs at work keep the mode they started in: ${working.map((r) => r.id).join(", ")}.`,
 			);
 		return;
 	}
@@ -727,7 +703,7 @@ const commands = {
 		const ago = (at) => minutes(Date.now() - Date.parse(at));
 		const runs = listRuns().filter((r) => r.state === "running");
 		const projects = config.projects.map(
-			(p) => `${p.id} (${p.mode}${p.bypassApproval ? ", approval bypass on" : ""})`,
+			(p) => `${p.id}${p.bypassApproval ? " (approval bypass on)" : ""}`,
 		);
 		console.log(
 			[
@@ -788,11 +764,11 @@ const commands = {
 				),
 				armed:
 					(await ask(
-						"Arm automatic merges? The server then merges alone what a live project's rules and locks allow. yes or no: ",
+						"Arm automatic merges? The server then merges alone what a project's rules and locks allow. yes or no: ",
 						(a) => ["yes", "no"].includes(a),
 					)) === "yes",
 				slug: await ask(
-					"A first repo, owner/repo (in shadow mode: nothing is written on GitHub): ",
+					"A first repo, owner/repo (its agents act as its rules say, and only read it until it has some): ",
 					(a) => SLUG.test(a),
 				),
 				checkout:

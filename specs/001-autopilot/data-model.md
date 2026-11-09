@@ -62,10 +62,11 @@ file has **one writer**. `rusuban` is the product name.
 
 ### Project
 
-`{ id, title, mode: "live" | "shadow", bypassApproval: false, repos: [{ slug: "owner/repo", checkout: "<path>" }], folders: ["<path>"], refreshSec: 90 }`
+`{ id, title, bypassApproval: false, repos: [{ slug: "owner/repo", checkout: "<path>" }], folders: ["<path>"], refreshSec: 90 }`
 
-- `mode`: `shadow` lets agents judge and propose while every GitHub write is denied and nothing is merged
-  (FR-028). `project add` writes `shadow` for a new project; `project mode` makes it `live`.
+- No `mode`: shadow mode was removed on 2026-11-09 (FR-028). A config that still names one is refused at
+  load, so a project that was in shadow mode never starts acting unasked: removing the key is the owner's
+  go.
 - A repo belongs to one project (slugs compared without case): two would read, judge and merge it each on
   their own.
 - `bypassApproval` (FR-029): off unless `project bypass <id> on` sets it; never read from a repo. The server

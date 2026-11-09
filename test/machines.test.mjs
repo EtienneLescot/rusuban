@@ -613,7 +613,7 @@ test("the daemon tends, then probes; the page gets each machine, Release ends a 
 		owner: { login: "alice" },
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
-		projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
+		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 		machines: [mac("mac"), { name: "desk", os: "windows", ssh: "desk", owner: "alice" }],
 	});
 	const calls = [];

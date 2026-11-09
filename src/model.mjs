@@ -208,8 +208,8 @@ function evidenceGate(pr, j, locks) {
 }
 
 // `rules` is the PR's repo entry of rules.json. Until rules are loaded and say otherwise, the repo
-// is only observed: the Judgment gate stays shut. A shadow project merges nothing (FR-028).
-export function gatesOf(pr, j, { rules = {}, armed = false, shadow = false } = {}) {
+// is only observed: the Judgment gate stays shut.
+export function gatesOf(pr, j, { rules = {}, armed = false } = {}) {
 	const locks = rules.locks ?? {};
 	return [
 		ciGate(pr, locks.requiredChecks ?? [], locks.ignoredChecks ?? []),
@@ -221,11 +221,7 @@ export function gatesOf(pr, j, { rules = {}, armed = false, shadow = false } = {
 		judgmentGate(pr, j, rules.observeOnly !== false),
 		locksGate(pr, rules),
 		evidenceGate(pr, j, locks),
-		shadow
-			? gate("fail", "Shadow mode: nothing is merged")
-			: armed
-				? gate("ok", "Merges armed")
-				: gate("fail", "Merges paused"),
+		armed ? gate("ok", "Merges armed") : gate("fail", "Merges paused"),
 	].map((g, i) => ({ name: GATES[i], ...g }));
 }
 
@@ -1006,7 +1002,6 @@ export function buildModel({
 	journal = [],
 	runs = [],
 	armed = false,
-	shadow = false,
 	me = null,
 	now = Date.now(),
 }) {
@@ -1053,7 +1048,7 @@ export function buildModel({
 	const nodes = [];
 	for (const pr of live.prs) {
 		const j = items[keyOf(pr)];
-		const gates = gatesOf(pr, j, { rules: rules[pr.repo], armed, shadow });
+		const gates = gatesOf(pr, j, { rules: rules[pr.repo], armed });
 		const n = node("pr", pr, j);
 		const first =
 			gates.find((g) => g.state === "fail") ??
@@ -1079,11 +1074,7 @@ export function buildModel({
 	const ready = flow.filter((n) =>
 		n.gates.every((g) => g.name === "Switch" || g.state === "ok" || g.state === "na"),
 	);
-	const readyLabel = shadow
-		? "ready, shadow mode"
-		: armed
-			? "merges next cycle"
-			: "ready, merges paused";
+	const readyLabel = armed ? "merges next cycle" : "ready, merges paused";
 	for (const n of flow)
 		edges.push({
 			from: n.id,

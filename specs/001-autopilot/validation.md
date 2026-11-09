@@ -25,9 +25,8 @@ logged in, from `npm i -g rusuban` to the dashboard showing a public repo.
 ## SC-002: OpenScreen on the generic product
 
 - **Product code: pass.** `grep -ri openscreen bin src web` finds nothing (T052).
-- **Running from its rules: waits.** OpenScreen's rules, locks and machines are proposed in
-  getopenscreen/openscreen#1507, still open. Until Etienne merges it, Etienne's instance reads the
-  project observe-only, in shadow mode, which is what a repo without rules gets.
+- **Running from its rules: merged.** OpenScreen's rules, locks and machines are merged
+  (getopenscreen/openscreen#1507, T048). The project acts on them from the switch (T051).
 - **The old pilot's judgments: replaced.** The shadow-week comparison was dropped on 2026-11-08 for
   Etienne's own trials (T050).
 
@@ -82,7 +81,7 @@ channel, to count notification → card → option.
   - a broken `locks.json`.
 - **Edge cases:** a head whose only checks are ignored is not green. The baseline does merge.
 - **The cycle's tests add the rest:**
-  - nothing merges paused or in shadow mode, not even a person's order;
+  - nothing merges paused, not even a person's order;
   - a merge GitHub refuses is not tried again on that head, a restart included;
   - the approval bypass's guard stops on any rule it would skip or does not know.
 

@@ -20,7 +20,7 @@ are recorded in the spec's Clarifications.
 | B1 | high | Observe-only enforced at one trigger only | Etienne: nothing autonomous without rules, owner requests still run (FR-024, constitution III) |
 | B2 | high | Identity compared to the GitHub login; no `Host` check, GET open | Tailscale login stored, `Host` checked on every request (FR via research R7, T089) |
 | F2 | high | Rules merged by anyone go straight into prompts | Etienne: rules apply at once, journaled with their diff and pinged; the host is protected by the instance profile, which no rule widens (FR-027) |
-| F3 | high | The shadow week would act on the live repo | Project `shadow` mode: judge only, GitHub writes denied, no merge (FR-028, T050, T090) |
+| F3 | high | The shadow week would act on the live repo | Project `shadow` mode: judge only, GitHub writes denied, no merge (FR-028, T050, T090). Removed on 2026-11-09 with the shadow week: a repo without rules is only read, and a repo added waits for the owner |
 | F4 | high | The switch depended on Phase 9 and 10 work | Switch repoints the existing Windows task; machines stay as text until Phase 9; US6 test fixed |
 | C1 | high | A person's desktop protected only by agent goodwill | Its alias denied to runs without its lease (FR-063, T110) |
 | B3 | high | "CI green" undefined; rebaseable missing from FR-021 | Defined in FR-021, gate T087 |

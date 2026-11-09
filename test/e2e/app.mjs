@@ -103,8 +103,8 @@ export function seed(busyPid, checkout) {
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
 		projects: [
-			{ id: "acme", title: "Acme", mode: "live", repos: [{ slug: "acme/widgets", checkout }] },
-			{ id: "orbit", title: "Orbit", mode: "shadow", repos: [{ slug: "orbit/site" }] },
+			{ id: "acme", title: "Acme", repos: [{ slug: "acme/widgets", checkout }] },
+			{ id: "orbit", title: "Orbit", repos: [{ slug: "orbit/site" }] },
 		],
 		machines: [
 			{ name: "mac", os: "macos", ssh: "mac", caps: ["gpu"] },

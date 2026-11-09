@@ -26,15 +26,15 @@ const config = (over = {}) => ({
 	owner: { login: "alice" },
 	permissions: { mode: "allowlist" },
 	limits: { maxWorkers: 3, maxRunMinutes: 150 },
-	projects: [{ id: "demo", mode: "live", repos: [{ slug: "alice/demo" }] }],
+	projects: [{ id: "demo", repos: [{ slug: "alice/demo" }] }],
 	...over,
 });
 
-test("each project states its mode, live or shadow, with no default", () => {
+test("a project has no mode: one still named in shadow mode is refused, never made to act unasked", () => {
 	const project = (mode) => config({ projects: [{ id: "demo", mode, repos: [{ slug: "a/b" }] }] });
-	assert.throws(() => validateConfig(project(undefined)), /projects\[0\]\.mode.*no default/);
-	assert.throws(() => validateConfig(project("dry")), /"live" or "shadow"/);
-	assert.equal(validateConfig(project("shadow")).projects[0].mode, "shadow");
+	for (const mode of ["shadow", "live"])
+		assert.throws(() => validateConfig(project(mode)), /projects\[0\]\.mode is no longer read/);
+	assert.equal(Object.hasOwn(validateConfig(config()).projects[0], "mode"), false);
 });
 
 test("the owner's Tailscale login is optional, and kept apart from the GitHub login", () => {
@@ -138,8 +138,8 @@ test("config defaults fill what is not policy, and mistakes are all reported", (
 	const bad = config({
 		owner: {},
 		projects: [
-			{ id: "Demo", mode: "live", repos: [] },
-			{ id: "x", mode: "live", repos: [{ slug: "nope" }], refreshSec: 5 },
+			{ id: "Demo", repos: [] },
+			{ id: "x", repos: [{ slug: "nope" }], refreshSec: 5 },
 		],
 	});
 	assert.throws(

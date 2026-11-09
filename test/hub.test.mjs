@@ -37,7 +37,6 @@ beforeEach(() => {
 		projects: [
 			{
 				id: "widgets",
-				mode: "shadow",
 				repos: [{ slug: "acme/widgets", checkout: path.join(work, "widgets") }],
 				folders: [path.join(work, "notes")],
 			},

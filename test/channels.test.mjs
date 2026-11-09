@@ -22,7 +22,7 @@ const config = (over = {}) => ({
 	port: 0,
 	permissions: { mode: "allowlist" },
 	limits: { maxWorkers: 1, maxRunMinutes: 10 },
-	projects: [{ id: "demo", mode: "shadow", repos: [{ slug: "o/r" }] }],
+	projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 	...over,
 });
 beforeEach(() => {
