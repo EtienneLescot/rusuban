@@ -388,7 +388,8 @@ async function channelCommand([sub, ...args]) {
 	if (sub === "test" && args.length === 1) {
 		const channel = config.channels.find((c) => c.id === args[0]);
 		if (!channel) throw new Error(`no channel "${args[0]}"`);
-		const base = dashboardUrl({ owner: config.owner, port: config.port });
+		const { pingBase } = await import("../src/server.mjs");
+		const base = await pingBase(config);
 		const test = {
 			project: null,
 			item: null,

@@ -113,6 +113,13 @@ export function tailnetName() {
 	);
 }
 
+// The dashboard as a ping sent from the command line links to it (`channel test`), as the daemon's
+// pings do: on the tailnet when remote access is on. Tests replace `name`.
+export async function pingBase(config, name = tailnetName) {
+	const tailnet = config.owner.tailscaleLogin ? await name() : null;
+	return dashboardUrl({ owner: config.owner, port: config.port, tailnet });
+}
+
 // Every request, GET included (transcripts are private): the Host must be this server's, on loopback
 // or on its tailnet name, so a page cannot reach it by DNS rebinding. On the tailnet name, Tailscale
 // Serve's identity header must be the owner's Tailscale login (research R7). A loopback request

@@ -11,7 +11,8 @@ import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { loadConfig, read, saveConfig, validateConfig, write } from "../src/home.mjs";
 import { applyJudgment } from "../src/model.mjs";
-import { flagsToPing, pingOnce, startServer } from "../src/server.mjs";
+import { cardUrl } from "../src/pings.mjs";
+import { flagsToPing, pingBase, pingOnce, reloadConfig, startServer } from "../src/server.mjs";
 import { confirmRequest, pendingRequests } from "../src/settings.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
@@ -123,23 +124,35 @@ test("a channel waits for the owner, its secret never shows; a test really sends
 	}
 });
 
-test("the daemon pings a new card once, by its urgency, and keeps its state in pings.json", async () => {
-	saveConfig(
-		config({
-			channels: [{ id: "ntfy", type: "ntfy", target: "https://ntfy.example/t", urgency: ["now"] }],
-		}),
-	);
+test("`channel test` links where the daemon's pings do: on the tailnet once remote access is on", async () => {
+	const remote = config({ port: 8790, owner: { login: "alice", tailscaleLogin: "a@example.com" } });
+	assert.equal(await pingBase(remote, async () => "box.tail1.ts.net"), "https://box.tail1.ts.net");
+	assert.equal(await pingBase(remote, async () => null), "http://127.0.0.1:8790", "Tailscale down");
+	const off = await pingBase(config({ port: 8790 }), () => assert.fail("Tailscale is not asked"));
+	assert.equal(off, "http://127.0.0.1:8790");
+});
+
+test("the daemon pings a new card once, by its urgency, linked on the tailnet, and keeps its state", async () => {
+	const channels = [
+		{ id: "ntfy", type: "ntfy", target: "https://ntfy.example/t", urgency: ["now"] },
+	];
+	saveConfig(config({ channels }));
 	const sent = [];
 	const srv = await startServer({
 		port: 0,
 		polling: false,
 		quiet: true,
-		tailnet: null,
-		deps: { sendPing: async (channel, message) => sent.push([channel.id, message.title]) },
+		tailnet: "box.tail1.ts.net",
+		deps: {
+			sendPing: async (channel, message) => sent.push([channel.id, message.title, message.href]),
+		},
 	});
 	try {
 		// A new channel does not replay the inbox: what comes after its first call pings.
 		await pingOnce(srv.ctx);
+		// The owner allows remote access while the daemon runs: the next pings link on the tailnet.
+		saveConfig(config({ channels, owner: { login: "alice", tailscaleLogin: "a@example.com" } }));
+		reloadConfig(srv.ctx);
 		const live = { prs: [], issues: [{ repo: "o/r", n: 10, title: "Dark mode" }] };
 		const judgment = { items: {} };
 		applyJudgment(
@@ -170,7 +183,8 @@ test("the daemon pings a new card once, by its urgency, and keeps its state in p
 		write("projects/demo/live.json", { repos: { "o/r": { prs: [], issues: live.issues } } });
 		await pingOnce(srv.ctx);
 		await pingOnce(srv.ctx);
-		assert.deepEqual(sent, [["ntfy", "Build dark mode?"]]);
+		const link = cardUrl("https://box.tail1.ts.net", judgment.items["o/r#10"].decision.id);
+		assert.deepEqual(sent, [["ntfy", "Build dark mode?", link]]);
 		assert.ok(Object.keys(read("pings.json").channels.ntfy.done).length === 1);
 		srv.ctx.dry = true;
 		await pingOnce(srv.ctx);
