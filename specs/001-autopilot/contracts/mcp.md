@@ -17,7 +17,7 @@ Reading:
 
 | Tool | Returns |
 |---|---|
-| `state` | The instance: owner, host profile, limits, the merge switch, projects with their mode, bypass and repos, and the settings waiting for a confirmation. |
+| `state` | The instance: owner, host profile, limits, the merge switch, projects with their bypass and repos, and the settings waiting for a confirmation. |
 | `project_state` | One project: its items with their judgments, open cards, freshness, rules and locks. |
 | `runs` | Runs at work and recent ones, with their conversation. |
 | `tasks` | The task catalog with each task's schedule, next slot, state and last runs. |
@@ -32,9 +32,8 @@ Settings. Each one returns `{ state, text }`, where `state` is:
 
 | Tool | Widens (waits for a confirmation) when |
 |---|---|
-| `project_add { slug, checkout?, to? }` | `to` names a live project |
+| `project_add { slug, checkout?, to? }` | always: agents act on the repo as its rules say |
 | `project_remove { project }` | never |
-| `project_mode { project, mode }` | `mode` is `live` |
 | `project_bypass { project, on }` | `on` is true |
 | `host_profile { mode }` | `mode` is `bypass` |
 | `merge_switch { armed }` | `armed` is true |

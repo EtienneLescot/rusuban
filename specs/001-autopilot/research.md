@@ -40,8 +40,8 @@ Phase 0 of [plan.md](plan.md). Each entry: decision, rationale, alternatives. Fa
   - Checked on Claude Code 2.1.302 on Windows: the hook runs with `--setting-sources user` and
     `--dangerously-skip-permissions`, and finds `rusuban` on the run's PATH.
   - An alias spelt another way gets through. The desktop's own agent account is the wall.
-- **Shadow projects**: every GitHub write (`gh` comment, review, close, edit, `gh api` with a method,
-  `git push`) is added to the deny rules.
+- **Shadow projects**, removed on 2026-11-09 with shadow mode (FR-028): every GitHub write (`gh`
+  comment, review, close, edit, `gh api` with a method, `git push`) was added to the deny rules.
 
 ## R4. Reading the rules
 

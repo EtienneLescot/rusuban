@@ -28,9 +28,9 @@ They ask you on a card, with an option to turn your answer into a rule.
 
 ### How do I try rules without risk?
 
-A new project starts in shadow mode: agents judge and propose, every GitHub write is denied, nothing
-merges. Run `rusuban project mode <id> live` once you trust them. `rusuban start --dry` goes further:
-the dashboard reads and shows, and starts no agent.
+Keep the merge switch paused: agents act as the rules say, and nothing merges until you arm it. A repo
+without rules is only read. `rusuban start --dry` goes further: the dashboard reads and shows, and
+starts no agent.
 
 ## Merges
 
@@ -60,8 +60,7 @@ after it checks the branch's other rules.
 - **The switch** in the dashboard's header pauses the server's merges in every project, the merge
   orders you give on cards included: they wait until it is armed again.
 - **The Agents view** stops a run.
-- **`rusuban project mode <id> shadow`** stops the project's merges and denies every GitHub write to
-  its next runs.
+- **`rusuban project remove <id>`** stops a project once its runs end; its files stay.
 
 ## Your machine and accounts
 

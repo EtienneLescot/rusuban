@@ -188,7 +188,7 @@ test("the agent commands read and write a project's files", () => {
 		owner: { login: "alice" },
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
-		projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
+		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 	});
 	put("projects/demo/live.json", {
 		repos: {
@@ -277,7 +277,7 @@ test("lease and release: a run's commands, with a machine or an OS, a reason and
 			owner: { login: "alice" },
 			permissions: { mode: "allowlist" },
 			limits: { maxWorkers: 3, maxRunMinutes: 150 },
-			projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
+			projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 			machines: [{ name: "mac", os: "macos", ssh: "mac" }],
 		}),
 	);
@@ -310,7 +310,7 @@ test("rusuban guard, Claude Code's hook: exit 2 with the reason refuses a comman
 			owner: { login: "alice" },
 			permissions: { mode: "bypass" },
 			limits: { maxWorkers: 3, maxRunMinutes: 150 },
-			projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
+			projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 			machines: [{ name: "desk", os: "windows", ssh: "desk.invalid", owner: "alice" }],
 		}),
 	);

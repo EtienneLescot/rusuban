@@ -165,7 +165,7 @@ before(async () => {
 		owner: OWNER,
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
-		projects: [{ id: "demo", mode: "live", repos: [{ slug: "o/r" }] }],
+		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 	});
 	srv = await startServer({
 		port: 0,

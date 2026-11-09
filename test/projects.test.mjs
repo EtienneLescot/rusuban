@@ -114,8 +114,8 @@ const deps = {
 };
 
 const projects = () => [
-	{ id: "alpha", mode: "live", repos: [{ slug: "a/one" }] },
-	{ id: "beta", mode: "live", repos: [{ slug: "b/two" }] },
+	{ id: "alpha", repos: [{ slug: "a/one" }] },
+	{ id: "beta", repos: [{ slug: "b/two" }] },
 ];
 // Port 0: a command never asks a daemon of this machine, only the one a test starts.
 const configOf = (over = {}) => ({
@@ -230,7 +230,7 @@ test("a repo belongs to one project, whatever the case of its name", () => {
 		() =>
 			validateConfig(
 				configOf({
-					projects: [...projects(), { id: "gamma", mode: "shadow", repos: [{ slug: "A/One" }] }],
+					projects: [...projects(), { id: "gamma", repos: [{ slug: "A/One" }] }],
 				}),
 			),
 		/projects\[2\]: repo A\/One is already in project "alpha"/,
@@ -356,8 +356,17 @@ test("a run writes its own project's files only", () => {
 	assert.ok(!fs.existsSync(homePath("projects/beta")));
 });
 
-test("project add, list, mode and remove, without a daemon", async () => {
-	const ids = () => read("config.json").projects.map((p) => `${p.id}:${p.mode}`);
+test("project add, list and remove, without a daemon", async () => {
+	const ids = () => read("config.json").projects.map((p) => p.id);
+	// The agents act on a repo added as its rules say: without a terminal, it waits for the owner's
+	// card (FR-092).
+	const allowed = async (...args) => {
+		const asked = await cli("project", "add", ...args);
+		assert.match(asked.stdout, /\nIt waits for your confirmation/, asked.stderr);
+		const request = pendingRequests().at(-1);
+		assert.equal(confirmRequest(request.id, { allow: true, by: "alice" }).state, "confirmed");
+		return asked.stdout;
+	};
 	assert.deepEqual(
 		JSON.parse((await cli("project", "list")).stdout).map((p) => p.id),
 		["alpha", "beta"],
@@ -365,9 +374,15 @@ test("project add, list, mode and remove, without a daemon", async () => {
 
 	const added = await cli("project", "add", "c/three");
 	assert.equal(added.status, 0, added.stderr);
-	assert.match(added.stdout, /^project three added, in shadow mode: .*nothing merges/);
-	assert.match(added.stdout, /No daemon answers on 127\.0\.0\.1:0: this applies when it starts/);
-	assert.deepEqual(ids(), ["alpha:live", "beta:live", "three:shadow"]);
+	assert.match(added.stdout, /^Add c\/three as project three\?\nIt waits for your confirmation/);
+	assert.deepEqual(ids(), ["alpha", "beta"], "nothing changes before the owner allows it");
+	const [request] = pendingRequests();
+	assert.deepEqual(
+		[request.origin, request.change.kind, request.change.slug],
+		["cli", "project.add", "c/three"],
+	);
+	assert.equal(confirmRequest(request.id, { allow: true, by: "alice" }).state, "confirmed");
+	assert.deepEqual(ids(), ["alpha", "beta", "three"]);
 	if (process.platform !== "win32")
 		assert.equal(fs.statSync(homePath("config.json")).mode & 0o777, 0o600);
 
@@ -375,11 +390,11 @@ test("project add, list, mode and remove, without a daemon", async () => {
 		(await cli("project", "add", "C/Three")).stderr,
 		/C\/Three is already in project three/,
 	);
-	assert.match((await cli("project", "add", "d/three")).stdout, /^project d-three added/);
+	assert.match(await allowed("d/three"), /^Add d\/three as project d-three\?/);
 	const folder = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-checkout-"));
-	assert.equal(
-		(await cli("project", "add", "c/four", "--to", "three", "--checkout", folder)).status,
-		0,
+	assert.match(
+		await allowed("c/four", "--to", "three", "--checkout", folder),
+		/^Add c\/four to three\?/,
 	);
 	assert.deepEqual(read("config.json").projects.find((p) => p.id === "three").repos, [
 		{ slug: "c/three", checkout: null },
@@ -395,26 +410,7 @@ test("project add, list, mode and remove, without a daemon", async () => {
 		/Unknown option '--force'/,
 	);
 	assert.match((await cli("project", "add", "seven")).stderr, /seven is not owner\/repo/);
-
-	// Going live widens what agents do: without a terminal it waits for the owner's card (FR-092).
-	const asked = await cli("project", "mode", "three", "live");
-	assert.match(asked.stdout, /^Let the agents act on three as its rules say\?\nIt waits for your/);
-	assert.deepEqual(ids(), ["alpha:live", "beta:live", "three:shadow", "d-three:shadow"]);
-	const [request] = pendingRequests();
-	assert.deepEqual(
-		[request.origin, request.change],
-		["cli", { kind: "project.mode", project: "three", mode: "live" }],
-	);
-	assert.equal(confirmRequest(request.id, { allow: true, by: "alice" }).state, "confirmed");
-	assert.match((await cli("project", "mode", "three", "live")).stdout, /already live/);
-	assert.match((await cli("project", "mode", "three", "maybe")).stderr, /usage: project add/);
-	assert.deepEqual(ids(), ["alpha:live", "beta:live", "three:live", "d-three:shadow"]);
-	// A repo added to a live project waits too; to a shadow one, it is added.
-	assert.match(
-		(await cli("project", "add", "c/eight", "--to", "three")).stdout,
-		/^Add c\/eight to three, a live project\?/,
-	);
-	assert.equal(read("config.json").projects.find((p) => p.id === "three").repos.length, 2);
+	assert.match((await cli("project", "mode", "three", "live")).stderr, /usage: project add/);
 
 	// A run of the project that waits refuses the remove, which deletes nothing.
 	write("runs/act-9/status.json", { id: "act-9", kind: "act", project: "three", state: "queued" });
@@ -433,26 +429,20 @@ test("project add, list, mode and remove, without a daemon", async () => {
 	assert.ok(removed.stdout.includes(homePath("projects/three")));
 	assert.match(removed.stdout, /Task t3 names it and will not run/);
 	assert.ok(fs.existsSync(homePath("projects/three/journal.jsonl")));
-	assert.deepEqual(ids(), ["alpha:live", "beta:live", "d-three:shadow"]);
+	assert.deepEqual(ids(), ["alpha", "beta", "d-three"]);
 	assert.match((await cli("project", "remove", "three")).stderr, /no project "three"/);
 	assert.match((await cli("project")).stderr, /usage: project add/);
 });
 
-test("a running daemon applies project add, mode and remove without a restart", async () => {
+test("a running daemon applies project add and remove without a restart", async () => {
 	const srv = await startServer({ port: 0, quiet: true, tailnet: null, deps });
 	const said = [];
 	srv.ctx.say = (...a) => said.push(a.join(" "));
 	try {
 		saveConfig(configOf({ port: srv.port })); // so the commands find this daemon
+		// Asked without a terminal, a new project waits for the owner, who allows it on the card.
 		const added = await cli("project", "add", "c/three");
-		assert.match(added.stdout, /The running daemon applied it\./);
-		await until(() => reads.includes("three"));
-		const first = srv.ctx.loops.get("three");
-		assert.ok(first);
-
-		// Asked without a terminal, going live waits for the owner, who allows it on the card.
-		const live = await cli("project", "mode", "three", "live");
-		assert.match(live.stdout, /It waits for your confirmation/);
+		assert.match(added.stdout, /It waits for your confirmation/);
 		const card = (await call(srv, "GET", "/api/inbox")).body.cards.find(
 			(c) => c.type === "setting",
 		);
@@ -467,14 +457,13 @@ test("a running daemon applies project add, mode and remove without a restart", 
 			option: "allow",
 		});
 		assert.deepEqual([allowed.status, allowed.body.state], [200, "confirmed"]);
-		assert.equal(srv.ctx.config.projects.find((p) => p.id === "three").mode, "live");
-		assert.notEqual(srv.ctx.loops.get("three"), first); // started again, with its new mode
+		await until(() => reads.includes("three"));
+		assert.ok(srv.ctx.loops.get("three"));
 		assert.deepEqual(
 			readJsonl("settings.jsonl").map((e) => [e.setting, e.origin, e.state]),
 			[
-				["project.add", "cli", "applied"],
-				["project.mode", "cli", "pending"],
-				["project.mode", "cli", "confirmed"],
+				["project.add", "cli", "pending"],
+				["project.add", "cli", "confirmed"],
 			],
 		);
 

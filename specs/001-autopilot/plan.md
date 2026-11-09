@@ -25,7 +25,7 @@ that starts the pilot on its own and gives a URL that is never lost.
 (data-model.md)
 
 **Testing**: `node:test` for units and fixtures (adversarial PRs, real transcripts), Playwright for the
-dashboard, a shadow week on OpenScreen for real behavior
+dashboard, Etienne's own trials on OpenScreen for real behavior
 
 **Target Platform**: host on Windows 10/11, macOS 13+, Linux with systemd; test machines are any OS
 with OpenSSH
@@ -109,7 +109,7 @@ OpenScreen's.
 | Milestone | Content | Stories |
 |---|---|---|
 | **M0** Foundation | Name, new repo (MIT), product constitution, CI on the three OSes | |
-| **M1** Parity | Multi-project config, rules and locks from the repo, generic prompts, server merge gate, cards, tasks in the daemon, English dashboard with an inbox. OpenScreen's rules proposed to its repo, shadow week, switch | US3, US6, US7, US2 (cards) |
+| **M1** Parity | Multi-project config, rules and locks from the repo, generic prompts, server merge gate, cards, tasks in the daemon, English dashboard with an inbox. OpenScreen's rules proposed to its repo, Etienne's trials, switch | US3, US6, US7, US2 (cards) |
 | **M2** Conversations | The hub: index, links, reading, answering | US4 |
 | **M3** Pings | Five channels, routing, digest, quiet hours | US2 |
 | **M4** Machines | Registry, probes, leases, enrollment, a person's desktop by card | US5 |

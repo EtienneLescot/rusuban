@@ -66,7 +66,7 @@ before(async () => {
 		owner: OWNER,
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
-		projects: [{ id: "demo", mode: "shadow", repos: [{ slug: "o/r" }] }],
+		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 	});
 	srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: TAILNET });
 });
@@ -102,8 +102,8 @@ test("the state and its live stream are served on loopback, merges paused until 
 	assert.equal(res.status, 200);
 	const state = JSON.parse(res.text);
 	assert.deepEqual(
-		[state.me, state.armed, state.project.id, state.project.mode, state.project.observeOnly],
-		["alice", false, "demo", "shadow", true],
+		[state.me, state.armed, state.project.id, state.project.observeOnly],
+		["alice", false, "demo", true],
 	);
 	const events = await call("GET", "/api/events?project=demo");
 	assert.match(events.text, /^event: state\ndata: \{/);

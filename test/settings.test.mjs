@@ -30,8 +30,8 @@ beforeEach(() => {
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 1, maxRunMinutes: 10 },
 		projects: [
-			{ id: "live", mode: "live", repos: [{ slug: "o/live" }] },
-			{ id: "calm", mode: "shadow", repos: [{ slug: "o/calm" }] },
+			{ id: "live", repos: [{ slug: "o/live" }] },
+			{ id: "calm", repos: [{ slug: "o/calm" }] },
 		],
 	});
 });
@@ -42,28 +42,23 @@ test("what widens agents' rights, and what narrows them", () => {
 		const plan = planOf(loadConfig(), change);
 		return plan.same ? "same" : plan.widens;
 	};
-	assert.equal(widens({ kind: "project.add", slug: "o/new" }), false);
+	// A repo added, to a new project or an existing one, is acted on as its rules say.
+	assert.equal(widens({ kind: "project.add", slug: "o/new" }), true);
 	assert.equal(widens({ kind: "project.add", slug: "o/two", to: "live" }), true);
-	assert.equal(widens({ kind: "project.add", slug: "o/two", to: "calm" }), false);
-	assert.equal(widens({ kind: "project.mode", project: "calm", mode: "live" }), true);
-	assert.equal(widens({ kind: "project.mode", project: "live", mode: "shadow" }), false);
-	assert.equal(widens({ kind: "project.mode", project: "live", mode: "live" }), "same");
 	assert.equal(widens({ kind: "project.bypass", project: "live", on: true }), true);
+	assert.equal(widens({ kind: "project.bypass", project: "live", on: false }), "same");
 	assert.equal(widens({ kind: "permissions.mode", mode: "bypass" }), true);
 	assert.equal(widens({ kind: "project.remove", project: "calm" }), false);
 	assert.throws(
-		() => widens({ kind: "project.mode", project: "nope", mode: "live" }),
+		() => widens({ kind: "project.bypass", project: "nope", on: true }),
 		/no project "nope"/,
 	);
 	assert.throws(() => widens({ kind: "owner.change" }), /unknown setting/);
 });
 
 test("narrowing applies at once; widening waits as a card; a terminal's typed confirmation applies it", () => {
-	assert.equal(
-		changeSetting({ kind: "project.mode", project: "live", mode: "shadow" }, as).state,
-		"applied",
-	);
-	assert.equal(loadConfig().projects[0].mode, "shadow");
+	assert.equal(changeSetting({ kind: "limits", maxRunMinutes: 5 }, as).state, "applied");
+	assert.equal(loadConfig().limits.maxRunMinutes, 5);
 
 	const asked = changeSetting(
 		{ kind: "permissions.mode", mode: "bypass" },
@@ -81,29 +76,29 @@ test("narrowing applies at once; widening waits as a card; a terminal's typed co
 	);
 
 	const typed = changeSetting(
-		{ kind: "project.mode", project: "calm", mode: "live" },
+		{ kind: "project.bypass", project: "calm", on: true },
 		{ ...as, origin: "terminal", confirmed: true },
 	);
 	assert.equal(typed.state, "applied");
-	assert.equal(loadConfig().projects[1].mode, "live");
+	assert.equal(loadConfig().projects[1].bypassApproval, true);
 	assert.deepEqual(
 		settingsLog().map((e) => [e.setting, e.origin, e.state, !!e.notify]),
 		[
-			["project.mode", "cli", "applied", false],
+			["limits", "cli", "applied", false],
 			["permissions.mode", "mcp", "pending", false],
-			["project.mode", "terminal", "applied", true],
+			["project.bypass", "terminal", "applied", true],
 		],
 	);
 });
 
 test("the owner allows or declines a setting's card; a card for what no longer exists says so", () => {
 	const a = changeSetting({ kind: "project.bypass", project: "live", on: true }, as);
-	const b = changeSetting({ kind: "project.mode", project: "calm", mode: "live" }, as);
+	const b = changeSetting({ kind: "project.bypass", project: "calm", on: true }, as);
 	const c = changeSetting({ kind: "project.add", slug: "o/two", to: "live" }, as);
 	assert.equal(confirmRequest(a.id, { allow: true, by: "alice" }).state, "confirmed");
 	assert.equal(loadConfig().projects[0].bypassApproval, true);
 	assert.equal(confirmRequest(b.id, { allow: false, by: "alice" }).state, "declined");
-	assert.equal(loadConfig().projects[1].mode, "shadow");
+	assert.equal(loadConfig().projects[1].bypassApproval, false);
 	assert.throws(() => confirmRequest(b.id, { allow: true, by: "alice" }), /no such setting waits/);
 	// The live project went away meanwhile: the card cannot be carried out, and it goes.
 	changeSetting({ kind: "project.remove", project: "live" }, as);
@@ -116,10 +111,10 @@ test("the owner allows or declines a setting's card; a card for what no longer e
 		settingsLog().map((e) => [e.setting, e.state]),
 		[
 			["project.bypass", "pending"],
-			["project.mode", "pending"],
+			["project.bypass", "pending"],
 			["project.add", "pending"],
 			["project.bypass", "confirmed"],
-			["project.mode", "declined"],
+			["project.bypass", "declined"],
 			["project.remove", "applied"],
 			["project.add", "declined"],
 		],
@@ -218,8 +213,8 @@ test("init writes the first config from the owner's answers, its limits spelled 
 		["alice", 8790, "bypass", { maxWorkers: 3, maxRunMinutes: 150 }],
 	);
 	assert.deepEqual(
-		c.projects.map((p) => [p.id, p.mode, p.repos[0].slug]),
-		[["first", "shadow", "o/first"]],
+		c.projects.map((p) => [p.id, p.repos[0].slug, Object.hasOwn(p, "mode")]),
+		[["first", "o/first", false]],
 	);
 	assert.equal(read("automerge.json").armed, false);
 	const [entry] = settingsLog();
@@ -234,24 +229,20 @@ test("nothing is set inside an agent run", () => {
 	process.env.RUSUBAN_RUN = "act-1";
 	try {
 		assert.throws(
-			() => changeSetting({ kind: "project.mode", project: "live", mode: "shadow" }, as),
+			() => changeSetting({ kind: "limits", maxWorkers: 1 }, as),
 			/never changed inside an agent run/,
 		);
 	} finally {
 		delete process.env.RUSUBAN_RUN;
 	}
 	assert.throws(
-		() =>
-			changeSetting(
-				{ kind: "project.mode", project: "live", mode: "shadow" },
-				{ origin: "agent", by: "x" },
-			),
+		() => changeSetting({ kind: "limits", maxWorkers: 1 }, { origin: "agent", by: "x" }),
 		/unknown origin/,
 	);
 });
 
 test("the dashboard: the card in the inbox, allowed by the owner, never answered in words", async () => {
-	const asked = changeSetting({ kind: "project.mode", project: "calm", mode: "live" }, as);
+	const asked = changeSetting({ kind: "project.add", slug: "o/two", to: "calm" }, as);
 	write("automerge.json", { armed: false });
 	const srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
 	const call = (method, urlPath, body) =>
@@ -292,13 +283,14 @@ test("the dashboard: the card in the inbox, allowed by the owner, never answered
 		assert.equal((await answer({ option: "other", note: "yes please" })).status, 400);
 		const allowed = await answer({ option: "allow" });
 		assert.deepEqual([allowed.status, allowed.body.state], [200, "confirmed"]);
-		assert.equal(srv.ctx.config.projects[1].mode, "live", "the daemon applied it at once");
+		const repos = (c) => c.projects[1].repos.map((r) => r.slug);
+		assert.deepEqual(repos(srv.ctx.config), ["o/calm", "o/two"], "the daemon applied it at once");
 		assert.equal((await answer({ option: "allow" })).status, 404);
 		assert.deepEqual((await call("GET", "/api/inbox")).body.cards, []);
 		// The change shows in the project's journal, flagged for the owner.
 		const { journal } = (await call("GET", "/api/state?project=calm")).body;
-		assert.match(journal[0].text, /^Allowed by @alice: project calm is live/);
-		assert.equal(read("config.json").projects[1].mode, "live");
+		assert.match(journal[0].text, /^Allowed by @alice: o\/two added to project calm/);
+		assert.deepEqual(repos(read("config.json")), ["o/calm", "o/two"]);
 	} finally {
 		await srv.close();
 	}
@@ -344,11 +336,11 @@ test("a config.json changed outside the settings module is flagged once, with wh
 	};
 	const srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
 	try {
-		changeSetting({ kind: "project.mode", project: "live", mode: "shadow" }, as);
+		changeSetting({ kind: "limits", maxRunMinutes: 5 }, as);
 		reloadConfig(srv.ctx);
 		assert.deepEqual(outside(), [], "the settings module's own change");
 		byHand((raw) => {
-			raw.projects[0].mode = "live";
+			raw.projects[0].title = "Live";
 			raw.projects[0].bypassApproval = true;
 			raw.channels = [
 				{ id: "ntfy", type: "ntfy", target: "https://ntfy.example/secret-topic", urgency: ["now"] },
@@ -360,11 +352,11 @@ test("a config.json changed outside the settings module is flagged once, with wh
 		const [flag] = outside();
 		assert.equal(
 			flag.text,
-			`config.json was changed outside Rusuban's settings: projects.live.mode: "shadow" → "live"; projects.live.bypassApproval: false → true; channels.ntfy added.`,
+			`config.json was changed outside Rusuban's settings: projects.live.title: "live" → "Live"; projects.live.bypassApproval: false → true; channels.ntfy added.`,
 		);
 		assert.ok(!JSON.stringify(flag).includes("secret-topic"));
 		assert.equal(flagsToPing([flag], "alice", "http://x")[0].card.urgency, "now");
-		assert.equal(srv.ctx.config.projects[0].mode, "live", "the edit applies; it is only flagged");
+		assert.equal(srv.ctx.config.projects[0].title, "Live", "the edit applies; it is only flagged");
 	} finally {
 		await srv.close();
 	}

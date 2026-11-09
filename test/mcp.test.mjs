@@ -21,7 +21,7 @@ beforeEach(() => {
 		port: 0,
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 2, maxRunMinutes: 60 },
-		projects: [{ id: "demo", mode: "shadow", repos: [{ slug: "o/demo" }] }],
+		projects: [{ id: "demo", repos: [{ slug: "o/demo" }] }],
 	});
 });
 
@@ -88,34 +88,25 @@ test("what narrows applies, what widens waits for the owner; both journaled as t
 	const s = server();
 	try {
 		await s.call("initialize", {});
-		assert.equal((await s.tool("project_add", { slug: "o/new" })).state, "applied");
-		assert.equal(loadConfig().projects[1].mode, "shadow");
-		const live = await s.tool("project_mode", { project: "new", mode: "live" });
-		assert.deepEqual(
-			[live.state, live.text],
-			["pending", "Let the agents act on new as its rules say?"],
-		);
-		assert.equal(
-			loadConfig().projects[1].mode,
-			"shadow",
-			"nothing changes before the owner allows it",
-		);
+		const added = await s.tool("project_add", { slug: "o/new" });
+		assert.deepEqual([added.state, added.text], ["pending", "Add o/new as project new?"]);
+		assert.equal(loadConfig().projects.length, 1, "nothing changes before the owner allows it");
 		assert.equal((await s.tool("merge_switch", { armed: true })).state, "pending");
 		assert.equal((await s.tool("limits", { maxWorkers: 1 })).state, "applied");
 		assert.equal((await s.tool("limits", { maxWorkers: 4 })).state, "pending");
 		assert.equal(
-			(await s.tool("project_mode", { project: "new", mode: "shadow" })).state,
+			(await s.tool("project_bypass", { project: "demo", on: false })).state,
 			"unchanged",
 		);
 		assert.match(
-			(await s.tool("project_mode", { project: "gone", mode: "shadow" })).error,
+			(await s.tool("project_bypass", { project: "gone", on: false })).error,
 			/no project "gone"/,
 		);
 		const state = await s.tool("state");
 		assert.deepEqual(
 			state.waitingForTheOwner.map((w) => [w.origin, w.question]),
 			[
-				["mcp", "Let the agents act on new as its rules say?"],
+				["mcp", "Add o/new as project new?"],
 				["mcp", "Arm automatic merges?"],
 				["mcp", "Raise the limits to 4 workers and 60 minutes a run?"],
 			],

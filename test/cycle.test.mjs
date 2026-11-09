@@ -50,7 +50,7 @@ const RULES = {
 		errors: [],
 	},
 };
-const project = (mode = "live") => ({ id: "demo", title: "Demo", mode, repos: [{ slug: REPO }] });
+const project = () => ({ id: "demo", title: "Demo", repos: [{ slug: REPO }] });
 const liveOf = (prs, extra = {}) => ({
 	repos: { [REPO]: { defaultBranch: "main", prs, issues: [], merged: [], pushes: [], ...extra } },
 });
@@ -104,7 +104,7 @@ test("the server merges one eligible PR per cycle, judged auto on its head, and 
 	assert.ok(entry.gates.includes("CI: CI green on the head") && entry.gates.length === 8);
 });
 
-test("nothing merges when paused or in shadow mode, not even a person's order; armed again, it does", async () => {
+test("nothing merges when paused, not even a person's order; armed again, it does", async () => {
 	const live = liveOf([
 		pr(1),
 		pr(2, { files: [{ path: ".github/x.yml", additions: 1, deletions: 0, change: "MODIFIED" }] }),
@@ -136,8 +136,6 @@ test("nothing merges when paused or in shadow mode, not even a person's order; a
 	await runCycle(ctxOf(), project(), live, RULES, deps);
 	assert.deepEqual(merged, [], "paused: the order waits");
 	write("automerge.json", { armed: true });
-	await runCycle(ctxOf(), project("shadow"), live, RULES, deps);
-	assert.deepEqual(merged, [], "shadow: nothing merges at all");
 	write("projects/demo/judgment.json", { items: { "o/r#2": judged } });
 	await runCycle(ctxOf(), project(), live, RULES, deps);
 	assert.deepEqual(merged, [{ slug: REPO, n: 2, method: "squash", head: "sha2", admin: false }]);

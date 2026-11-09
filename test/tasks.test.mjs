@@ -29,7 +29,7 @@ beforeEach(() => {
 		owner: { login: "alice" },
 		permissions: { mode: "bypass", allow: [], deny: [] },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
-		projects: [{ id: "sandbox", mode: "live", repos: [{ slug: "o/sandbox" }] }],
+		projects: [{ id: "sandbox", repos: [{ slug: "o/sandbox" }] }],
 	});
 });
 

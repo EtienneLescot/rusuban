@@ -64,7 +64,6 @@ const liveOf = (prs) => ({
 });
 const project = (over = {}) => ({
 	id: "demo",
-	mode: "live",
 	bypassApproval: true,
 	repos: [{ slug: REPO }],
 	...over,
@@ -158,7 +157,7 @@ test("the setting lives in the instance's config, off unless stated, and a repo 
 		owner: { login: "alice" },
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 1, maxRunMinutes: 10 },
-		projects: [{ id: "demo", mode: "live", repos: [{ slug: REPO }], ...p }],
+		projects: [{ id: "demo", repos: [{ slug: REPO }], ...p }],
 	});
 	assert.equal(validateConfig(config({})).projects[0].bypassApproval, false);
 	assert.equal(validateConfig(config({ bypassApproval: true })).projects[0].bypassApproval, true);
@@ -331,13 +330,11 @@ test("off, the server never merges with --admin; on, it does only what it merges
 	assert.deepEqual([entry.kind, entry.admin], ["merge", true]);
 	assert.match(entry.text, /^Merged alone through the approval bypass \(--admin\): Fix 1\./);
 
-	// Paused, nothing merges alone, bypass or not; a shadow project merges nothing at all.
+	// Paused, nothing merges alone, bypass or not.
 	merged.length = 0;
 	write("projects/demo/judgment.json", { items: { "o/r#2": auto(2) } });
 	write("automerge.json", { armed: false });
 	await runCycle(ctxOf(), project(), liveOf([pr(2)]), rulesOf(), deps);
-	write("automerge.json", { armed: true });
-	await runCycle(ctxOf(), project({ mode: "shadow" }), liveOf([pr(2)]), rulesOf(), deps);
 	assert.deepEqual(merged, []);
 	// A person's merge order waits while paused too; armed again, it is a merge the server makes
 	// anyway, so it goes through the bypass, the branch's rules met.
@@ -472,7 +469,7 @@ test("the owner's commands are closed to agents; the bypass turned on waits for 
 		port: 0,
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 1, maxRunMinutes: 10 },
-		projects: [{ id: "demo", mode: "live", repos: [{ slug: REPO }] }],
+		projects: [{ id: "demo", repos: [{ slug: REPO }] }],
 	});
 	const cli = (env, ...args) =>
 		spawnSync(process.execPath, [BIN, ...args], {
@@ -493,8 +490,10 @@ test("the owner's commands are closed to agents; the bypass turned on waits for 
 	for (const c of OWNER_COMMANDS) assert.ok(deny.includes(`Bash(rusuban ${c}*)`), c);
 	assert.ok(deny.includes("mcp__rusuban"));
 
-	// A project added is off. Asked without a terminal, turning it on waits for the owner (FR-092).
+	// A project added, once the owner allows it, is off. Asked without a terminal, turning it on waits
+	// for the owner (FR-092).
 	assert.equal(cli({}, "project", "add", "o/other").status, 0);
+	confirmRequest(pendingRequests()[0].id, { allow: true, by: "alice" });
 	assert.equal(read("config.json").projects[1].bypassApproval, false);
 	const on = cli({}, "project", "bypass", "demo", "on");
 	assert.equal(on.status, 0, on.stderr);

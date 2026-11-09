@@ -63,6 +63,7 @@ Tasks added by the analysis are numbered from T084 and placed where they run.
 
 - [x] T084 Config in `src/home.mjs`: `"version": 1` checked on load, `limits { maxWorkers, maxRunMinutes }`, `owner.tailscaleLogin`, project `mode: "live" | "shadow"`, machine `workspace`
   - Version and limits came with Phase 2 (PR #1). `owner.tailscaleLogin` replaces Phase 2's `owner.tailscale`; `mode` is required, with no default. Nothing reads machines before T066, so `workspace` has no code yet.
+  - The project `mode` was removed on 2026-11-09 (T127): a config that still names one is refused.
 - [x] T085 Split the journal in `src/home.mjs`: `journal.jsonl` (daemon) and `agent-log.jsonl` (agent CLI, under the judgment lock), shown as one
 - [x] T086 Merge switch in `src/server.mjs`: `automerge.json` written by the daemon only, `POST /api/automerge`, the switch in the page header
   - Already done in Phase 2 (PR #1).
@@ -74,6 +75,7 @@ Tasks added by the analysis are numbered from T084 and placed where they run.
   - Phase 2 accepted any `ts.net` name and the GitHub login. The name now comes from `tailscale status --json`, read at start and every 5 minutes.
 - [x] T090 Every run through the launcher of T016 (workers, tasks, replies included); shadow projects add deny rules for every GitHub write
   - The launcher is the only way to start `claude` today; T033, T041 and T059 must keep it so. A run of a project no longer in the config gets the shadow rules too.
+  - The shadow deny rules went with shadow mode on 2026-11-09 (T127). A run of a project no longer in the config does not start.
 - [x] T091 [P] One breaking test per lock in `test/merge-gate.test.mjs` and `test/server.test.mjs`: open thread, switch paused, size, conflict, missing required check, no check at all, wrong `Host`, wrong Tailscale login
 
 ---
@@ -172,6 +174,7 @@ show in the journal.
 
 - [x] T044 [US7] `project add|list|remove` in `bin/rusuban.mjs`; per-project state under `projects/<p>/`
   - Also `project mode <id> <live|shadow>`, from the same table of the CLI contract, for the switch (T050, T051). A new project starts in shadow mode and goes live on its owner's word. Its id comes from the repo's name (`owner-repo` when the name is taken); `--to` adds a repo to an existing project, `--checkout` records a folder that exists.
+  - `project mode` was removed on 2026-11-09 with shadow mode (T127): a repo added now waits for the owner.
   - A repo belongs to one project: the config refuses it in two, whatever the case of its name. `config.json` stays at mode 600.
   - `remove` refuses while a run of the project waits or works, deletes no file and says where they stay, and names the tasks that still point at it.
   - Each command asks the running daemon, on its port, whether it applied the change, and says so, or that no daemon answers, or that it must be restarted.
@@ -187,7 +190,7 @@ show in the journal.
 ## Phase 6b: User Story 9 - Every setting from Claude, widening ones confirmed by a person (P2)
 
 **Goal**: Claude sets Rusuban up; what widens agents' rights waits for the owner, outside Claude.
-**Independent test**: from Claude, a project added applies at once, a project made live waits as a card;
+**Independent test**: from Claude, the limits lowered apply at once, a project added waits as a card;
 allowed in the dashboard it applies; from inside a run, both are refused.
 
 - [x] T118 [US9] Settings module `src/settings.mjs`: one implementation for the owner's commands and the MCP; widening against narrowing (FR-092, FR-093); `pending.json`; `settings.jsonl` with each change's origin (FR-094); `settings.lock`
@@ -217,14 +220,19 @@ allowed in the dashboard it applies; from inside a run, both are refused.
 - [ ] T049 Configure Etienne's instance: the `openscreen` project; the `publications` and `n8n-series` tasks moved to `~/.rusuban/tasks/`
 - [x] T050 Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge), judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
   - Replaced on 2026-11-08, Etienne's decision: no formal shadow week. He tries Rusuban himself on OpenScreen, and v0.1 ships after his trials. The daily comparison task was declined.
+  - Shadow mode itself was removed on 2026-11-09 (T127).
 - [x] T115 Approval bypass per project (FR-029): `project bypass <id> <on|off>` in `bin/rusuban.mjs`, off by default and never set by `project add`; `--admin` in `src/github.mjs` only on a merge the server makes anyway, the switch armed, after the base branch's rules are read and met (`src/model.mjs`); journaled in the project
   - The guard reads the base branch's rulesets and its classic protection in full (`/branches/{b}/protection`, none on a 404 "Branch not protected"). Every required check must be on the head, from the app the rule names (a PR's own job named like the review app does not count), in its latest run, and `success`. Rules that only concern pushes pass; a linear history refuses the `merge` method; a code owner's review, an up-to-date requirement, signed commits, protection that binds administrators, push restrictions, a locked branch, or any rule or setting it does not know stops it. What stops it is journaled once per head and flagged.
   - Tried on `getopenscreen/openscreen` main, read only: #1506 would pass; #1505 (CodeRabbit cancelled) and #1478 (macOS jobs cancelled) would not, though both were merged under the old pilot.
 - [x] T116 A refused merge in `src/server.mjs` and `src/model.mjs`: never tried again on that head, a daemon restart included (the journal is the record); the todo reason `merge-refused` makes the agents put it on a card for the owner
 - [x] T117 The owner's commands (`project`, `task`, `start`) refused inside an agent run, and forbidden by the built-in deny rules, so no agent turns a project live or its bypass on through them; under the bypass host profile the shell still reaches `config.json` and the dashboard (`security.md`, residual risk)
 - [x] T126 Cheap shell deny rules: no command naming the dashboard's port or a `.ts.net` address, nor `config.json` next to the home's name, `automerge.json`, `answers.jsonl` or `pending.json` (leading wildcards checked on Claude Code 2.1.302)
-- [ ] T051 Switch: the project goes `live`; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
-  - Decided on 2026-11-08: the approval bypass, set per project (T115). `getopenscreen/openscreen` requires an approval that agents' PRs, pushed under the owner's account, cannot get; the switch to `live` turns the bypass on.
+- [x] T127 Shadow mode removed, Etienne's decision of 2026-11-09: projects have no mode
+  - It served the shadow week, dropped on 2026-11-08 (T050). A repo without rules is only read (FR-024), and a repo added, to a new project or an existing one, now waits for the owner (FR-092).
+  - Gone: `project mode`, the MCP's `project_mode`, the shadow deny rules, the refusal to start a worker, the Switch gate's shadow state, the page's banner. FR-028 is marked removed.
+  - A config that still names a project's `mode` is refused at load, `"live"` included, so a project in shadow mode never starts acting on an update: removing the key is the owner's go (T051).
+- [ ] T051 Switch: OpenScreen's `"mode"` removed from `config.json` (refused since T127), as the old pilot stops; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
+  - Decided on 2026-11-08: the approval bypass, set per project (T115). `getopenscreen/openscreen` requires an approval that agents' PRs, pushed under the owner's account, cannot get; the switch turns the bypass on.
 - [x] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)
   - Nothing found on 2026-11-08, with every phase on main (`validation.md`).
 

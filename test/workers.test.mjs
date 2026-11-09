@@ -27,7 +27,7 @@ const config = {
 	owner: { login: "alice" },
 	permissions: { mode: "bypass", allow: [], deny: [] },
 	limits: { maxWorkers: 2, maxRunMinutes: 150 },
-	projects: [{ id: "demo", title: "Demo", mode: "live", repos: [{ slug: "o/r" }] }],
+	projects: [{ id: "demo", title: "Demo", repos: [{ slug: "o/r" }] }],
 	machines: [],
 	channels: [],
 };
@@ -51,22 +51,6 @@ beforeEach(() => {
 
 const start = (name, item, mission = "Fix it.") =>
 	startWorker({ config, project: "demo", name, item, mission });
-
-test("no worker in a shadow project: its agents judge and propose, nothing more", () => {
-	const shadow = { ...config, projects: [{ ...config.projects[0], mode: "shadow" }] };
-	assert.throws(
-		() =>
-			startWorker({
-				config: shadow,
-				project: "demo",
-				name: "fix-1",
-				item: "o/r#1",
-				mission: "Fix it.",
-			}),
-		/shadow mode/,
-	);
-	assert.equal(listRuns().length, 0);
-});
 
 test("at most the configured number of workers, one per item, each under its own name", () => {
 	start("fix-1", "o/r#1");

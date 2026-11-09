@@ -80,11 +80,8 @@ test("a new commit invalidates the judgment", () => {
 	assert.ok(!isEligible(g));
 });
 
-test("the merge switch, shadow projects, observe-only repos and unloaded rules keep every merge shut", () => {
+test("the merge switch, observe-only repos and unloaded rules keep every merge shut", () => {
 	assert.equal(by(gates(pr(1), fix(1), RULES, false), "Switch").state, "fail");
-	const shadow = gatesOf(pr(1), fix(1), { rules: RULES, armed: true, shadow: true });
-	assert.match(by(shadow, "Switch").detail, /Shadow mode/);
-	assert.ok(!isEligible(shadow));
 	assert.match(by(gates(pr(1), fix(1), { observeOnly: true }), "Judgment").detail, /Observe only/);
 	assert.equal(by(gatesOf(pr(1), fix(1), { armed: true }), "Judgment").state, "fail");
 });
@@ -369,7 +366,7 @@ test("layout: no overlapping nodes, stable from one run to the next", () => {
 	assert.ok(a.frames.some((f) => f.kind === "group" && f.group === "mine" && f.count === 10));
 });
 
-test("only PRs on the merge lane feed main, and a paused switch or shadow mode keeps them still", () => {
+test("only PRs on the merge lane feed main, and a paused switch keeps them still", () => {
 	const running = { checks: [{ name: "test", workflow: "CI", state: "pending" }] };
 	const live = {
 		prs: [pr(1), pr(2, running), pr(3)],
@@ -395,9 +392,6 @@ test("only PRs on the merge lane feed main, and a paused switch or shadow mode k
 	const paused = buildModel({ live, judgment, rules, armed: false });
 	assert.deepEqual(toMain(paused), ["o/r#1:false", "o/r#2:false"]);
 	assert.equal(paused.edges.find((e) => e.from === "o/r#1").label, "ready, merges paused");
-	const shadow = buildModel({ live, judgment, rules, armed: true, shadow: true });
-	assert.deepEqual(toMain(shadow), ["o/r#1:false", "o/r#2:false"]);
-	assert.equal(shadow.edges.find((e) => e.from === "o/r#1").label, "ready, shadow mode");
 });
 
 test("a closed card stays visible for 48 h with the chosen option", () => {

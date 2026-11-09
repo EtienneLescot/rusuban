@@ -111,7 +111,7 @@ export const TOOLS = [
 	{
 		name: "project_add",
 		description:
-			"Adds a repo (owner/repo): to a new project, in shadow mode, or to an existing one with `to`. To a live project it waits for the owner.",
+			"Adds a repo (owner/repo): to a new project, or to an existing one with `to`. It waits for the owner: the agents will act on it as its rules say.",
 		inputSchema: obj({ slug: text, checkout: text, to: text }, ["slug"]),
 		run: ({ slug, checkout, to }) =>
 			set({ kind: "project.add", slug, checkout: checkout ?? null, to: to ?? null }),
@@ -122,15 +122,6 @@ export const TOOLS = [
 			"Removes a project from the instance; its files stay. Refused while one of its runs waits or works.",
 		inputSchema: obj({ project: text }, ["project"]),
 		run: ({ project }) => set({ kind: "project.remove", project }),
-	},
-	{
-		name: "project_mode",
-		description: "`shadow` applies at once; `live` waits for the owner.",
-		inputSchema: obj({ project: text, mode: { type: "string", enum: ["live", "shadow"] } }, [
-			"project",
-			"mode",
-		]),
-		run: ({ project, mode }) => set({ kind: "project.mode", project, mode }),
 	},
 	{
 		name: "project_bypass",

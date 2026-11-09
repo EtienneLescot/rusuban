@@ -83,11 +83,6 @@ export function maskTarget(channel) {
 		return "…";
 	}
 }
-export const MODE_SAYS = {
-	live: "its agents act as its rules say, and the server merges what they allow",
-	shadow: "its agents judge and propose, nothing is written on GitHub and nothing merges",
-};
-
 // A project's id from a repo's name: lowercase letters, digits and dashes.
 const idOf = (s) =>
 	s
@@ -121,22 +116,23 @@ export function planOf(config, change) {
 			if (dir && !fs.statSync(dir, { throwIfNoEntry: false })?.isDirectory())
 				throw new Error(`checkout ${dir} is not a folder`);
 			const repo = { slug, checkout: dir };
+			// The agents act on a repo as its rules say, from its first read: it joins on the owner's word.
+			const acts = `The agents will act on ${slug} as its own rules say, and the server will merge what those rules and the locks allow. Until the repo has rules, they only read it.`;
 			if (to) {
 				const p = find(to);
 				return {
 					project: p.id,
-					widens: p.mode === "live",
+					widens: true,
 					apply: (c) => project(c, p.id).repos.push(repo),
-					said: `${slug} added to project ${p.id} (${p.mode}).`,
+					said: `${slug} added to project ${p.id}.`,
 					card: {
-						q: `Add ${slug} to ${p.id}, a live project?`,
-						ctx: `The agents will act on ${slug} as its own rules say, and the server will merge what those rules and the locks allow.`,
+						q: `Add ${slug} to ${p.id}?`,
+						ctx: acts,
 						allow: `${slug} joins ${p.id}.`,
 						deny: "Nothing changes.",
 					},
 				};
 			}
-			// A new project starts in shadow mode: it goes live on its owner's word, never on its own.
 			const [owner, name] = slug.split("/");
 			const ids = [idOf(name), idOf(`${owner}-${name}`)];
 			const id = ids.find((x) => PROJECT_ID.test(x) && !config.projects.some((p) => p.id === x));
@@ -146,9 +142,15 @@ export function planOf(config, change) {
 				);
 			return {
 				project: id,
-				widens: false,
-				apply: (c) => c.projects.push({ id, title: name, mode: "shadow", repos: [repo] }),
-				said: `project ${id} added, in shadow mode: ${MODE_SAYS.shadow}.`,
+				widens: true,
+				apply: (c) => c.projects.push({ id, title: name, repos: [repo] }),
+				said: `project ${id} added: its agents act on ${slug} as its rules say.`,
+				card: {
+					q: `Add ${slug} as project ${id}?`,
+					ctx: acts,
+					allow: `Project ${id} is added.`,
+					deny: "Nothing changes.",
+				},
 			};
 		}
 		case "project.remove": {
@@ -168,27 +170,6 @@ export function planOf(config, change) {
 				said: `project ${p.id} removed.`,
 			};
 		}
-		case "project.mode": {
-			const p = find(change.project);
-			if (!Object.hasOwn(MODE_SAYS, change.mode)) throw new Error("a mode is live or shadow");
-			if (p.mode === change.mode)
-				return { project: p.id, same: `project ${p.id} is already ${p.mode}.` };
-			const live = change.mode === "live";
-			return {
-				project: p.id,
-				widens: live,
-				apply: (c) => {
-					project(c, p.id).mode = change.mode;
-				},
-				said: `project ${p.id} is ${live ? "live" : "in shadow mode"}: ${MODE_SAYS[change.mode]}.`,
-				card: {
-					q: `Let the agents act on ${p.id} as its rules say?`,
-					ctx: "Live, the agents write on GitHub and the server merges what the rules and the locks allow.",
-					allow: `${p.id} goes live. Runs at work keep shadow mode until they end.`,
-					deny: `${p.id} stays in shadow mode.`,
-				},
-			};
-		}
 		case "project.bypass": {
 			const p = find(change.project);
 			const on = change.on === true;
@@ -204,7 +185,7 @@ export function planOf(config, change) {
 					project(c, p.id).bypassApproval = on;
 				},
 				said: on
-					? `project ${p.id}: approval bypass on. What the server merges anyway${p.mode === "live" ? "" : " once the project is live"}, with the merge switch armed, it merges with --admin, and only once every check the base branch requires is green on the head.`
+					? `project ${p.id}: approval bypass on. What the server merges anyway, with the merge switch armed, it merges with --admin, and only once every check the base branch requires is green on the head.`
 					: `project ${p.id}: approval bypass off. The server never merges with --admin.`,
 				card: {
 					q: `Let the server merge with your bypass on ${p.id}?`,
@@ -300,7 +281,7 @@ export function planOf(config, change) {
 				said: armed ? "Merges armed" : "Merges paused",
 				card: {
 					q: "Arm automatic merges?",
-					ctx: "Armed, the server merges alone what the rules and every lock allow, in every live project.",
+					ctx: "Armed, the server merges alone what the rules and every lock allow, in every project.",
 					allow: "Merges are armed.",
 					deny: "Merges stay paused.",
 				},
@@ -573,8 +554,8 @@ export function changeSetting(change, { origin, by, confirmed = false }) {
 }
 
 // `init` (T073): the instance's first config, from the owner's answers in a terminal, so what widens
-// in it (the host profile, the switch) is the person's own word. The limits are written out, for the
-// owner to see and change; the first project starts in shadow mode, like any.
+// in it (the host profile, the switch, the first project) is the person's own word. The limits are
+// written out, for the owner to see and change.
 export const FIRST_LIMITS = { maxWorkers: 3, maxRunMinutes: 150 };
 export function initInstance({ owner, mode, armed, port, slug, checkout = null }) {
 	return withLock(() => {

@@ -18,7 +18,7 @@ and its drawer lists them all. A PR merges alone only when every gate passes.
 | Judgment | The repo has no rules; the PR is not judged, or was judged on another commit; it was judged not to merge alone (`pr.auto: false`). |
 | Locks | It touches `.rusuban/` or a locked path; it is over the size limits; it renames a file; it changes more files than GitHub lists (100); the repo's `locks.json` does not validate. |
 | Evidence | It touches an `evidence` zone, or its judgment asked for a proof, and no successful proof is recorded on its head. |
-| Switch | Merges are paused, or the project is in shadow mode. |
+| Switch | Merges are paused. |
 
 ## Built-in locks
 
@@ -40,7 +40,7 @@ see.
 
 ## How the server merges
 
-- **Only in a live project**, at most one merge per read of the project.
+- **At most one merge per read of the project.**
 - **A person's merge order first**, then a PR judged `auto` on its head whose every gate passes, the
   switch read again just before.
 - **Exactly the head it checked**: `gh pr merge --<mergeMethod> --match-head-commit <head>`.
@@ -63,7 +63,7 @@ the head the card was written on, once:
 - the head has not moved since the card.
 
 Your order lifts the rest, for that head only: the Reviews, Judgment, Locks and Evidence gates, the
-`.rusuban/` lock included. An order is never carried out in shadow mode.
+`.rusuban/` lock included.
 
 ### The approval bypass
 

@@ -1,7 +1,6 @@
 // Agents are headless Claude Code sessions (research R2, R3). Every run carries the built-in deny
 // rules, whatever the host's permission profile: agents never merge, never push to a default branch
-// and never edit the instance's state; in a shadow project they write nothing on GitHub. The server
-// is the only merger. Every run goes through requestRun and executeRun (FR-030).
+// and never edit the instance's state. The server is the only merger. Every run goes through requestRun and executeRun (FR-030).
 //
 // A run is requested, then executed by a detached runner process, so it outlives the daemon that
 // asked for it. Runs of one lock group go one after the other, in order of request. Its prompt is
@@ -49,32 +48,6 @@ const STATE = [
 	"bin",
 ];
 
-// Shadow projects (FR-028, research R3): agents judge and propose, every GitHub write is denied.
-const GH_WRITES = {
-	pr: "close comment create edit lock ready reopen review revert unlock update-branch",
-	issue: "close comment create delete develop edit lock pin reopen transfer unlock unpin",
-	label: "clone create delete edit",
-	release: "create delete delete-asset edit upload",
-	repo: "archive create delete deploy-key edit fork rename sync unarchive",
-	run: "cancel delete rerun",
-	workflow: "disable enable run",
-	cache: "delete",
-	secret: "delete set",
-	variable: "delete set",
-	gist: "create delete edit rename",
-};
-export const SHADOW_DENY = [
-	...Object.entries(GH_WRITES).flatMap(([group, verbs]) =>
-		verbs.split(" ").map((verb) => `Bash(gh ${group} ${verb}*)`),
-	),
-	// `gh api` writes with a method, or with fields or a body, which make it a POST: GraphQL reads
-	// through `gh api graphql -f` are denied too in shadow mode.
-	...["-X", "--method", "-f", "-F", "--field", "--raw-field", "--input"].map(
-		(flag) => `Bash(gh api* ${flag}*)`,
-	),
-	"Bash(git push*)",
-];
-
 // The commands of contracts/cli.md that belong to the owner; the agent CLI refuses them inside a run.
 export const OWNER_COMMANDS = [
 	"project",
@@ -98,20 +71,15 @@ const SHELL_STATE = ["automerge.json", "answers.jsonl", "pending.json"];
 // or another tool gets through, and so does one that reaches the dashboard or the owner's files by a
 // spelling the rules do not name. The server flags merges and pushes it did not make (research R3);
 // an agent-only token, and agents under their own OS account or a sandbox, close the gap after v1.
-export function builtInDeny({
-	home = homeDir(),
-	defaultBranches = [],
-	shadow = false,
-	port = null,
-} = {}) {
+export function builtInDeny({ home = homeDir(), defaultBranches = [], port = null } = {}) {
 	const rules = [
 		"Bash(gh pr merge*)",
 		"Bash(gh api*merge*)", // REST /merge and /merges, GraphQL mergePullRequest
 		"Bash(gh api*Merge*)", // GraphQL enablePullRequestAutoMerge and the like
 		"Bash(git push*--all*)",
 		"Bash(git push*--mirror*)",
-		// The owner's settings (FR-095): no agent makes a project live, turns its bypass on, starts a
-		// task or reaches Rusuban's own MCP server.
+		// The owner's settings (FR-095): no agent adds a project, turns its bypass on, starts a task or
+		// reaches Rusuban's own MCP server.
 		...OWNER_COMMANDS.map((c) => `Bash(rusuban ${c}*)`),
 		"mcp__rusuban",
 		...STATE.map((name) => editRule(path.join(home, name), !name.endsWith(".json"))),
@@ -133,7 +101,6 @@ export function builtInDeny({
 			`Bash(git push*refs/heads/${b}*)`,
 			`Bash(gh api*git/refs/heads/${b}*)`,
 		);
-	if (shadow) rules.push(...SHADOW_DENY);
 	return rules;
 }
 
@@ -233,11 +200,10 @@ function contextOf({ p, kind, run, config, pending, task }) {
 	const live = read(`${dir}/live.json`, { repos: {} });
 	const rules = read(`${dir}/rules.json`, {});
 	const judgment = read(`${dir}/judgment.json`, { items: {} });
-	const shadow = p.mode === "shadow";
 	const out = [
 		"# Context",
 		"",
-		`- Project: ${p.title} (\`${p.id}\`), ${shadow ? "in shadow mode: judge and propose only, every GitHub write is denied and nothing is merged" : "live"}.`,
+		`- Project: ${p.title} (\`${p.id}\`).`,
 		`- Owner: @${config.owner.login}.`,
 		...p.repos.map(({ slug }) => {
 			const r = rules[slug];
@@ -739,11 +705,9 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 		if (s.state !== "queued") return resolve(s);
 		// Arguments first: a bad permission profile fails here, before the run holds its lock group.
 		const live = read(`projects/${s.project}/live.json`, {});
-		const mode = config.projects?.find((p) => p.id === s.project)?.mode;
 		const args = permissionArgs(config.permissions, {
 			home: homeDir(),
 			defaultBranches: Object.values(live.repos ?? {}).map((r) => r.defaultBranch),
-			shadow: mode !== "live", // a project no longer configured gets the shadow rules too
 			port: config.port,
 			guard: config.machines?.some((m) => m.owner), // a desktop added later guards later runs
 		});
