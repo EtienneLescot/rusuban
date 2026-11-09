@@ -395,10 +395,10 @@ async function bypassStopsOf(pr, method, deps) {
 	}
 }
 
-// The server's merge (T030, T093), one per cycle, never while the switch is paused, read again just
-// before. A person's merge order comes first; then a PR judged
-// `auto` whose every gate passes. A head GitHub refused is not tried again (T116), the journal being the record: only an order
-// given after the refusal, or the bypass turned on since, tries it once more.
+// The server's merge (T030, T093), one per cycle, never while the switch is paused, read again
+// just before. A person's merge order comes first; then a PR judged `auto` whose every gate
+// passes. A head GitHub refused is not tried again (T116), the journal being the record: only an
+// order given after the refusal, or the bypass turned on since, tries it once more.
 async function mergeOne(ctx, p, { live, judgment, answers, rules }, deps) {
 	const dir = `projects/${p.id}`;
 	const said = readJsonl(`${dir}/journal.jsonl`);
