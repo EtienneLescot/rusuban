@@ -1,6 +1,7 @@
 // Agents are headless Claude Code sessions (research R2, R3). Every run carries the built-in deny
 // rules, whatever the host's permission profile: agents never merge, never push to a default branch
-// and never edit the instance's state. The server is the only merger. Every run goes through requestRun and executeRun (FR-030).
+// and never edit the instance's state. The server is the only merger. Every run goes through
+// requestRun and executeRun (FR-030).
 //
 // A run is requested, then executed by a detached runner process, so it outlives the daemon that
 // asked for it. Runs of one lock group go one after the other, in order of request. Its prompt is
