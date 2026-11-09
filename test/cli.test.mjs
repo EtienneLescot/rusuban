@@ -227,7 +227,8 @@ test("the agent commands read and write a project's files", () => {
 	const shown = JSON.parse(run("show", "#1").stdout);
 	assert.deepEqual([shown.item, shown.judgment.judgedBy], ["o/r#1", "agent:judge-1"]);
 
-	fs.writeFileSync(file, JSON.stringify(prJ({ pr: { head: "stale", auto: true } })));
+	const stale = prJ({ revisitAt: "2099-01-01T00:00:00Z", pr: { head: "stale", auto: true } });
+	fs.writeFileSync(file, JSON.stringify(stale));
 	const refused = run("judge", file);
 	assert.equal(refused.status, 1);
 	assert.match(refused.stderr, /^refused: o\/r#1: pr.head must be the live head/);
