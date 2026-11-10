@@ -61,6 +61,11 @@ Then the item's owner:
   Ask them on GitHub. `revisitAt` is how long the rules say to wait.
 - **a GitHub login**: a real decision for that person, always with a card.
 
+**An issue follows its PR.** An issue that an open PR addresses (the PR closes it, names it, or links
+it) gets no card while the PR has one: judge it `owner: "agent"`, its `next` naming the PR. When you
+give a PR a card, an open card on an issue it addresses goes into the PR's: judge that issue the same
+way, which replaces its card.
+
 ## Your final answer
 
 Three lines at most: what you judged or did alone, the new cards and for whom, the workers you

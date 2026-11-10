@@ -542,6 +542,18 @@ export function applyJudgment(
 		const d = input.decision;
 		if (!isPerson(next.owner))
 			fail(`${key}: a card goes to a person: set owner to their GitHub login`);
+		// An issue follows the PR that addresses it: while that PR has an open card, none of its own.
+		const carrier =
+			type === "issue" &&
+			live.prs.find((p) => {
+				const pj = judgment.items[keyOf(p)];
+				const refs = [...(p.closes ?? []), ...(p.refs ?? []), ...(pj?.links?.issues ?? [])];
+				return hasOpenCard(pj) && refs.some((r) => refKey(r, p.repo) === key);
+			});
+		if (carrier)
+			fail(
+				`${key}: ${keyOf(carrier)} addresses this issue and has an open card, so the issue follows it without a card: owner "agent", its next naming the PR`,
+			);
 		if (d.to != null && d.to !== next.owner)
 			fail(`${key}: decision.to must be the owner, ${next.owner}`);
 		if (!d.q || !d.ctx || !Array.isArray(d.options) || d.options.length < 2)

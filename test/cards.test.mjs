@@ -89,6 +89,66 @@ test("a card is open, resolved by its answer, or replaced by a newer judgment", 
 	assert.equal(cardState("o/r#10", judgment.items["o/r#10"].decision, []), "replaced");
 });
 
+test("an issue follows the PR that addresses it: no card of its own while the PR has one", () => {
+	const judgment = { items: {} };
+	const pr = (over) => ({ ...live, prs: [{ ...live.prs[0], ...over }] });
+	const prCard = (links = {}) =>
+		applyJudgment(
+			{
+				item: "#1",
+				label: "Add median()",
+				kind: "feature",
+				owner: "alice",
+				next: "Alice decides.",
+				pr: { head: "abc", auto: false },
+				links,
+				decision: card({ q: "Merge median()?" }),
+			},
+			live,
+			judgment,
+			{ repos: ["o/r"], now: NOW },
+		);
+	const issueCard = (lv) =>
+		applyJudgment(
+			{
+				item: "#10",
+				label: "Dark mode",
+				kind: "feature",
+				owner: "alice",
+				next: "Alice decides.",
+				decision: card(),
+			},
+			lv,
+			judgment,
+			{ repos: ["o/r"], now: NOW },
+		);
+	const refused = /o\/r#1 addresses this issue and has an open card, so the issue follows it/;
+	// The PR's card is open: an issue it closes, names or links gets none.
+	prCard();
+	assert.throws(() => issueCard(pr({ closes: ["#10"] })), refused);
+	assert.throws(() => issueCard(pr({ refs: ["o/r#10"] })), refused);
+	prCard({ issues: ["#10"] });
+	assert.throws(() => issueCard(live), refused);
+	// It follows the PR, held by the agents.
+	const follows = applyJudgment(
+		{
+			item: "#10",
+			label: "Dark mode",
+			kind: "feature",
+			owner: "agent",
+			next: "Follows PR #1.",
+			revisitAt: LATER,
+		},
+		live,
+		judgment,
+		{ repos: ["o/r"], now: NOW },
+	);
+	assert.equal(follows.decision, undefined);
+	// The PR's card closed, the issue may get its own.
+	closeCard(judgment, "o/r#1", "Merged.", [], NOW);
+	assert.equal(issueCard(live).decision.state, "open");
+});
+
 test("an answer is checked against its card: a replaced card and a second answer are refused", () => {
 	const judgment = { items: {} };
 	const d = toAlice(judgment);
