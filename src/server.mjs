@@ -12,6 +12,7 @@ import {
 	coordinatorLock,
 	kickQueues,
 	listRuns,
+	NO_MODEL,
 	pendingOf,
 	readRun,
 	requestCoordinator,
@@ -212,6 +213,7 @@ export function stateOf(ctx, projectId) {
 		dry: ctx.dry,
 		me,
 		armed,
+		runModel: config.model ?? null,
 		projects: config.projects.map(({ id, title }) => ({ id, title })),
 	};
 	const empty = { prs: [], issues: [], merged: [] };
@@ -602,7 +604,8 @@ export async function runCycle(ctx, p, liveFile, rules, deps = DEPS) {
 	const answers = readJsonl(`${dir}/answers.jsonl`);
 	if (!ctx.dry) await mergeOne(ctx, p, { live, judgment, answers, rules }, deps);
 	flagOutsiders(p, liveFile);
-	if (!ctx.dry) triggerRuns(p, { live, judgment, rules }, deps);
+	// Without a model no run starts (FR-098): the page says why, nothing piles up failed runs.
+	if (!ctx.dry && ctx.config.model) triggerRuns(p, { live, judgment, rules }, deps);
 }
 
 // ── Recurring tasks (T041, T043) ──────────────────────────────────────────────────────────────
@@ -661,6 +664,7 @@ function runTaskNow(ctx, id, res) {
 	if (t.error) return json(res, 400, { error: t.error });
 	if (busyRun(t.id)) return json(res, 409, { error: "this task already waits or works" });
 	if (ctx.dry) return json(res, 200, { run: null, state: "dry" });
+	if (!ctx.config.model) return json(res, 409, { error: NO_MODEL });
 	const r = startTaskRun(ctx, t, "button");
 	ctx.broadcast(true);
 	return json(res, 200, { run: r.id, state: r.state });
@@ -831,6 +835,9 @@ export const runsOf = (project = null) =>
 			retryAt: r.retryAt ?? null,
 			summary: r.summary ?? null,
 			conversation: r.session ?? null,
+			// The model asked for, and the one the session said it runs on (FR-098).
+			model: r.model ?? null,
+			modelAsked: r.modelAsked ?? null,
 		}));
 
 // ── Machines (T067, T070, T071) ───────────────────────────────────────────────────────────────
@@ -936,6 +943,7 @@ export const agentsState = (ctx, project) => {
 	const p = ctx.config.projects.find((x) => x.id === project);
 	return {
 		dry: ctx.dry,
+		runModel: ctx.config.model ?? null,
 		runs: runsOf(project).slice(0, 40),
 		tasks: tasksState(ctx.config).filter(
 			(t) => t.project === project || !known.includes(t.project),
@@ -967,7 +975,11 @@ const depsOf = (ctx) => ({ ...DEPS, ...ctx.deps });
 
 // The coordinator starts at once on an answer or a request (FR-043), unless the daemon is dry.
 const startCoordinator = (ctx, project, trigger) =>
-	ctx.dry ? "dry" : (depsOf(ctx).requestCoordinator(project, trigger)?.state ?? "queued");
+	ctx.dry
+		? "dry"
+		: !ctx.config.model
+			? "no model"
+			: (depsOf(ctx).requestCoordinator(project, trigger)?.state ?? "queued");
 
 const itemOf = (p, ref) => {
 	try {
@@ -999,9 +1011,11 @@ function converse(ctx, id, what, body, res, req) {
 		if (what === "terminal") {
 			if (!localHosts(ctx.port).includes(String(req.headers.host ?? "").toLowerCase()))
 				return json(res, 403, { error: "a terminal opens only from this machine" });
-			return json(res, 200, depsOf(ctx).openTerminal(ctx.hubIndex, id));
+			// An unknown conversation is 404, then without a model it is 409, said by openTerminal.
+			return json(res, 200, depsOf(ctx).openTerminal(ctx.hubIndex, id, ctx.config.model));
 		}
 		if (ctx.dry) return json(res, 200, { run: null, forked: false, state: "dry" });
+		if (!ctx.config.model) return json(res, 409, { error: NO_MODEL });
 		const r = replyTo(ctx.hubIndex, id, body.text, depsOf(ctx).requestRun);
 		journal(r.project, {
 			kind: "reply",
@@ -1399,6 +1413,7 @@ export async function startServer({
 	// Recurring tasks: their slots are looked at every 30 s, and once at start for those missed. The
 	// queues are tended on the same clock, every project's, with a repo or not.
 	const schedule = () => {
+		if (!ctx.config.model) return; // no run starts: nothing to start nor ask again
 		try {
 			for (const r of runSchedule(ctx)) ctx.say(`task ${r.task}: started (${r.id})`);
 			kickQueues();
@@ -1413,6 +1428,7 @@ export async function startServer({
 	ctx.say(
 		`rusuban ${version} on http://127.0.0.1:${ctx.port}/${dry ? " (dry: no GitHub write, no agent)" : ""}`,
 	);
+	if (!config.model) ctx.say(NO_MODEL);
 	return {
 		port: ctx.port,
 		ctx,

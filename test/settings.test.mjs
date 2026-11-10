@@ -52,6 +52,10 @@ test("what widens agents' rights, and what narrows them", () => {
 	assert.equal(widens({ kind: "project.create", id: "posts" }), false);
 	assert.throws(() => widens({ kind: "project.create", id: "live" }), /exists already/);
 	assert.equal(widens({ kind: "project.remove", project: "calm" }), false);
+	// The runs' model widens neither what agents may do nor where data goes; a flag is never one.
+	assert.equal(widens({ kind: "model", model: "claude-opus-5-5" }), false);
+	for (const bad of ["", "--dangerously-skip-permissions", "opus 5", undefined])
+		assert.throws(() => widens({ kind: "model", model: bad }), /a model is a Claude Code model id/);
 	assert.throws(
 		() => widens({ kind: "project.bypass", project: "nope", on: true }),
 		/no project "nope"/,
@@ -205,15 +209,23 @@ test("remote access: on waits for the owner, then Serve forwards the dashboard; 
 test("init writes the first config from the owner's answers, its limits spelled out, and only once", () => {
 	const config = path.join(process.env.RUSUBAN_HOME, "config.json");
 	fs.rmSync(config);
-	const answers = { owner: "alice", mode: "bypass", armed: false, port: 8790, slug: "o/first" };
-	// A wrong answer writes nothing.
+	const answers = {
+		owner: "alice",
+		mode: "bypass",
+		armed: false,
+		model: "claude-test",
+		port: 8790,
+		slug: "o/first",
+	};
+	// A wrong answer writes nothing, and the runs' model has no default.
 	assert.throws(() => initInstance({ ...answers, slug: "first" }), /first is not owner\/repo/);
 	assert.throws(() => initInstance({ ...answers, mode: "both" }), /permissions\.mode/);
+	assert.throws(() => initInstance({ ...answers, model: undefined }), /has no default/);
 	assert.ok(!fs.existsSync(config));
 	const c = initInstance(answers);
 	assert.deepEqual(
-		[c.owner.login, c.port, c.permissions.mode, c.limits],
-		["alice", 8790, "bypass", { maxWorkers: 3, maxRunMinutes: 150 }],
+		[c.owner.login, c.port, c.permissions.mode, c.limits, c.model],
+		["alice", 8790, "bypass", { maxWorkers: 3, maxRunMinutes: 150 }, "claude-test"],
 	);
 	assert.deepEqual(
 		c.projects.map((p) => [p.id, p.repos[0].slug, Object.hasOwn(p, "mode")]),
@@ -225,6 +237,7 @@ test("init writes the first config from the owner's answers, its limits spelled 
 		[entry.setting, entry.origin, entry.project, entry.notify],
 		["init", "terminal", "first", true],
 	);
+	assert.match(entry.text, /model claude-test/);
 	assert.throws(() => initInstance(answers), /set up already/);
 });
 

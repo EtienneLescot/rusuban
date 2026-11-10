@@ -8,7 +8,7 @@ tools.
 
 - **Read the instance**: projects, their items and cards, runs, tasks, the journal.
 - **Change a setting**: add or remove a repo, a project's mode or approval bypass, the host profile,
-  the merge switch, the limits, the owner, a task, a channel, remote access.
+  the merge switch, the limits, the runs' model, the owner, a task, a channel, remote access.
 
 Ask in your own words: "watch acme/widgets in Rusuban", "pause the merges", "write a task that drafts
 the release notes every Friday".
@@ -29,9 +29,10 @@ What widens:
 - a channel added, since cards leave for its target;
 - remote access turned on.
 
-What narrows applies at once: the bypass off, the switch paused, the limits lowered, a
-project, a channel or a task removed, remote access off. So does a project without a repo created: it
-starts nothing by itself, and each of its tasks waits for you.
+What narrows applies at once: the bypass off, the switch paused, the limits lowered, a project, a
+channel or a task removed, remote access off. So does a project without a repo created: it starts
+nothing by itself, and each of its tasks waits for you. So does the runs' model: every run uses the
+one you chose, never Claude Code's default, and without one no run starts.
 
 In a terminal, `rusuban` asks you to type the change's target instead of making a card. Claude's own
 shell has no terminal: there, the change waits for the card too.

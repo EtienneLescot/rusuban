@@ -7,7 +7,14 @@ let prompt = "";
 process.stdin.setEncoding("utf8");
 for await (const chunk of process.stdin) prompt += chunk;
 const emit = (e) => process.stdout.write(`${JSON.stringify(e)}\n`);
-emit({ type: "system", subtype: "init", session_id: "00000000-0000-4000-8000-000000000001" });
+// The session says the model it runs on: the one asked, unless FAKE_CLAUDE_MODEL says otherwise.
+const asked = process.argv[process.argv.indexOf("--model") + 1];
+emit({
+	type: "system",
+	subtype: "init",
+	session_id: "00000000-0000-4000-8000-000000000001",
+	model: process.env.FAKE_CLAUDE_MODEL ?? asked,
+});
 emit({
 	type: "assistant",
 	message: { content: [{ type: "text", text: `Reading: ${prompt.trim()}` }] },

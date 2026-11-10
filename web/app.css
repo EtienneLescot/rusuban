@@ -2642,6 +2642,9 @@ body[data-showing="conversations"] .filters > :not(.views) {
 .ag-line .mono {
 	color: var(--text-3);
 }
+#agents-view .ag-model.off {
+	color: var(--amber-text);
+}
 
 /* Phone: one screen at a time, picked in the tab bar; an open card covers them all. */
 @media (max-width: 720px) {

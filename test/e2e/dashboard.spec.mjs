@@ -1,7 +1,7 @@
 // What a person does on the dashboard, with real clicks on a desktop and real taps on a phone: both
 // go through the page's own hit-testing, which is what let the view tabs of #7 ship dead.
 import { expect } from "@playwright/test";
-import { read, readJsonl } from "../../src/home.mjs";
+import { loadConfig, read, readJsonl, saveConfig } from "../../src/home.mjs";
 import { answerOf, askDesktop } from "../../src/machines.mjs";
 import { changeSetting } from "../../src/settings.mjs";
 import { test } from "./app.mjs";
@@ -141,6 +141,21 @@ test("Agents: Run now on a task at rest, none on a task at work", async ({ page,
 	await expect(page.locator("#toast")).toHaveText("Weekly digest started");
 	await expect(runNow("digest")).toHaveCount(0);
 	await expect(page.locator(".ag-run").filter({ hasText: "Weekly digest" })).toBeVisible();
+	// The model its session announced, the one asked for.
+	await expect(page.locator("#agents-view .ag-model").first()).toHaveText("claude-test");
+	await expect(page.locator("#agents-view .ag-model.off")).toHaveCount(0);
+});
+
+test("without a model the page says no run starts, and Run now is refused", async ({
+	page,
+	isMobile,
+}) => {
+	await expect(page.locator("#nomodel")).toBeHidden();
+	saveConfig({ ...loadConfig(), model: undefined });
+	await expect(page.locator("#nomodel")).toBeVisible();
+	await goTo(page, "agents", isMobile);
+	await press(page.locator('[data-run-task="digest"]'), isMobile);
+	await expect(page.locator("#toast")).toContainText("No model is set for the runs");
 });
 
 test("a setting asked from Claude waits as a card, and applies once the owner allows it", async ({

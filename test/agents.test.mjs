@@ -12,11 +12,13 @@ import {
 	holder,
 	kickQueues,
 	listRuns,
+	NO_MODEL,
 	noteCrash,
 	permissionArgs,
 	queued,
 	readRun,
 	requestRun,
+	runClaude,
 	runner,
 	scratchOf,
 	stopRun,
@@ -37,7 +39,7 @@ const PR = { repo: "o/r", n: 1, head: "abc", files: [], ci: { state: "success" }
 beforeEach(() => {
 	process.env.RUSUBAN_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-agents-"));
 	launched.length = 0;
-	for (const k of ["FAKE_CLAUDE_MS", "FAKE_CLAUDE_EXIT", "FAKE_CLAUDE_LIMIT"])
+	for (const k of ["FAKE_CLAUDE_MS", "FAKE_CLAUDE_EXIT", "FAKE_CLAUDE_LIMIT", "FAKE_CLAUDE_MODEL"])
 		delete process.env[k];
 	write("projects/demo/live.json", {
 		repos: { "o/r": { defaultBranch: "main", prs: [PR], issues: [] } },
@@ -111,6 +113,7 @@ const config = {
 	port: 0,
 	permissions: { mode: "bypass", allow: [], deny: [] },
 	limits: { maxWorkers: 3, maxRunMinutes: 150 },
+	model: "claude-test",
 	projects: [{ id: "demo", title: "Demo", repos: [{ slug: "o/r" }] }],
 	machines: [],
 	channels: [],
@@ -228,6 +231,61 @@ test("a run builds its prompt when it starts, works in its folder with rusuban o
 	assert.match(log, /denied: Bash gh pr merge 1/);
 	assert.deepEqual(readRun(id), done);
 	assert.equal(holder("demo.coordinator"), null);
+});
+
+// Every way a run starts Claude Code: one that forgot the model would run on the default.
+test("every launch asks for the owner's model, and each run keeps the one its session announced", async () => {
+	append("projects/demo/asks.jsonl", { at: "2026-11-07T10:00:00Z", text: "Look." });
+	const cwd = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-model-"));
+	const reply = (session, fork = false) =>
+		request({
+			kind: "reply",
+			mission: "Go on.",
+			cwd,
+			resume: session,
+			fork,
+			lock: `demo.reply.${session}`,
+		});
+	const launches = {
+		judge: request(),
+		coordinator: request({ kind: "act" }),
+		task: request({
+			kind: "task",
+			mission: "Write.",
+			title: "Digest",
+			task: "digest",
+			lock: "demo.task.digest",
+		}),
+		resume: reply("s-1"),
+		fork: reply("s-2", true),
+	};
+	for (const [what, { id }] of Object.entries(launches)) {
+		const done = await executeRun(id, { config, command: FAKE });
+		const { args } = JSON.parse(done.summary);
+		const at = args.indexOf("--model");
+		assert.deepEqual(args.slice(at, at + 2), ["--model", "claude-test"], what);
+		assert.deepEqual([done.model, done.modelAsked], ["claude-test", "claude-test"], what);
+	}
+	// A session on another model than the one asked for keeps what it said, for the page to show.
+	process.env.FAKE_CLAUDE_MODEL = "claude-other";
+	const off = await executeRun(request().id, { config, command: FAKE });
+	assert.deepEqual([off.model, off.modelAsked], ["claude-other", "claude-test"]);
+});
+
+test("without a model no run starts: never one on Claude Code's default", async () => {
+	const none = await executeRun(request().id, {
+		config: { ...config, model: undefined },
+		command: FAKE,
+	});
+	assert.deepEqual(
+		[none.state, none.session, none.summary],
+		["failed", null, `Could not start: ${NO_MODEL}`],
+	);
+	assert.throws(
+		() => runClaude({ prompt: "x", cwd: os.tmpdir(), logFile: homePath("x.log"), command: FAKE }),
+		{ message: NO_MODEL },
+	);
+	assert.ok(!fs.existsSync(homePath("x.log")), "claude is never started");
 });
 
 test("a run of a project no longer configured does not start", async () => {

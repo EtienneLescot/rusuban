@@ -165,6 +165,7 @@ before(async () => {
 		owner: OWNER,
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
+		model: "claude-test",
 		projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
 	});
 	srv = await startServer({

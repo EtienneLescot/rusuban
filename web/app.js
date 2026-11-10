@@ -22,6 +22,8 @@ const T = {
 	observeText: (branch) =>
 		`No rules in <span class="mono">.rusuban/rules/</span> on ${branch ? esc(branch) : "the default branch"}: agents read this project and never act.`,
 	dry: "Dry mode: the server starts no agent and writes nothing on GitHub.",
+	noModel: "No model is set for the runs, so none starts: rusuban model <id> sets one.",
+	modelAsked: (m) => `Not the model asked for, ${m}`,
 	offline: "Server unreachable: the display is frozen.",
 	filters: "Filters",
 	areaFrames: "Area frames",
@@ -1180,6 +1182,13 @@ const conversationLink = (r) =>
 	r.conversation
 		? `<a href="${logUrl(r)}" target="_blank" rel="noopener">${T.conversation}</a>`
 		: "";
+// The model a run's session said it runs on (FR-098), marked when it is not the one asked for (an
+// alias asked, such as opus, is part of the full id announced).
+const modelHtml = (r) => {
+	if (!r.model) return "";
+	const off = r.modelAsked && !r.model.includes(r.modelAsked);
+	return `<span class="mono ag-model${off ? " off" : ""}"${off ? ` title="${esc(T.modelAsked(r.modelAsked))}"` : ""}>${esc(r.model)}</span>`;
+};
 const stateDot = (r) =>
 	`<i class="sd ${esc(r.state)}" role="img" aria-label="${esc(T.runState[r.state] ?? r.state)}"></i>`;
 
@@ -1189,7 +1198,7 @@ function runCardHtml(r) {
 		? `<span>${T.queued}</span>`
 		: `<span class="mono" data-since="${esc(r.startedAt ?? r.createdAt)}"></span>`;
 	return `<div class="ag-run${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}">
-		<div class="ag-head">${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b><span class="mono">${esc(runRef(r))}</span><span class="grow"></span>${time}</div>
+		<div class="ag-head">${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b><span class="mono">${esc(runRef(r))}</span><span class="grow"></span>${modelHtml(r)}${time}</div>
 		${queued ? "" : `<span class="ag-step clamp2" title="${esc(plain(r.step))}">${md(r.step) || T.starting}</span>`}
 		<div class="ag-actions">${queued ? "" : conversationLink(r)}<span class="grow"></span><button type="button" class="ag-stop${stopArmed === r.id ? " armed" : ""}" data-stop="${esc(r.id)}">${stopArmed === r.id ? T.confirmStop : T.stop}</button></div>
 	</div>`;
@@ -1257,8 +1266,8 @@ function recentHtml(r, ph) {
 	const sum = `<span class="ag-sum${ph ? " clamp2" : ""}" title="${esc(plain(r.summary))}">${md(r.summary)}</span>`;
 	const attrs = `class="ag-line${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}"`;
 	if (!ph)
-		return `<div ${attrs}>${who}${sum}<span class="mono">${esc(at)}</span>${conversationLink(r)}</div>`;
-	const inner = `<span class="ag-line-head">${who}<span class="grow"></span><span class="mono">${esc(at)}</span></span>${sum}`;
+		return `<div ${attrs}>${who}${sum}${modelHtml(r)}<span class="mono">${esc(at)}</span>${conversationLink(r)}</div>`;
+	const inner = `<span class="ag-line-head">${who}<span class="grow"></span>${modelHtml(r)}<span class="mono">${esc(at)}</span></span>${sum}`;
 	return r.conversation
 		? `<a ${attrs} href="${logUrl(r)}" target="_blank" rel="noopener">${inner}</a>`
 		: `<div ${attrs}>${inner}</div>`;
@@ -1564,6 +1573,7 @@ function render() {
 	$("observe").hidden = !S.project?.observeOnly;
 	$("observe-text").innerHTML = T.observeText(S.project?.defaultBranch);
 	$("dry").hidden = !S.dry;
+	$("nomodel").hidden = !!S.runModel;
 	// On a phone, Conversations and Agents have tabs of their own; the first tab shows the graph or the
 	// kanban, picked in its row of view tabs, and is named after the one it shows.
 	const board = ui.view === "kanban" ? "kanban" : "graph";

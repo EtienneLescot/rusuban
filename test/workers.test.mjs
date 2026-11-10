@@ -27,6 +27,7 @@ const config = {
 	owner: { login: "alice" },
 	permissions: { mode: "bypass", allow: [], deny: [] },
 	limits: { maxWorkers: 2, maxRunMinutes: 150 },
+	model: "claude-test",
 	projects: [{ id: "demo", title: "Demo", repos: [{ slug: "o/r" }] }],
 	machines: [],
 	channels: [],
@@ -69,6 +70,10 @@ test("a worker runs in its own worktree, reports once to the coordinator, and it
 	const done = await executeRun(id, { config, command: FAKE });
 	assert.equal(done.state, "done");
 	const reported = JSON.parse(done.summary);
+	assert.deepEqual(
+		[done.model, reported.args[reported.args.indexOf("--model") + 1]],
+		["claude-test", "claude-test"],
+	);
 	assert.equal(
 		fs.realpathSync.native(path.dirname(reported.cwd)),
 		fs.realpathSync.native(path.dirname(worktreeOf("demo", id))),

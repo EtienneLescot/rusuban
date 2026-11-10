@@ -6,7 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { executeRun, holder, queued, readRun, runner } from "../src/agents.mjs";
+import { executeRun, holder, NO_MODEL, queued, readRun, runner } from "../src/agents.mjs";
 import { homePath, readJsonl, saveConfig, write } from "../src/home.mjs";
 import { agentsState, runSchedule, startServer } from "../src/server.mjs";
 import { dueTasks, lastSlot, nextSlot, parseSchedule, parseTask } from "../src/tasks.mjs";
@@ -29,6 +29,7 @@ beforeEach(() => {
 		owner: { login: "alice" },
 		permissions: { mode: "bypass", allow: [], deny: [] },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
+		model: "claude-test",
 		projects: [{ id: "sandbox", repos: [{ slug: "o/sandbox" }] }],
 	});
 });
@@ -249,6 +250,23 @@ function call(port, method, urlPath, headers = {}) {
 		req.end();
 	});
 }
+
+test("without a model no task starts on a click: the page is told why, and knows it", async () => {
+	saveConfig({ ...config, model: undefined });
+	taskFile("digest", "title: Digest\nproject: sandbox");
+	const srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
+	try {
+		const r = await call(srv.port, "POST", "/api/tasks/digest/run", {
+			origin: `http://127.0.0.1:${srv.port}`,
+			"x-rusuban": "1",
+		});
+		assert.deepEqual([r.status, r.body.error, launched], [409, NO_MODEL, []]);
+		assert.equal((await call(srv.port, "GET", "/api/state")).body.runModel, null);
+		assert.equal(agentsState(srv.ctx, "sandbox").runModel, null);
+	} finally {
+		await srv.close();
+	}
+});
 
 test("the catalog is served with each task's slots, state and runs; a task starts on a click", async () => {
 	taskFile("digest", "title: Digest\nproject: sandbox\nschedule: daily 09:00,17:30");

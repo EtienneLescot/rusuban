@@ -103,6 +103,7 @@ export function seed(busyPid, checkout) {
 		port: 0,
 		permissions: { mode: "allowlist" },
 		limits: { maxWorkers: 3, maxRunMinutes: 150 },
+		model: "claude-test",
 		projects: [
 			{ id: "acme", title: "Acme", repos: [{ slug: "acme/widgets", checkout }] },
 			{ id: "orbit", title: "Orbit", repos: [{ slug: "orbit/site" }] },

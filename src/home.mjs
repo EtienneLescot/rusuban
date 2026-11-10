@@ -86,6 +86,8 @@ export const PROJECT_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 export const SLUG = /^[\w.-]+\/[\w.-]+$/;
 const MODES = ["bypass", "allowlist"];
 export const CHANNEL_TYPES = ["ntfy", "slack", "discord", "teams", "email"];
+// A Claude Code model id or alias, `claude-opus-5-5` or `opus`; it never starts with a dash.
+export const MODEL = /^[A-Za-z0-9][\w.:/@[\]-]{0,99}$/;
 
 const isStrings = (v) => Array.isArray(v) && v.every((x) => typeof x === "string" && x.length > 0);
 
@@ -94,7 +96,8 @@ const isCount = (v) => Number.isInteger(v) && v > 0;
 
 // Checks config.json and fills the defaults that are not policy (port, refresh interval, empty
 // lists). The host permission mode and the limits have no default: the owner's config states them
-// (FR-025; `init` writes the limits explicitly).
+// (FR-025; `init` writes the limits explicitly). Nor has the runs' model (FR-098): a config without
+// one loads, so `rusuban model` can set it, but no run starts until it does.
 export function validateConfig(raw) {
 	const c = raw && typeof raw === "object" ? raw : {};
 	const errors = [];
@@ -122,6 +125,10 @@ export function validateConfig(raw) {
 			errors.push(`permissions.${k} must be a list of tool rules`);
 	for (const k of ["maxWorkers", "maxRunMinutes"])
 		if (!isCount(c.limits?.[k])) errors.push(`limits.${k} must be a positive integer`);
+	if (c.model != null && !MODEL.test(c.model))
+		errors.push(
+			"model must be a Claude Code model id or alias, such as the one `claude --model` takes",
+		);
 	const projects = c.projects ?? [];
 	if (!Array.isArray(projects)) errors.push("projects must be a list");
 	const ids = new Set();
@@ -194,6 +201,7 @@ export function validateConfig(raw) {
 		port,
 		permissions: { mode: perm.mode, allow: perm.allow ?? [], deny: perm.deny ?? [] },
 		limits: { maxWorkers: c.limits.maxWorkers, maxRunMinutes: c.limits.maxRunMinutes },
+		...(c.model ? { model: c.model } : {}),
 		projects: projects.map((p) => ({
 			id: p.id,
 			title: p.title || p.id,

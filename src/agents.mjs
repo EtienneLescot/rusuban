@@ -12,7 +12,17 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { append, homeDir, homePath, journal, loadConfig, read, readJsonl, write } from "./home.mjs";
+import {
+	append,
+	homeDir,
+	homePath,
+	journal,
+	loadConfig,
+	MODEL,
+	read,
+	readJsonl,
+	write,
+} from "./home.mjs";
 import { lastProbes, releaseRun } from "./machines.mjs";
 import { flatten, pendingAnswers, refusedOf, todoOf } from "./model.mjs";
 import { prepareWorktree, removeWorktree } from "./workers.mjs";
@@ -314,12 +324,18 @@ export function usageLimitOf(text, now = new Date()) {
 	return { resetAt: at.toISOString() };
 }
 
+// Without a model in config.json no run starts: never one on Claude Code's default (FR-098).
+export const NO_MODEL =
+	"No model is set for the runs, so none starts: rusuban model <id> sets one.";
+
 // `claude -p` with the prompt on stdin (no command-line length limit), stream-json so each step
 // is written as it comes, in plain words and timestamped, to the log the dashboard shows live.
+// Every run starts here, always on the model it is given.
 export function runClaude({
 	prompt,
 	cwd,
 	logFile,
+	model,
 	args = [],
 	env = process.env,
 	command = ["claude"],
@@ -328,10 +344,12 @@ export function runClaude({
 	onStep,
 	onDone,
 }) {
+	if (!MODEL.test(model ?? "")) throw new Error(NO_MODEL);
 	const log = fs.openSync(logFile, "a");
 	const line = (text) => fs.writeSync(log, `${clock()}  ${text}\n`);
 	const [cmd, ...pre] = command;
-	const child = spawn(cmd, [...pre, "-p", "--output-format", "stream-json", "--verbose", ...args], {
+	const head = ["-p", "--model", model, "--output-format", "stream-json", "--verbose"];
+	const child = spawn(cmd, [...pre, ...head, ...args], {
 		cwd,
 		env,
 		stdio: ["pipe", "pipe", "pipe"],
@@ -346,7 +364,9 @@ export function runClaude({
 	let limit = null;
 	const onEvent = (e) => {
 		// The session id: `claude --resume <id>` in the same folder reopens the conversation.
-		if (e.type === "system" && e.subtype === "init" && e.session_id) onSession?.(e.session_id);
+		// The model is the one the session says it runs on: a gap with the one asked shows.
+		if (e.type === "system" && e.subtype === "init" && e.session_id)
+			onSession?.(e.session_id, e.model ?? null);
 		if (e.type === "assistant")
 			for (const c of e.message?.content ?? []) {
 				if (c.type === "text" && c.text.trim()) {
@@ -760,6 +780,8 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 		let prompt;
 		let pending = null;
 		try {
+			if (!config.model) throw new Error(NO_MODEL);
+			status.modelAsked = config.model;
 			if (s.kind === "worker") {
 				const slug = slugOf(s);
 				status.worktree = prepareWorktree({
@@ -821,6 +843,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			prompt,
 			cwd: status.cwd,
 			logFile: homePath(`runs/${id}/${status.log}`),
+			model: config.model,
 			// A reply resumes its session, in place, or as a fork that leaves the original as it was.
 			args: s.resume
 				? [...args, "--resume", s.resume, ...(s.forkOf ? ["--fork-session"] : [])]
@@ -828,8 +851,9 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			command,
 			maxMinutes: config.limits?.maxRunMinutes,
 			env: runEnv(id, s.project),
-			onSession: (session) => {
+			onSession: (session, model) => {
 				status.session = session;
+				status.model = model;
 				flush();
 			},
 			// The last sentence reads better than the last command: a tool shows only until one comes.

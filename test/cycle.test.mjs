@@ -64,7 +64,7 @@ const ctxOf = (over = {}) => ({
 	mergeFailed: new Map(),
 	loops: new Map(),
 	say: () => {},
-	config: { owner: { login: "alice" } },
+	config: { owner: { login: "alice" }, model: "claude-test" },
 	...over,
 });
 const journal = () => readJsonl("projects/demo/journal.jsonl");
@@ -220,6 +220,9 @@ test("a first watch flags nothing from before it", async () => {
 
 test("agents start on change: a judge when the todo changes, a coordinator when reports wait", async () => {
 	const live = liveOf([pr(1), pr(2)]);
+	// Without a model no run starts (FR-098): nothing is asked for, nothing piles up.
+	await runCycle(ctxOf({ config: { owner: { login: "alice" } } }), project(), live, RULES, deps);
+	assert.deepEqual([runs, coordinators], [[], []]);
 	await runCycle(ctxOf(), project(), live, RULES, deps);
 	assert.deepEqual(
 		runs.map((r) => [r.kind, r.lock, r.trigger, r.items]),

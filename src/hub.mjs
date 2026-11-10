@@ -9,8 +9,8 @@ import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { listRuns, readRun, requestRun } from "./agents.mjs";
-import { read, write } from "./home.mjs";
+import { listRuns, NO_MODEL, readRun, requestRun } from "./agents.mjs";
+import { MODEL, read, write } from "./home.mjs";
 import { flatten, keyOf } from "./model.mjs";
 
 const INDEX = "hub/index.json";
@@ -552,9 +552,10 @@ export function replyTo(index, id, text, request = requestRun) {
 	return { run: r.id, forked: fork, title, project: s.project };
 }
 
-// The command that opens a session in a terminal of this machine (T060), for the platform.
-export function terminalCommand(s, platform = process.platform) {
-	const resume = `claude --resume ${s.id}`;
+// The command that opens a session in a terminal of this machine (T060), for the platform, on the
+// runs' model like every launch of Claude Code (FR-098).
+export function terminalCommand(s, model, platform = process.platform) {
+	const resume = `claude --resume ${s.id} --model ${model}`;
 	if (platform === "win32") return ["wt.exe", ["-d", s.cwd, "cmd", "/k", resume]];
 	const quoted = `'${s.cwd.replace(/'/g, "'\\''")}'`; // a quote closes, is escaped, reopens
 	if (platform === "darwin")
@@ -568,10 +569,11 @@ export function terminalCommand(s, platform = process.platform) {
 	];
 }
 
-export function openTerminal(index, id, start = spawn) {
+export function openTerminal(index, id, model, start = spawn) {
 	const s = sessionIn(index, id);
 	if (!s.cwd) throw Object.assign(new Error("no such conversation"), { status: 404 });
-	const [cmd, args] = terminalCommand(s);
+	if (!MODEL.test(model ?? "")) throw Object.assign(new Error(NO_MODEL), { status: 409 });
+	const [cmd, args] = terminalCommand(s, model);
 	start(cmd, args, { detached: true, stdio: "ignore", windowsHide: false })
 		.on?.("error", () => {})
 		?.unref?.();
