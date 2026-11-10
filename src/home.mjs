@@ -140,8 +140,9 @@ export function validateConfig(raw) {
 			);
 		if (p?.bypassApproval !== undefined && typeof p.bypassApproval !== "boolean")
 			errors.push(`${at}.bypassApproval must be true or false`);
-		if (!Array.isArray(p?.repos) || !p.repos.length)
-			errors.push(`${at}.repos must list at least one repo`);
+		// A project without a repo holds tasks, their runs and conversations: nothing on GitHub.
+		if (p?.repos !== undefined && !Array.isArray(p.repos))
+			errors.push(`${at}.repos must be a list of repos`);
 		for (const r of Array.isArray(p?.repos) ? p.repos : []) {
 			if (!SLUG.test(r?.slug ?? ""))
 				errors.push(`${at}: repo slug "${r?.slug}" must be owner/repo`);
@@ -198,7 +199,7 @@ export function validateConfig(raw) {
 			title: p.title || p.id,
 			// FR-029: off unless the owner's `project bypass` turned it on.
 			bypassApproval: p.bypassApproval === true,
-			repos: p.repos.map((r) => ({ slug: r.slug, checkout: r.checkout ?? null })),
+			repos: (p.repos ?? []).map((r) => ({ slug: r.slug, checkout: r.checkout ?? null })),
 			folders: p.folders ?? [],
 			refreshSec: p.refreshSec ?? 90,
 		})),

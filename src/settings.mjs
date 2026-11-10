@@ -153,6 +153,23 @@ export function planOf(config, change) {
 				},
 			};
 		}
+		// A project without a repo, a section of its own (publications, say): its tasks, their runs and
+		// conversations. Nothing is read, judged or merged on GitHub, and it starts no agent by itself:
+		// each of its tasks waits for the owner. Creating it widens nothing.
+		case "project.create": {
+			const { id, title = null } = change;
+			if (!PROJECT_ID.test(id ?? ""))
+				throw new Error(`${id} is not a project id: lowercase letters, digits and dashes`);
+			if (config.projects.some((p) => p.id === id)) throw new Error(`project ${id} exists already`);
+			if (title !== null && (typeof title !== "string" || !title.trim()))
+				throw new Error("a project's title is some text");
+			return {
+				project: id,
+				widens: false,
+				apply: (c) => c.projects.push({ id, title: title?.trim() || id, repos: [] }),
+				said: `project ${id} added, without a repo: its tasks, their runs and conversations; nothing is read on GitHub.`,
+			};
+		}
 		case "project.remove": {
 			const p = find(change.project);
 			// A run asked for the project would find it gone, or keep writing its files after the remove.

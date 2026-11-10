@@ -484,3 +484,25 @@ test("a running daemon applies project add and remove without a restart", async 
 		await srv.close();
 	}
 });
+
+test("a project without a repo is created at once, and the daemon reads nothing on GitHub for it", async () => {
+	const srv = await startServer({ port: 0, quiet: true, tailnet: null, deps });
+	try {
+		saveConfig(configOf({ port: srv.port })); // so the command finds this daemon
+		const made = await cli("project", "create", "posts", "--title", "Posts");
+		assert.equal(made.status, 0, made.stderr);
+		assert.match(made.stdout, /^project posts added, without a repo: /);
+		assert.match(made.stdout, /The running daemon applied it\./);
+		assert.match((await cli("project", "create", "posts")).stderr, /project posts exists already/);
+		assert.match((await cli("project", "create", "Posts!")).stderr, /is not a project id/);
+		assert.equal(srv.ctx.loops.has("posts"), false);
+		const { body } = await call(srv, "GET", "/api/state?project=posts");
+		assert.deepEqual(
+			[body.project.title, body.project.repos, body.project.observeOnly, body.freshness],
+			["Posts", [], false, null],
+		);
+		assert.ok(!reads.includes("posts"), "nothing is read on GitHub");
+	} finally {
+		await srv.close();
+	}
+});

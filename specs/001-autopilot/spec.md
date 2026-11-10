@@ -209,7 +209,7 @@ journal.
 ### User Story 7 - Several projects, one inbox (Priority: P2)
 
 One instance pilots several projects. Each has its repos, rules, tasks and machines; the inbox gathers
-the decisions of all projects.
+the decisions of all projects. A project may have no repo, only tasks (FR-096).
 
 **Independent Test**: connect two projects, get one decision in each, see both in the inbox.
 
@@ -412,6 +412,11 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   (`security.md`) states what this stops and what it does not: under the bypass host profile an agent
   has the user's shell, and cheap deny rules on the dashboard's port and the owner's files slow it
   without stopping it. That residual risk covers the confirmation card of FR-092 too.
+- **FR-096**: A project MAY have no repo: a section of its own for tasks about no repo's items
+  (publications, say), decided by Etienne on 2026-11-10. It holds its tasks, their runs and
+  conversations; nothing is read, judged or merged on GitHub for it. Creating one applies at once, from
+  a command or the MCP: it starts nothing by itself, and each of its tasks waits for the owner (FR-092).
+  Its page shows its tasks and runs where a graph or a kanban would be empty.
 
 **Team (P3, after v1)**
 

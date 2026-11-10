@@ -277,7 +277,11 @@ export function assemblePrompt({
 				...rules[slug].files.map((f) => `## ${f.name}\n\n${f.text.trim()}`),
 			].join("\n\n"),
 		);
-	if (!ruled.length)
+	if (!p.repos.length)
+		parts.push(
+			"# Project rules\n\nThis project has no repo: no rules come from GitHub, and nothing is judged or merged. Its tasks, and the owner's own requests and answers in the context, are yours to carry out as they say.",
+		);
+	else if (!ruled.length)
 		parts.push(
 			"# Project rules\n\nNo repo of this project has rules yet: do nothing autonomous. Only the owner's own requests and answers in the context are yours to carry out.",
 		);

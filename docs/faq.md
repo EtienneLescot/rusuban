@@ -88,6 +88,12 @@ In `~/.rusuban/` (`RUSUBAN_HOME` overrides it), never in your repos.
 No. An instance is one person's, and every card shows in its owner's inbox. A card can name another
 GitHub login, and then says so.
 
+### Where do tasks that are about no repo go?
+
+In a project without a repo: `rusuban project create publications --title Publications`, then give
+each task `project: publications`. The project holds their runs and conversations, and its page shows
+them where a graph would be. Nothing is read, judged or merged on GitHub for it.
+
 ### Can I use another forge, or another agent?
 
 No. GitHub only, through `gh`, and Claude Code only.

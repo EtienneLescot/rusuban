@@ -247,7 +247,8 @@ export function stateOf(ctx, projectId) {
 			title: p.title,
 			bypassApproval: p.bypassApproval,
 			repos,
-			observeOnly: repos.every((s) => rules[s]?.observeOnly !== false),
+			// Without a repo there is nothing to observe: its page shows its tasks and runs.
+			observeOnly: repos.length > 0 && repos.every((s) => rules[s]?.observeOnly !== false),
 			defaultBranch: branches.size === 1 ? [...branches][0] : null,
 		},
 		model: buildModel({
@@ -260,23 +261,26 @@ export function stateOf(ctx, projectId) {
 			armed,
 			me,
 		}),
-		freshness: {
-			checkedAt: checked.every(Boolean) ? checked.sort()[0] : null,
-			refreshing: ctx.loops.get(p.id)?.isRunning() ?? false,
-			intervalMs: p.refreshSec * 1000,
-			error: errors[0] ?? null,
-			repos: Object.fromEntries(
-				repos.map((s) => [
-					s,
-					{
-						checkedAt: liveFile.repos?.[s]?.checkedAt ?? null,
-						changedAt: liveFile.repos?.[s]?.changedAt ?? null,
-						error: liveFile.repos?.[s]?.error ?? null,
-					},
-				]),
-			),
-			rate: liveFile.rate ?? null,
-		},
+		// Nothing is read on GitHub for a project without a repo.
+		freshness: !repos.length
+			? null
+			: {
+					checkedAt: checked.every(Boolean) ? checked.sort()[0] : null,
+					refreshing: ctx.loops.get(p.id)?.isRunning() ?? false,
+					intervalMs: p.refreshSec * 1000,
+					error: errors[0] ?? null,
+					repos: Object.fromEntries(
+						repos.map((s) => [
+							s,
+							{
+								checkedAt: liveFile.repos?.[s]?.checkedAt ?? null,
+								changedAt: liveFile.repos?.[s]?.changedAt ?? null,
+								error: liveFile.repos?.[s]?.error ?? null,
+							},
+						]),
+					),
+					rate: liveFile.rate ?? null,
+				},
 		rules: Object.fromEntries(
 			repos.map((s) => {
 				const r = rules[s];
@@ -664,8 +668,10 @@ function runTaskNow(ctx, id, res) {
 
 // ── The daemon ────────────────────────────────────────────────────────────────────────────────
 // One loop per project: its read, its rules, its merge and its agents, on its own files only. A loop
-// stopped or replaced while it read (the project removed or changed) drops what it read.
+// stopped or replaced while it read (the project removed or changed) drops what it read. A project
+// without a repo has none: nothing to read, judge or merge.
 function startLoop(ctx, p) {
+	if (!p.repos.length) return;
 	const dir = `projects/${p.id}`;
 	const deps = depsOf(ctx);
 	let loop = null;
@@ -710,7 +716,6 @@ function startLoop(ctx, p) {
 			} catch (e) {
 				ctx.say(`${p.id}: cycle failed: ${firstLine(e)}`);
 			}
-			if (!ctx.dry) kickQueues();
 			const items = Object.values(live.repos).reduce(
 				(s, r) => s + (r.prs?.length ?? 0) + (r.issues?.length ?? 0),
 				0,
@@ -1382,10 +1387,12 @@ export async function startServer({
 		pingOnce(ctx);
 		timers.push(setInterval(() => pingOnce(ctx), 60_000));
 	}
-	// Recurring tasks: their slots are looked at every 30 s, and once at start for those missed.
+	// Recurring tasks: their slots are looked at every 30 s, and once at start for those missed. The
+	// queues are tended on the same clock, every project's, with a repo or not.
 	const schedule = () => {
 		try {
 			for (const r of runSchedule(ctx)) ctx.say(`task ${r.task}: started (${r.id})`);
+			kickQueues();
 		} catch (e) {
 			ctx.say(`tasks: ${firstLine(e)}`);
 		}

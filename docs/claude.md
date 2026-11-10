@@ -30,7 +30,8 @@ What widens:
 - remote access turned on.
 
 What narrows applies at once: the bypass off, the switch paused, the limits lowered, a
-project, a channel or a task removed, remote access off.
+project, a channel or a task removed, remote access off. So does a project without a repo created: it
+starts nothing by itself, and each of its tasks waits for you.
 
 In a terminal, `rusuban` asks you to type the change's target instead of making a card. Claude's own
 shell has no terminal: there, the change waits for the card too.

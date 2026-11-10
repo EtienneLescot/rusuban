@@ -231,6 +231,11 @@ allowed in the dashboard it applies; from inside a run, both are refused.
   - It served the shadow week, dropped on 2026-11-08 (T050). A repo without rules is only read (FR-024), and a repo added, to a new project or an existing one, now waits for the owner (FR-092).
   - Gone: `project mode`, the MCP's `project_mode`, the shadow deny rules, the refusal to start a worker, the Switch gate's shadow state, the page's banner. FR-028 is marked removed.
   - A config that still names a project's `mode` is refused at load, `"live"` included, so a project in shadow mode never starts acting on an update: removing the key is the owner's go (T051).
+- [x] T128 Projects without a repo (FR-096), Etienne's decision of 2026-11-10: tasks about no repo's items get a section of their own, such as `publications`
+  - `repos` may be empty in `src/home.mjs`; `project create <id> [--title]` and the MCP's `project_create`, through the settings module, applied at once: the project starts nothing by itself, and each task waits for the owner.
+  - The daemon starts no read loop for it: nothing read, judged or merged on GitHub. The queues are tended on the tasks' 30 s clock, so its runs are retried with or without a project that has a repo. Its runs' prompt says it has no repo, instead of "do nothing autonomous".
+  - Its page shows Agents, its tasks and runs, in place of an empty graph or kanban; no GitHub pill, no observe-only banner, no rules in the drawer. Agents and Conversations still list every project's, each row named.
+  - OpenScreen's `publications` and `n8n-series` tasks move to such a project on Etienne's instance, through cards, after the merge.
 - [ ] T051 Switch: OpenScreen's `"mode"` removed from `config.json` (refused since T127), as the old pilot stops; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
   - Decided on 2026-11-08: the approval bypass, set per project (T115). `getopenscreen/openscreen` requires an approval that agents' PRs, pushed under the owner's account, cannot get; the switch turns the bypass on.
 - [x] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)

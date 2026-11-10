@@ -191,6 +191,11 @@ test("a prompt is the product prompt, the frame, the rules with their source, th
 		assemblePrompt({ kind: "judge", project: "demo", config, run: "j" }),
 		/has rules yet: do nothing autonomous/,
 	);
+	// A project without a repo: its tasks are the owner's word, no rules come from GitHub.
+	const posts = { ...config, projects: [{ id: "posts", title: "Posts", repos: [] }] };
+	const task = assemblePrompt({ kind: "task", project: "posts", config: posts, run: "t" });
+	assert.match(task, /This project has no repo: no rules come from GitHub/);
+	assert.doesNotMatch(task, /do nothing autonomous/);
 	assert.throws(
 		() => assemblePrompt({ kind: "judge", project: "gone", config, run: "j" }),
 		/unknown project/,

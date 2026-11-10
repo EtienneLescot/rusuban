@@ -1143,10 +1143,13 @@ function renderDrawer() {
 					`<li${j.notify ? ' class="flag"' : ""}><span class="mono">${clock(j.at)}</span><span>${j.item ? `<button type="button" class="secondary small" data-focus="${esc(j.item)}">${esc(numOfKey(j.item))}</button> ` : ""}${esc(j.text)}${safeUrl(j.href) ? ` <a href="${esc(j.href)}" target="_blank" rel="noopener">↗</a>` : ""}</span></li>`,
 			)
 			.join("") || `<li class="empty">${T.emptyJournal}</li>`;
+	// A project without a repo has a journal, but no rules nor locks: nothing merges there.
+	const rules = S.project?.repos.length
+		? `<section><h2>${T.rulesAndLocks}</h2>${rulesHtml()}</section>`
+		: "";
 	const html = `
 		<h2>${T.journal} <button type="button" class="secondary" data-close>${T.close}</button></h2>
-		<section><ul class="journal">${journalHtml}</ul></section>
-		<section><h2>${T.rulesAndLocks}</h2>${rulesHtml()}</section>`;
+		<section><ul class="journal">${journalHtml}</ul></section>${rules}`;
 	// Rebuilt only when it changes: the 2-second updates keep its scroll and the button under the mouse.
 	if (html === drawerHtml) return;
 	const scroll = el.scrollTop;
@@ -1545,16 +1548,20 @@ function render() {
 	renderInbox();
 	const count = waiting().length;
 	$("tab-count").textContent = count ? String(count) : "";
+	// A project without a repo has no graph or kanban: Agents, its tasks and runs, shows instead.
+	const repoless = !!S?.project && !S.project.repos.length;
+	const tab = repoless && ui.tab === "graph" ? "agents" : ui.tab;
 	// On a phone one screen shows at a time, picked in the tab bar; an open card covers them all.
-	document.body.dataset.tab = ui.tab;
+	document.body.dataset.tab = tab;
 	document.body.classList.toggle("card-open", !!ui.card);
 	// A phone reads a conversation full screen, like a card.
 	document.body.classList.toggle(
 		"conv-open",
-		phone() && ui.tab === "conversations" && !!ui.conv && !ui.card,
+		phone() && tab === "conversations" && !!ui.conv && !ui.card,
 	);
+	$("tab-board").hidden = repoless;
 	for (const b of document.querySelectorAll("#tabbar [data-tab]"))
-		b.setAttribute("aria-current", b.dataset.tab === ui.tab && !ui.card ? "page" : "false");
+		b.setAttribute("aria-current", b.dataset.tab === tab && !ui.card ? "page" : "false");
 	if (!S) return;
 	const M = S.model;
 	renderProjects();
@@ -1566,10 +1573,15 @@ function render() {
 	// On a phone, Conversations and Agents have tabs of their own; the first tab shows the graph or the
 	// kanban, picked in its row of view tabs, and is named after the one it shows.
 	const board = ui.view === "kanban" ? "kanban" : "graph";
-	const view = phone() ? (["conversations", "agents"].includes(ui.tab) ? ui.tab : board) : ui.view;
+	const picked = phone() ? (["conversations", "agents"].includes(tab) ? tab : board) : ui.view;
+	const view = repoless && ["graph", "kanban"].includes(picked) ? "agents" : picked;
 	$("tab-board").textContent = T[board];
-	for (const b of document.querySelectorAll(".views button"))
+	for (const b of document.querySelectorAll(".views button")) {
 		b.setAttribute("aria-selected", String(b.dataset.view === view));
+		b.hidden = repoless && ["graph", "kanban"].includes(b.dataset.view);
+	}
+	// Nothing is read on GitHub for it either.
+	$("fresh").hidden = repoless;
 	document.body.dataset.showing = view;
 	$("vp").hidden = view !== "graph";
 	$("kanban").hidden = view !== "kanban";
