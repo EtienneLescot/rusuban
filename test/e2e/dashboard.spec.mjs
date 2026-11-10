@@ -231,6 +231,45 @@ test("a project without a repo shows its tasks and runs, never an empty board, a
 	if (!isMobile) await expect(page.locator("#fresh")).toBeVisible();
 });
 
+test("each project's section shows only its own tasks, runs and conversations", async ({
+	page,
+	isMobile,
+}) => {
+	const pick = async (id) => {
+		if (isMobile) await press(page.locator("#menu"), true);
+		await page.selectOption("#project", id);
+		if (isMobile) await press(page.locator("#menu"), true);
+	};
+	const agents = page.locator("#agents-view");
+	const tasks = agents.locator(".ag-task-name b");
+	const rows = page.locator("#conv-list .cl-row");
+	// A task naming a project the instance lacks shows in each section, with its error.
+	const orphan = `project "letters" is none of this instance's: acme, orbit, publications`;
+	// Acme's: its tasks and its machines; no row names its project.
+	await goTo(page, "agents", isMobile);
+	await expect(tasks).toHaveText(["Weekly digest", "Newsletter", "Release notes"]);
+	await expect(agents.locator(".ag-err")).toHaveText(orphan);
+	await expect(agents.locator('section[aria-label="Machines"]')).toBeVisible();
+	await expect(agents.locator(".ag-line")).toHaveCount(0);
+	await expect(agents).not.toContainText("Acme");
+	await expect(page.locator("#agents-label")).toContainText("Release notes");
+	await goTo(page, "conversations", isMobile);
+	await expect(rows).toHaveCount(2);
+	await expect(rows.filter({ hasText: "Daily post" })).toHaveCount(0);
+	// Publications': its conversation, its task and run, no machines; the header's run is its own.
+	await pick("publications");
+	await expect(rows).toHaveCount(1);
+	await expect(rows).toContainText("Daily post");
+	await goTo(page, "agents", isMobile);
+	await expect(tasks).toHaveText(["Newsletter", "Daily post"]);
+	await expect(agents.locator(".ag-err")).toHaveText(orphan);
+	await expect(agents.locator('section[aria-label="Machines"]')).toHaveCount(0);
+	await expect(agents.locator(".ag-line")).toHaveCount(1);
+	await expect(agents.locator(".ag-line")).toContainText("Posted the release thread.");
+	await expect(agents).not.toContainText("Release notes");
+	await expect(page.locator("#agents-label")).not.toContainText("Release notes");
+});
+
 test("a project without rules says so under the view tabs, with how to add rules", async ({
 	page,
 	isMobile,

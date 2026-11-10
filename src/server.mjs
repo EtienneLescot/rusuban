@@ -929,14 +929,20 @@ async function releaseMachine(ctx, name, res) {
 	return json(res, 200, { released });
 }
 
-// The Agents view: every project's runs, the recurring tasks and the machines, pushed like the inbox
-// (T043).
-export const agentsState = (ctx) => ({
-	dry: ctx.dry,
-	runs: runsOf().slice(0, 40),
-	tasks: tasksState(ctx.config),
-	machines: machinesState(ctx),
-});
+// The Agents view of one project (T043, FR-097): its runs and tasks, the machines when it has a
+// repo. A task naming none of the instance's projects shows in every one, with its error.
+export const agentsState = (ctx, project) => {
+	const known = ctx.config.projects.map((p) => p.id);
+	const p = ctx.config.projects.find((x) => x.id === project);
+	return {
+		dry: ctx.dry,
+		runs: runsOf(project).slice(0, 40),
+		tasks: tasksState(ctx.config).filter(
+			(t) => t.project === project || !known.includes(t.project),
+		),
+		machines: p?.repos.length ? machinesState(ctx) : null,
+	};
+};
 
 // A run's log and a task's file, as text the page opens in a tab. A log's name comes from the run's
 // status: a bare file name, never a path.
@@ -1278,7 +1284,8 @@ export async function startServer({
 		say: (...a) =>
 			quiet || console.log(new Date().toLocaleTimeString("en-GB", { hour12: false }), ...a),
 	};
-	// Each client gets the state of its project and the inbox of all projects, each when it changes.
+	// Each client gets its project's state, runs, tasks and conversations, the one its state names,
+	// and the inbox of all projects, each when it changes.
 	ctx.push = (client, force = false) => {
 		const send = (event, value, key) => {
 			const body = JSON.stringify(value);
@@ -1287,10 +1294,12 @@ export async function startServer({
 			client[key] = h;
 			client.res.write(`event: ${event}\ndata: ${body}\n\n`);
 		};
-		send("state", stateOf(ctx, client.project), "sent");
+		const state = stateOf(ctx, client.project);
+		const shown = state.project?.id ?? "";
+		send("state", state, "sent");
 		send("inbox", inboxState(ctx), "sentInbox");
-		send("agents", agentsState(ctx), "sentAgents");
-		send("hub", conversationsOf(ctx), "sentHub");
+		send("agents", agentsState(ctx, shown), "sentAgents");
+		send("hub", conversationsOf(ctx, new URLSearchParams({ project: shown })), "sentHub");
 	};
 	// A state file the model cannot read (cut short, from an older version) costs the page one update,
 	// never the daemon nor a write that already happened: said once per distinct error.

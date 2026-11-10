@@ -51,10 +51,11 @@ export function parseTask(id, text, config, since = 0) {
 		else if (!KEYS.includes(kv[1])) errors.push(`unknown field "${kv[1]}"`);
 		else meta[kv[1]] = kv[2];
 	}
+	// Such a task shows in every project's section, so its error names the project it names.
 	const project = config.projects.find((p) => p.id === meta.project);
 	if (!project)
 		errors.push(
-			`project must be one of this instance's: ${config.projects.map((p) => p.id).join(", ")}`,
+			`project ${meta.project ? `"${meta.project}" is none` : "names none"} of this instance's: ${config.projects.map((p) => p.id).join(", ") || "none yet"}`,
 		);
 	const schedule = meta.schedule ? parseSchedule(meta.schedule) : { slots: [] };
 	if (schedule.error) errors.push(schedule.error);

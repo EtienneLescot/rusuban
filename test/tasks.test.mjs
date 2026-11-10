@@ -94,7 +94,8 @@ test("a task file is its front matter then its prompt; a task with a mistake car
 			text("project: sandbox\nschedule daily 09:00"),
 			/"schedule daily 09:00" is not "field: value"/,
 		],
-		[text("project: elsewhere"), /project must be one of this instance's: sandbox/],
+		[text("project: elsewhere"), /project "elsewhere" is none of this instance's: sandbox/],
+		[text("title: Digest"), /project names none of this instance's: sandbox/],
 		[text("project: sandbox\nschedule: weekly 09:00"), /schedule is "daily HH:MM"/],
 		[text("project: sandbox\nlock: a b"), /lock is letters/],
 		[text("project: sandbox\ncwd: relative/dir"), /not an existing absolute folder/],
@@ -294,8 +295,8 @@ test("the catalog is served with each task's slots, state and runs; a task start
 		const [entry] = readJsonl("projects/sandbox/journal.jsonl");
 		assert.deepEqual([entry.text, entry.by], ["Started the task “Digest”", "alice"]);
 
-		// The page pushes every project's runs and the tasks, each with the start of its prompt.
-		const pushed = agentsState(srv.ctx);
+		// The page pushes the project's runs and tasks, each with the start of its prompt.
+		const pushed = agentsState(srv.ctx, "sandbox");
 		assert.deepEqual(
 			[pushed.dry, pushed.runs.map((r) => r.id), pushed.tasks[1].promptStart],
 			[false, [run.id], "Write the digest."],
@@ -318,6 +319,65 @@ test("the catalog is served with each task's slots, state and runs; a task start
 		write(`runs/${run.id}/status.json`, { ...readRun(run.id), log: "../../config.json" });
 		assert.equal((await get(`/api/runs/${run.id}/log`)).status, 404);
 		assert.equal((await get("/api/runs/..%2Fconfig/log")).status, 404);
+	} finally {
+		await srv.close();
+	}
+});
+
+test("a page gets its project's runs, tasks and conversations; a task of no project, every page", async () => {
+	saveConfig({
+		...config,
+		projects: [...config.projects, { id: "posts", repos: [] }],
+		machines: [{ name: "mac", os: "macos", ssh: "mac", caps: [] }],
+	});
+	taskFile("digest", "title: Digest\nproject: sandbox");
+	taskFile("post", "title: Post\nproject: posts");
+	taskFile("broken", "project: elsewhere");
+	for (const [id, project] of [
+		["r1", "sandbox"],
+		["r2", "posts"],
+	])
+		write(`runs/${id}/status.json`, {
+			id,
+			kind: "task",
+			project,
+			state: "done",
+			createdAt: iso(0),
+		});
+	const srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
+	try {
+		const session = (id, project) => ({ id, project, title: id, items: [], lastAt: iso(0) });
+		srv.ctx.hubIndex = { sessions: { a: session("a", "sandbox"), b: session("b", "posts") } };
+		// What the server pushes to a page that asked for this project.
+		const page = (project) => {
+			const got = {};
+			const res = {
+				write: (s) => {
+					const [, event, data] = /^event: (\w+)\ndata: (.*)\n\n$/s.exec(s);
+					got[event] = JSON.parse(data);
+				},
+			};
+			srv.ctx.push({ project, res }, true);
+			const { agents, hub } = got;
+			return [
+				got.state.project.id,
+				agents.runs.map((r) => r.id),
+				agents.tasks.map((t) => t.id),
+				agents.machines?.machines.map((m) => m.name) ?? null,
+				hub.conversations.map((c) => c.id),
+			];
+		};
+		assert.deepEqual(page("posts"), ["posts", ["r2"], ["broken", "post"], null, ["b"]]);
+		const sandbox = ["sandbox", ["r1"], ["broken", "digest"], ["mac"], ["a"]];
+		assert.deepEqual(page("sandbox"), sandbox);
+		// No project asked, or one the instance lacks: the first project's, as the state says.
+		assert.deepEqual(page(null), sandbox);
+		assert.deepEqual(page("gone"), sandbox);
+		// The task of no project says which it names.
+		assert.match(
+			agentsState(srv.ctx, "posts").tasks[0].error,
+			/project "elsewhere" is none of this instance's: sandbox, posts/,
+		);
 	} finally {
 		await srv.close();
 	}
@@ -347,7 +407,10 @@ test("task list shows the catalog; task run starts one, and refuses a busy or br
 	assert.match(ran.stdout, /^task digest queued \(run /);
 	assert.deepEqual([readRun(id).trigger, queued("sandbox.reports")], ["manual", [id]]);
 	assert.match(cli("run", "digest").stderr, /already waits or works/);
-	assert.match(cli("run", "broken").stderr, /^refused: task broken: project must be/);
+	assert.match(
+		cli("run", "broken").stderr,
+		/^refused: task broken: project "elsewhere" is none of this instance.s: sandbox$/m,
+	);
 	assert.match(cli("run", "nope").stderr, /no task "nope"/);
 	assert.match(cli("run").stderr, /usage: task list \| task run <id>/);
 });

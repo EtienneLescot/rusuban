@@ -171,7 +171,7 @@ test("a task written from Claude waits, its card showing the task, then the diff
 		);
 		assert.match(
 			(await s.tool("task_write", { id: "x", title: "X", project: "nope", prompt: "Go." })).error,
-			/project must be one of/,
+			/project "nope" is none of this instance/,
 		);
 		assert.equal((await s.tool("task_remove", { id: "digest" })).state, "applied");
 		assert.ok(fs.existsSync(path.join(process.env.RUSUBAN_HOME, "tasks/digest.md.removed")));

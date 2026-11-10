@@ -236,6 +236,10 @@ allowed in the dashboard it applies; from inside a run, both are refused.
   - The daemon starts no read loop for it: nothing read, judged or merged on GitHub. The queues are tended on the tasks' 30 s clock, so its runs are retried with or without a project that has a repo. Its runs' prompt says it has no repo, instead of "do nothing autonomous".
   - Its page shows Agents, its tasks and runs, in place of an empty graph or kanban; no GitHub pill, no observe-only banner, no rules in the drawer. Agents and Conversations still list every project's, each row named.
   - OpenScreen's `publications` and `n8n-series` tasks move to such a project on Etienne's instance, through cards, after the merge.
+- [x] T129 Each project's section shows only its own (FR-097), Etienne's choice of 2026-11-10 (variant B of T128's mockup)
+  - The stream pushes a page its project's runs, tasks and conversations, the project its state names; the header's runs follow. No row names its project.
+  - The machines show in a project with a repo only. A task naming none of the instance's projects shows in every section, its error naming that project.
+  - Replaces T128's "Agents and Conversations still list every project's".
 - [ ] T051 Switch: OpenScreen's `"mode"` removed from `config.json` (refused since T127), as the old pilot stops; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
   - Decided on 2026-11-08: the approval bypass, set per project (T115). `getopenscreen/openscreen` requires an approval that agents' PRs, pushed under the owner's account, cannot get; the switch turns the bypass on.
 - [x] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)

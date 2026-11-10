@@ -322,8 +322,8 @@ const save = () => {
 
 let S = null; // the last state the server pushed
 let INBOX = { cards: [], flags: [] }; // the inbox the server pushed, every project's
-let AGENTS = { dry: false, runs: [], tasks: [] }; // every project's runs and the tasks
-let HUB = { indexedAt: null, conversations: [], items: {} }; // every project's Claude conversations
+let AGENTS = { dry: false, runs: [], tasks: [] }; // the project's runs and tasks, and the machines
+let HUB = { indexedAt: null, conversations: [], items: {} }; // the project's Claude conversations
 let READER = null; // the conversation open in the reader, a page of it
 let chosen = null; // the option picked on the open card, waiting for Send
 let stopArmed = null; // the run whose Stop was pressed once
@@ -1159,7 +1159,7 @@ function renderDrawer() {
 }
 let drawerHtml = "";
 
-// ── Agents: what runs now, the recurring tasks, the recent runs, every project's (T043) ──────
+// ── Agents: what runs now, the recurring tasks, the recent runs, the project's (T043, FR-097) ─
 const AT_WORK = ["running", "queued"];
 // A run a card points at (its conversation links) is lit.
 const lit = (r) => runFocus && (r.id === runFocus || r.items?.includes(runFocus));
@@ -1174,9 +1174,6 @@ const runRef = (r) =>
 	r.items?.length
 		? `${itemRef(r.project, r.items[0])}${r.items.length > 1 ? ` +${r.items.length - 1}` : ""}`
 		: "";
-// A run's or a task's project, named only when the instance has several.
-const projectOf = (id) =>
-	(S?.projects?.length ?? 0) > 1 ? (S.projects.find((p) => p.id === id)?.title ?? id) : "";
 // A run's conversation, as its log tells it until the hub shows transcripts.
 const logUrl = (r) => `/api/runs/${encodeURIComponent(r.id)}/log`;
 const conversationLink = (r) =>
@@ -1188,12 +1185,11 @@ const stateDot = (r) =>
 
 function runCardHtml(r) {
 	const queued = r.state === "queued";
-	const project = projectOf(r.project);
 	const time = queued
 		? `<span>${T.queued}</span>`
 		: `<span class="mono" data-since="${esc(r.startedAt ?? r.createdAt)}"></span>`;
 	return `<div class="ag-run${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}">
-		<div class="ag-head">${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b>${project ? `<span>${esc(project)}</span>` : ""}<span class="mono">${esc(runRef(r))}</span><span class="grow"></span>${time}</div>
+		<div class="ag-head">${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b><span class="mono">${esc(runRef(r))}</span><span class="grow"></span>${time}</div>
 		${queued ? "" : `<span class="ag-step clamp2" title="${esc(plain(r.step))}">${md(r.step) || T.starting}</span>`}
 		<div class="ag-actions">${queued ? "" : conversationLink(r)}<span class="grow"></span><button type="button" class="ag-stop${stopArmed === r.id ? " armed" : ""}" data-stop="${esc(r.id)}">${stopArmed === r.id ? T.confirmStop : T.stop}</button></div>
 	</div>`;
@@ -1229,8 +1225,7 @@ const miniRunHtml = (r) =>
 function taskHtml(t, ph) {
 	const open = openTasks.has(t.id);
 	const last = lastRunOf(t);
-	const lock = t.lock !== `${t.project}.task.${t.id}` ? T.lockOf(t.lock) : "";
-	const meta = [projectOf(t.project), lock].filter(Boolean).join(" · ");
+	const meta = t.lock !== `${t.project}.task.${t.id}` ? T.lockOf(t.lock) : "";
 	const schedule = t.schedule ?? T.onClick;
 	const runNow =
 		!AGENTS.dry && !t.error && t.state === "idle"
@@ -1254,12 +1249,11 @@ function taskHtml(t, ph) {
 
 // A recent run: one line on a desktop, two on a phone, where the whole line opens its conversation.
 function recentHtml(r, ph) {
-	const project = projectOf(r.project);
 	const at =
 		r.state === "limited" && r.retryAt
 			? T.limitedUntil(clock(r.retryAt))
 			: shortWhen(r.endedAt ?? r.createdAt);
-	const who = `${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b>${project ? `<span class="ag-proj">${esc(project)}</span>` : ""}`;
+	const who = `${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b>`;
 	const sum = `<span class="ag-sum${ph ? " clamp2" : ""}" title="${esc(plain(r.summary))}">${md(r.summary)}</span>`;
 	const attrs = `class="ag-line${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}"`;
 	if (!ph)
@@ -1339,7 +1333,7 @@ function renderAgents() {
 }
 
 // ── Conversations (T061, the validated mockups) ──────────────────────────────────────────────
-// Every project's Claude conversations by item, then the one open in the reader, a page at a time.
+// The project's Claude conversations by item, then the one open in the reader, a page at a time.
 const CONV_DOT = { live: "#34b27b", running: "#d97757" };
 const convState = (c) =>
 	c.live
@@ -1403,12 +1397,12 @@ function convListHtml() {
 	);
 	const groupHtml = ordered
 		.map(([key, cs]) => {
-			const [project, item] = key.split("|");
+			const [, item] = key.split("|");
 			const title = item ? HUB.items?.[item]?.title : null;
 			const head = item
 				? `<span class="mono">${esc(refOfKey(item))}</span>${title ? `<b>${esc(title)}</b>` : ""}`
 				: `<b>${T.notLinked}</b>`;
-			return `<div class="cl-group"><div class="cl-ghead">${head}<span class="grow"></span><span>${esc(projectOf(project) || project)}</span></div>${cs.map((c) => convRowHtml(c, c.id === ui.conv)).join("")}</div>`;
+			return `<div class="cl-group"><div class="cl-ghead">${head}</div>${cs.map((c) => convRowHtml(c, c.id === ui.conv)).join("")}</div>`;
 		})
 		.join("");
 	return `<div class="cl-head"><h2>${T.conversations}</h2><span>${esc(age ? T.indexedAgo(list.length, age) : T.notIndexed)}</span></div>
@@ -1447,7 +1441,7 @@ function convReaderHtml(c) {
 	const page = READER?.id === c.id ? READER : null;
 	return `${top}<div class="cr-head">
 		<div class="cr-top"><h1>${esc(c.title)}</h1>${ph ? "" : `<button type="button" class="secondary" data-terminal="${esc(c.id)}">${T.openInTerminal}</button>`}</div>
-		<div class="cr-meta">${status}<span>${esc(projectOf(c.project) || c.project)}</span>${ph ? "" : refs}${c.branch ? `<span class="mono">${esc(c.branch)}</span>` : ""}${!ph && c.firstAt ? `<span>${esc(T.startedAt(clock(c.firstAt)))}</span>` : ""}</div>
+		<div class="cr-meta">${status}${ph ? "" : refs}${c.branch ? `<span class="mono">${esc(c.branch)}</span>` : ""}${!ph && c.firstAt ? `<span>${esc(T.startedAt(clock(c.firstAt)))}</span>` : ""}</div>
 	</div>
 	<div class="cr-body" id="cr-body">${page?.before != null ? `<button type="button" class="cr-earlier" data-earlier>${T.earlier}</button>` : ""}${page ? entriesHtml(page.entries) : ""}</div>
 	<div class="cr-answer"><label for="cr-text" class="vh">${T.answer}</label><textarea id="cr-text" rows="2"></textarea>
@@ -1915,12 +1909,12 @@ function connect() {
 		render();
 		followCard();
 	});
-	// Every project's runs and the tasks, for the Agents view and the header.
-	// Every project's Claude conversations, for the Conversations view and the items' details.
+	// The project's Claude conversations, for the Conversations view and the items' details.
 	es.addEventListener("hub", (ev) => {
 		HUB = JSON.parse(ev.data);
 		render();
 	});
+	// The project's runs and tasks, for the Agents view and the header.
 	es.addEventListener("agents", (ev) => {
 		AGENTS = JSON.parse(ev.data);
 		render();

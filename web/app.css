@@ -2634,14 +2634,10 @@ body[data-showing="conversations"] .filters > :not(.views) {
 	color: var(--text-1);
 }
 .ag-line .ag-name,
-.ag-line .ag-proj,
 .ag-line .mono,
 .ag-line > a {
 	flex: 0 0 auto;
 	white-space: nowrap;
-}
-.ag-line .ag-proj {
-	color: var(--text-2);
 }
 .ag-line .mono {
 	color: var(--text-3);
