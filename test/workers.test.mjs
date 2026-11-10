@@ -6,7 +6,7 @@ import path from "node:path";
 import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { executeRun, listRuns, readRun, runner } from "../src/agents.mjs";
-import { homePath, readJsonl, write } from "../src/home.mjs";
+import { homePath, readJsonl, saveConfig, write } from "../src/home.mjs";
 import { cleanStale, cloneOf, startWorker, stopWorker, worktreeOf } from "../src/workers.mjs";
 
 const FAKE = [
@@ -37,6 +37,7 @@ const config = {
 beforeEach(() => {
 	const home = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-workers-"));
 	process.env.RUSUBAN_HOME = home;
+	saveConfig(config);
 	launched.length = 0;
 	const src = path.join(home, "src");
 	fs.mkdirSync(src);
@@ -51,18 +52,35 @@ beforeEach(() => {
 });
 
 const start = (name, item, mission = "Fix it.") =>
-	startWorker({ config, project: "demo", name, item, mission });
+	startWorker({ project: "demo", name, item, mission });
 
-test("at most the configured number of workers, one per item, each under its own name", () => {
-	start("fix-1", "o/r#1");
+test("one worker per item, each under its own name; past the limit one waits its turn", async () => {
+	const first = start("fix-1", "o/r#1");
 	assert.throws(() => start("fix-1", "o/r#2"), /already at work/);
 	assert.throws(() => start("fix-1b", "o/r#1"), /already at work on o\/r#1/);
 	start("fix-2", "o/r#2");
-	assert.throws(() => start("fix-3", "o/r#3"), /2 workers are at work \(limit 2\)/);
 	assert.throws(() => start("X", "o/r#3"), /lowercase/);
 	assert.throws(() => start("fix-3", "o/r#3", " "), /mission is empty/);
+	// Two at work, the limit: the next two wait, without an error, and keep their names and items.
+	const third = start("fix-3", "o/r#3");
+	await new Promise((resolve) => setTimeout(resolve, 5)); // two runs of one millisecond: no order
+	const fourth = start("fix-4", "o/r#4");
+	assert.deepEqual([third.state, fourth.state, launched.length], ["queued", "queued", 2]);
+	assert.throws(() => start("fix-5", "o/r#3"), /already at work on o\/r#3/);
+	// A worker stops: the one that waited longest starts, the other still waits.
 	stopWorker("demo", "fix-2");
-	assert.equal(start("fix-3", "o/r#3").state, "started");
+	assert.deepEqual(launched.slice(2), [third.id]);
+	assert.equal(readRun(fourth.id).state, "queued");
+	assert.ok(launched.includes(first.id));
+});
+
+test("a waiting worker starts as soon as a worker ends", async () => {
+	const first = start("fix-1", "o/r#1");
+	start("fix-2", "o/r#2");
+	const waiting = start("fix-3", "o/r#3");
+	assert.ok(!launched.includes(waiting.id));
+	assert.equal((await executeRun(first.id, { config, command: FAKE })).state, "done");
+	assert.ok(launched.includes(waiting.id));
 });
 
 test("a worker runs in its own worktree, reports once to the coordinator, and its worktree goes", async () => {

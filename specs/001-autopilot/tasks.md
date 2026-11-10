@@ -245,6 +245,9 @@ allowed in the dashboard it applies; from inside a run, both are refused.
   - The stream pushes a page its project's runs, tasks and conversations, the project its state names; the header's runs follow. No row names its project.
   - The machines show in a project with a repo only. A task naming none of the instance's projects shows in every section, its error naming that project.
   - Replaces T128's "Agents and Conversations still list every project's".
+- [x] T130 A worker past the limit waits its turn instead of failing (FR-031), Etienne's decision of 2026-11-10 after the cards on #989 and #1522
+  - `worker start` past `limits.maxWorkers` queues the worker; it starts by itself as soon as a worker ends or stops, the one that waited longest first. The prompt says a busy slot is never a question for anyone.
+  - The limit is checked when a worker starts, not when it is asked for, so a worker asked again after a crash waits too.
 - [ ] T051 Switch: OpenScreen's `"mode"` removed from `config.json` (refused since T127), as the old pilot stops; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
   - Decided on 2026-11-08: the approval bypass, set per project (T115). `getopenscreen/openscreen` requires an approval that agents' PRs, pushed under the owner's account, cannot get; the switch turns the bypass on.
 - [x] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)
