@@ -1,6 +1,7 @@
 // The app under a click test: the real server (startServer) on a free port, over a temporary instance
-// home seeded with two projects, a card in each, and two tasks, one of them at work. It reads no
-// GitHub, and a run goes through the real runner with fake-claude (run.mjs).
+// home seeded with two projects, a card in each, and two tasks, one of them at work; and a project
+// without a repo, with a task of its own. It reads no GitHub, and a run goes through the real runner
+// with fake-claude (run.mjs).
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -105,6 +106,7 @@ export function seed(busyPid, checkout) {
 		projects: [
 			{ id: "acme", title: "Acme", repos: [{ slug: "acme/widgets", checkout }] },
 			{ id: "orbit", title: "Orbit", repos: [{ slug: "orbit/site" }] },
+			{ id: "publications", title: "Publications" },
 		],
 		machines: [
 			{ name: "mac", os: "macos", ssh: "mac", caps: ["gpu"] },
@@ -172,6 +174,10 @@ export function seed(busyPid, checkout) {
 	fs.writeFileSync(
 		homePath("tasks/release.md"),
 		"---\ntitle: Release notes\nproject: acme\nschedule: daily 18:00\n---\nDraft the release notes.\n",
+	);
+	fs.writeFileSync(
+		homePath("tasks/post.md"),
+		"---\ntitle: Daily post\nproject: publications\n---\nWrite today's post.\n",
 	);
 	// The release task at work, held by a process of its own (a Stop pressed by mistake kills only it).
 	const id = "task-20261108100000-r001";

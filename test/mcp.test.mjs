@@ -93,6 +93,16 @@ test("what narrows applies, what widens waits for the owner; both journaled as t
 		assert.equal(loadConfig().projects.length, 1, "nothing changes before the owner allows it");
 		assert.equal((await s.tool("merge_switch", { armed: true })).state, "pending");
 		assert.equal((await s.tool("limits", { maxWorkers: 1 })).state, "applied");
+		const posts = await s.tool("project_create", { id: "posts", title: "Posts" });
+		assert.equal(posts.state, "applied", "a project without a repo starts nothing by itself");
+		assert.deepEqual(loadConfig().projects.at(-1), {
+			id: "posts",
+			title: "Posts",
+			bypassApproval: false,
+			repos: [],
+			folders: [],
+			refreshSec: 90,
+		});
 		assert.equal((await s.tool("limits", { maxWorkers: 4 })).state, "pending");
 		assert.equal(
 			(await s.tool("project_bypass", { project: "demo", on: false })).state,

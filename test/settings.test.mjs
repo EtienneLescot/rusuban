@@ -48,6 +48,9 @@ test("what widens agents' rights, and what narrows them", () => {
 	assert.equal(widens({ kind: "project.bypass", project: "live", on: true }), true);
 	assert.equal(widens({ kind: "project.bypass", project: "live", on: false }), "same");
 	assert.equal(widens({ kind: "permissions.mode", mode: "bypass" }), true);
+	// A project without a repo starts nothing by itself: each of its tasks waits for the owner.
+	assert.equal(widens({ kind: "project.create", id: "posts" }), false);
+	assert.throws(() => widens({ kind: "project.create", id: "live" }), /exists already/);
 	assert.equal(widens({ kind: "project.remove", project: "calm" }), false);
 	assert.throws(
 		() => widens({ kind: "project.bypass", project: "nope", on: true }),

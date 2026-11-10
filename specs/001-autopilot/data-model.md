@@ -64,6 +64,8 @@ file has **one writer**. `rusuban` is the product name.
 
 `{ id, title, bypassApproval: false, repos: [{ slug: "owner/repo", checkout: "<path>" }], folders: ["<path>"], refreshSec: 90 }`
 
+- `repos` may be empty, or left out: a project without a repo (FR-096) holds tasks, their runs and
+  conversations. The daemon starts no read loop for it, so nothing is read, judged or merged on GitHub.
 - No `mode`: shadow mode was removed on 2026-11-09 (FR-028). A config that still names one is refused at
   load, so a project that was in shadow mode never starts acting unasked: removing the key is the owner's
   go.

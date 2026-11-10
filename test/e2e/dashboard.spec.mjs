@@ -201,6 +201,36 @@ test("Conversations: by item, filtered by origin; the reader shows one and answe
 		.toContain("Answered the conversation “Fix the crash on save” in a fork");
 });
 
+test("a project without a repo shows its tasks and runs, never an empty board, and reads no GitHub", async ({
+	page,
+	isMobile,
+}) => {
+	// On a phone the project switcher is in the menu.
+	const pick = async (id) => {
+		if (isMobile) await press(page.locator("#menu"), true);
+		await page.selectOption("#project", id);
+		if (isMobile) await press(page.locator("#menu"), true);
+	};
+	await pick("publications");
+	const boards = page.locator('.views [data-view="graph"], .views [data-view="kanban"]');
+	if (isMobile) {
+		await expect(page.locator('#tabbar [data-tab="graph"]')).toBeHidden();
+		await press(page.locator('#tabbar [data-tab="agents"]'), true);
+	} else await expect(boards).toHaveCount(2);
+	await showing(page, "agents");
+	for (const b of await boards.all()) await expect(b).toBeHidden();
+	await expect(page.locator("#agents-view")).toContainText("Daily post");
+	await expect(page.locator("#fresh")).toBeHidden();
+	await expect(page.locator("#observe")).toBeHidden();
+	await goTo(page, "conversations", isMobile);
+	await showing(page, "conversations");
+	// Back on a project with a repo, its board is there again.
+	await pick("acme");
+	await goTo(page, "graph", isMobile);
+	await showing(page, "graph");
+	if (!isMobile) await expect(page.locator("#fresh")).toBeVisible();
+});
+
 test("a project without rules says so under the view tabs, with how to add rules", async ({
 	page,
 	isMobile,

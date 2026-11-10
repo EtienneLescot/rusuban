@@ -122,6 +122,9 @@ const USAGE = `rusuban ${version}
   project add <owner/repo> [--checkout <path>] [--to <project>]
                                 adds a repo, to a new project or to an existing one: its agents act
                                 on it as its rules say, and only read it until it has some
+  project create <id> [--title <text>]
+                                a project without a repo, for tasks (publications, say): its tasks,
+                                their runs and conversations, nothing read on GitHub
   project list | project remove <id>
                                 the projects; one removed, its files kept
   project bypass <id> <on|off>  merges with --admin what the server merges anyway, once every
@@ -212,7 +215,7 @@ const TASK_USAGE = "usage: task list | task run <id> | task add <file.md> | task
 
 // ── Projects and the host profile (the owner's) ───────────────────────────────────────────────
 const PROJECT_USAGE =
-	"usage: project add <owner/repo> [--checkout <path>] [--to <project>] | project list | project remove <id> | project bypass <id> <on|off>";
+	"usage: project add <owner/repo> [--checkout <path>] [--to <project>] | project create <id> [--title <text>] | project list | project remove <id> | project bypass <id> <on|off>";
 
 // The daemon reads config.json again when it changes. Whether the one running applied the change is
 // asked on its own port, so the command says it rather than promise it.
@@ -283,6 +286,18 @@ async function projectCommand([sub, ...args]) {
 		const id = values.to ?? planOf(loadConfig(), change).project;
 		return setting(change, values.to ?? slug, (s) =>
 			values.to ? s.project?.repos?.includes(slug) : s.projects?.some((p) => p.id === id),
+		);
+	}
+	if (sub === "create") {
+		const { values, positionals } = parseArgs({
+			args,
+			options: { title: { type: "string" } },
+			allowPositionals: true,
+		});
+		const [id, extra] = positionals;
+		if (!id || extra) throw new Error(PROJECT_USAGE);
+		return setting({ kind: "project.create", id, title: values.title ?? null }, id, (s) =>
+			s.projects?.some((p) => p.id === id),
 		);
 	}
 	if (sub === "remove" && args.length === 1) {

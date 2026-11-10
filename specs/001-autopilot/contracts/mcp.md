@@ -33,6 +33,7 @@ Settings. Each one returns `{ state, text }`, where `state` is:
 | Tool | Widens (waits for a confirmation) when |
 |---|---|
 | `project_add { slug, checkout?, to? }` | always: agents act on the repo as its rules say |
+| `project_create { id, title? }` | never: a project without a repo starts nothing by itself (FR-096) |
 | `project_remove { project }` | never |
 | `project_bypass { project, on }` | `on` is true |
 | `host_profile { mode }` | `mode` is `bypass` |

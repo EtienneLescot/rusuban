@@ -138,7 +138,7 @@ test("config defaults fill what is not policy, and mistakes are all reported", (
 	const bad = config({
 		owner: {},
 		projects: [
-			{ id: "Demo", repos: [] },
+			{ id: "Demo", repos: "o/r" },
 			{ id: "x", repos: [{ slug: "nope" }], refreshSec: 5 },
 		],
 	});
@@ -149,6 +149,12 @@ test("config defaults fill what is not policy, and mistakes are all reported", (
 				(s) => e.message.includes(s),
 			),
 	);
+});
+
+test("a project may have no repo: its tasks, runs and conversations, nothing on GitHub", () => {
+	const repoless = (p) => validateConfig(config({ projects: [p] })).projects[0];
+	assert.deepEqual(repoless({ id: "publications", title: "Publications" }).repos, []);
+	assert.deepEqual(repoless({ id: "publications", repos: [] }).repos, []);
 });
 
 test("config.json is saved with mode 600 and loads back", () => {

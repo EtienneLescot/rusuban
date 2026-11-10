@@ -117,6 +117,13 @@ export const TOOLS = [
 			set({ kind: "project.add", slug, checkout: checkout ?? null, to: to ?? null }),
 	},
 	{
+		name: "project_create",
+		description:
+			"Creates a project without a repo, a section of its own for tasks (publications, say): its tasks, their runs and conversations, nothing read on GitHub. Applies at once: each task still waits for the owner.",
+		inputSchema: obj({ id: text, title: text }, ["id"]),
+		run: ({ id, title }) => set({ kind: "project.create", id, title: title ?? null }),
+	},
+	{
 		name: "project_remove",
 		description:
 			"Removes a project from the instance; its files stay. Refused while one of its runs waits or works.",
