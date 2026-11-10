@@ -351,7 +351,8 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
 **Decisions and pings**
 
 - **FR-040**: A decision MUST be a card: what it is, what was done, options phrased as orders to the
-  agent, each with its effect, plus a free answer.
+  agent, each with its effect, plus a free answer. An issue that an open PR addresses follows that
+  PR: while the PR has an open card, the issue gets none of its own (decided on 2026-11-10).
 - **FR-041**: Pings MUST go through pluggable channels: phone push, Slack, Discord, Microsoft Teams,
   e-mail; each ping links to its card. In v1 channels are outbound only: answers happen in the dashboard.
 - **FR-042**: Rules MUST decide who is pinged and how urgently; the person's settings decide where.
