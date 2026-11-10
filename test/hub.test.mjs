@@ -7,6 +7,7 @@ import { read, validateConfig, write } from "../src/home.mjs";
 import {
 	hubState,
 	listConversations,
+	openTerminal,
 	readPage,
 	replyTo,
 	scanHub,
@@ -467,18 +468,27 @@ test("an answer resumes in place a session whose Rusuban run has ended, and fork
 	assert.equal(asked.length, 3);
 });
 
-test("a terminal opens on the session's folder, a quote in its path kept", () => {
-	const linux = terminalCommand({ id: "abc", cwd: "/w/it's" }, "linux");
+test("a terminal opens on the session's folder, a quote in its path kept, on the runs' model", () => {
+	const linux = terminalCommand({ id: "abc", cwd: "/w/it's" }, "claude-test", "linux");
 	assert.deepEqual(linux[1], [
 		"-e",
 		"sh",
 		"-c",
-		"cd '/w/it'\\''s' && claude --resume abc; exec sh",
+		"cd '/w/it'\\''s' && claude --resume abc --model claude-test; exec sh",
 	]);
-	assert.deepEqual(terminalCommand({ id: "abc", cwd: "C:\\w" }, "win32"), [
+	assert.deepEqual(terminalCommand({ id: "abc", cwd: "C:\\w" }, "claude-test", "win32"), [
 		"wt.exe",
-		["-d", "C:\\w", "cmd", "/k", "claude --resume abc"],
+		["-d", "C:\\w", "cmd", "/k", "claude --resume abc --model claude-test"],
 	]);
+	// Without a model, no terminal opens on Claude Code's default.
+	const index = { sessions: { abc: { id: "abc", project: "widgets", cwd: "/w" } } };
+	const started = [];
+	assert.throws(() => openTerminal(index, "abc", undefined, (...a) => started.push(a)), {
+		status: 409,
+	});
+	openTerminal(index, "abc", "claude-test", (...a) => started.push(a));
+	assert.equal(started.length, 1);
+	assert.match(started[0][1].join(" "), /--model claude-test/);
 });
 
 test("a compaction's summary is Claude's: no title, no citation, nothing in the reader", async () => {

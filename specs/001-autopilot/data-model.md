@@ -43,6 +43,7 @@ file has **one writer**. `rusuban` is the product name.
   "owner": { "login": "EtienneLescot", "tailscaleLogin": "etienne@example.com" },
   "port": 8788,
   "limits": { "maxWorkers": 3, "maxRunMinutes": 150 },
+  "model": "claude-opus-5-5",
   "permissions": { "mode": "bypass", "allow": [], "deny": [] },
   "projects": [Project],
   "machines": [Machine],
@@ -52,6 +53,9 @@ file has **one writer**. `rusuban` is the product name.
 
 - `permissions.mode`: `bypass` or `allowlist`, asked at init, no default. `deny` adds to the built-in
   deny rules (research R3), it never removes them.
+- `model`: the Claude model every run uses (FR-098), a Claude Code id or alias, passed as `--model`.
+  Asked at init, no default; a config without one loads, but no run starts until `rusuban model`
+  sets it.
 - `version`: the format of the whole instance home, config.json and every state file under it (FR-074).
   A rusuban that finds a newer one refuses to load it; a change to any file's format bumps it, and the
   update that brings it migrates the home on load. Version 1 has no migration yet.
@@ -138,7 +142,10 @@ message? }], createdAt, resolvedAt, outcome }`
 ### Run
 
 `{ id, kind: "judge" | "act" | "worker" | "task" | "reply", project, items[], session, cwd, worktree,
-leases[], trigger, state, startedAt, endedAt, exitCode, step, summary, crash? }`
+leases[], trigger, state, startedAt, endedAt, exitCode, step, summary, crash?, modelAsked, model }`
+
+- `modelAsked` is the config's model the run was started on; `model` is the one its session
+  announced in its init event (FR-098).
 
 - `state`: `queued → running → done | failed | stopped`; `running` with a dead pid reads `interrupted`.
 - An interrupted run is journaled once by the daemon, with why: the error its runner noted in `crash`

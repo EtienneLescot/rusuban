@@ -121,6 +121,11 @@ adversarial PRs are not, each with the gate that stopped it.
   - Proved on the private `EtienneLescot/rusuban-sandbox`: see the PR.
 - [x] T114 [US3] `ignoredChecks` in `src/model.mjs`: named checks never block CI green, never all of them (a head whose only checks are ignored is not green); a breaking test in `test/merge-gate.test.mjs`
 
+- [x] T132 [US3] The runs' model is the owner's choice (FR-098), Etienne's decision of 2026-11-10: never Claude Code's default
+  - `model` in config.json, a Claude Code id or alias, asked by `init`; `rusuban model [<id>]` and the MCP's `model` set it at once, journaled.
+  - `runClaude` refuses to start without one and passes `--model` on every launch; the terminal a conversation opens in gets it too. A test runs the judge, the coordinator, a task, a reply in place and in a fork, and a worker, and checks each launch.
+  - Without a model no run starts: the daemon asks for none, Run now, replies and the terminal are refused with why, the page shows a red banner and `status` says it.
+  - Each run keeps `modelAsked` and the `model` its session announced; the Agents view shows it, in amber when it is not the one asked for.
 ---
 
 ## Phase 4: User Story 2 - Decisions come to me: cards and inbox (P1)

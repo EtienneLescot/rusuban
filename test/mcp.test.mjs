@@ -93,6 +93,8 @@ test("what narrows applies, what widens waits for the owner; both journaled as t
 		assert.equal(loadConfig().projects.length, 1, "nothing changes before the owner allows it");
 		assert.equal((await s.tool("merge_switch", { armed: true })).state, "pending");
 		assert.equal((await s.tool("limits", { maxWorkers: 1 })).state, "applied");
+		assert.equal((await s.tool("model", { model: "claude-opus-5-5" })).state, "applied");
+		assert.equal((await s.tool("model", { model: "claude-opus-5-5" })).state, "unchanged");
 		const posts = await s.tool("project_create", { id: "posts", title: "Posts" });
 		assert.equal(posts.state, "applied", "a project without a repo starts nothing by itself");
 		assert.deepEqual(loadConfig().projects.at(-1), {
@@ -122,6 +124,7 @@ test("what narrows applies, what widens waits for the owner; both journaled as t
 			],
 		);
 		assert.deepEqual(state.limits, { maxWorkers: 1, maxRunMinutes: 60 });
+		assert.equal(state.model, "claude-opus-5-5");
 		assert.ok(settingsLog().every((e) => e.origin === "mcp"));
 		// The owner reads on the card that Claude asked, and that Claude is told if it is declined.
 		const [card] = settingsCards(loadConfig());

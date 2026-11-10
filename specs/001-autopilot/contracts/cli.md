@@ -6,7 +6,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 
 | Command | Effect |
 |---|---|
-| `init` | Checks `gh` and `claude` logins, takes the owner login from `gh`, asks the host permission mode and whether to arm automatic merges (no default for either), adds a first project, writes the limits out, installs the service, registers the MCP server (`claude mcp add --scope user rusuban`), prints and opens the URL. In a terminal only, once per instance, never from npx's cache; the port is the first free one from 8788. |
+| `init` | Checks `gh` and `claude` logins, takes the owner login from `gh`, asks the host permission mode, the runs' model and whether to arm automatic merges (no default for any), adds a first project, writes the limits out, installs the service, registers the MCP server (`claude mcp add --scope user rusuban`), prints and opens the URL. In a terminal only, once per instance, never from npx's cache; the port is the first free one from 8788. |
 | `start [--dry] [--log]` | Runs the daemon in the foreground. The service calls it with `--log`: what the daemon says, and a crash, also go to `daemon.log` in the instance home. |
 | `status` | URL (local and tailnet), uptime, the switch, projects, running agents, the log's path; exit 1 when the daemon does not answer. |
 | `open` | Opens the dashboard. |
@@ -15,6 +15,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 | `project list` / `project remove <id>` | `remove` refuses while a run of the project waits or works, deletes no file and says where they stay. |
 | `project bypass <id> <on\|off>` | The approval bypass (FR-029): the server merges with `--admin` what it would merge anyway, once every check the base branch requires is green on the head. Off for every new project. |
 | `permissions <bypass\|allowlist>` | The host profile (FR-025): what agents may run on this machine. `bypass` widens it. |
+| `model [<id>]` | The Claude model every run uses (FR-098), its Claude Code id or alias; without an id, the one set. Applies at once and is journaled; there is no default, and without one no run starts. |
 | `machine add <alias> [--os] [--caps a,b] [--workspace <path>] [--owner <login>]` | Checks SSH, the `rusuban` account, git and the workspace, creates the bare mirror, then registers the machine. `--owner` marks a person's desktop. |
 | `machine list` / `machine probe [<machine>]` / `machine doctor <machine>` | `doctor` rechecks SSH, the account, the workspace and the project's toolchain. |
 | `channel add <ntfy\|slack\|discord\|teams\|email> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM] [--smtp <url>] [--from <address>] [--token <token>]` / `channel test <id>` / `channel list` / `channel remove <id>` | Adding one sends data out (FR-092): confirmed. A target shows only its host. |

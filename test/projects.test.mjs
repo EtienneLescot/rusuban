@@ -124,6 +124,7 @@ const configOf = (over = {}) => ({
 	port: 0,
 	permissions: { mode: "allowlist" },
 	limits: { maxWorkers: 3, maxRunMinutes: 150 },
+	model: "claude-test",
 	projects: projects(),
 	...over,
 });

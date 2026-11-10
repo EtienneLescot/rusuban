@@ -17,7 +17,7 @@ Reading:
 
 | Tool | Returns |
 |---|---|
-| `state` | The instance: owner, host profile, limits, the merge switch, projects with their bypass and repos, and the settings waiting for a confirmation. |
+| `state` | The instance: owner, host profile, limits, the runs' model, the merge switch, projects with their bypass and repos, and the settings waiting for a confirmation. |
 | `project_state` | One project: its items with their judgments, open cards, freshness, rules and locks. |
 | `runs` | Runs at work and recent ones, with their conversation. |
 | `tasks` | The task catalog with each task's schedule, next slot, state and last runs. |
@@ -39,6 +39,7 @@ Settings. Each one returns `{ state, text }`, where `state` is:
 | `host_profile { mode }` | `mode` is `bypass` |
 | `merge_switch { armed }` | `armed` is true |
 | `limits { maxWorkers?, maxRunMinutes? }` | either one goes up |
+| `model { model }` | never: the runs' model widens neither what agents may do nor where data goes (FR-098) |
 | `owner { login }` | always |
 | `task_write { id, title, project, schedule?, lock?, cwd?, prompt }` | always: its card shows the task, or the diff of its file |
 | `task_remove { id }` | never: the task stops, its file is kept as `<id>.md.removed` |

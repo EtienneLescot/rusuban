@@ -14,6 +14,7 @@ import {
 	CONFIG_VERSION,
 	homePath,
 	loadConfig,
+	MODEL,
 	PROJECT_ID,
 	read,
 	readJsonl,
@@ -304,6 +305,24 @@ export function planOf(config, change) {
 				},
 			};
 		}
+		// The owner's choice, never Claude Code's default (FR-098). It widens neither what agents
+		// may do nor where data goes: it applies at once, journaled.
+		case "model": {
+			const { model } = change;
+			if (!MODEL.test(model ?? ""))
+				throw new Error(
+					"a model is a Claude Code model id or alias, such as `claude --model` takes",
+				);
+			if (config.model === model) return { project: null, same: `the runs use ${model} already.` };
+			return {
+				project: null,
+				widens: false,
+				apply: (c) => {
+					c.model = model;
+				},
+				said: `model: ${model}, for every run from the next one.`,
+			};
+		}
 		case "limits": {
 			const next = { ...config.limits };
 			for (const k of ["maxWorkers", "maxRunMinutes"])
@@ -574,7 +593,7 @@ export function changeSetting(change, { origin, by, confirmed = false }) {
 // in it (the host profile, the switch, the first project) is the person's own word. The limits are
 // written out, for the owner to see and change.
 export const FIRST_LIMITS = { maxWorkers: 3, maxRunMinutes: 150 };
-export function initInstance({ owner, mode, armed, port, slug, checkout = null }) {
+export function initInstance({ owner, mode, armed, model, port, slug, checkout = null }) {
 	return withLock(() => {
 		if (fs.existsSync(homePath("config.json")))
 			throw new Error(`this instance is set up already: ${homePath("config.json")}`);
@@ -584,8 +603,10 @@ export function initInstance({ owner, mode, armed, port, slug, checkout = null }
 			port,
 			permissions: { mode, allow: [], deny: [] },
 			limits: { ...FIRST_LIMITS },
+			model,
 			projects: [],
 		});
+		if (!config.model) throw new Error("the runs' model has no default: choose one");
 		const plan = planOf(config, { kind: "project.add", slug, checkout });
 		plan.apply(config, { by: owner });
 		saveConfig(config);
@@ -596,7 +617,7 @@ export function initInstance({ owner, mode, armed, port, slug, checkout = null }
 			origin: "terminal",
 			by: owner,
 			state: "applied",
-			text: `Set up by @${owner}: host profile ${mode}, merges ${armed ? "armed" : "paused"}; ${plan.said}`,
+			text: `Set up by @${owner}: host profile ${mode}, merges ${armed ? "armed" : "paused"}, model ${model}; ${plan.said}`,
 			...(mode === "bypass" || armed ? { notify: true } : {}),
 		});
 		return loadConfig();

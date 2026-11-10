@@ -339,6 +339,12 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   each in its own git worktree, at most `limits.maxWorkers` at once (instance config).
 - **FR-032**: Every run MUST record its session id, folder, linked items, machines held, status, live
   step and final summary.
+- **FR-098**: Every run MUST use the model the owner chose, `model` in the instance config, never
+  Claude Code's default, decided by Etienne on 2026-11-10. Every launch of Claude Code passes it as
+  `--model`: judge, act, worker, task, reply in place or in a fork, and the terminal a conversation
+  opens in. There is no default: `init` asks for it, `rusuban model` and the MCP change it at once,
+  journaled; without one no run starts, and the page and `status` say why. Each run records the
+  model its session announced, which the page shows, marked when it is not the one asked for.
 
 **Decisions and pings**
 

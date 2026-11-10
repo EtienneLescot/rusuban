@@ -9,8 +9,24 @@ import path from "node:path";
 import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { executeRun, listRuns, noteCrash, OWNER_COMMANDS, readRun } from "../src/agents.mjs";
-import { agentLog, homePath, loadConfig, read, readJsonl, SLUG, write } from "../src/home.mjs";
+import {
+	executeRun,
+	listRuns,
+	NO_MODEL,
+	noteCrash,
+	OWNER_COMMANDS,
+	readRun,
+} from "../src/agents.mjs";
+import {
+	agentLog,
+	homePath,
+	loadConfig,
+	MODEL,
+	read,
+	readJsonl,
+	SLUG,
+	write,
+} from "../src/home.mjs";
 import {
 	answerOf,
 	askDesktop,
@@ -131,6 +147,8 @@ const USAGE = `rusuban ${version}
                                 check the base branch requires is green on the head
   permissions <bypass|allowlist>
                                 the host profile: what agents may run on this machine
+  model [<id>]                  the Claude model every run uses, its Claude Code id or alias, or
+                                the one set; there is no default, and without one no run starts
   channel add <type> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM]
           | channel list | channel test <id> | channel remove <id>
                                 where cards ping you: ntfy, Slack, Discord, Teams, e-mail
@@ -393,6 +411,13 @@ async function channelCommand([sub, ...args]) {
 	throw new Error(CHANNEL_USAGE);
 }
 
+// The runs' model (FR-098): the owner's choice, never Claude Code's default; shown without an id.
+async function modelCommand([model, ...rest]) {
+	if (rest.length) throw new Error("usage: model [<id>]");
+	if (!model) return console.log(loadConfig().model ?? NO_MODEL);
+	return setting({ kind: "model", model }, model, (s) => s.runModel === model);
+}
+
 // The host profile (FR-025): what agents may run on this machine.
 async function permissionsCommand([mode, ...rest]) {
 	if (!["bypass", "allowlist"].includes(mode) || rest.length)
@@ -472,6 +497,7 @@ const commands = {
 	project: projectCommand,
 	machine: machineCommand,
 	permissions: permissionsCommand,
+	model: modelCommand,
 	channel: channelCommand,
 	// Remote access (T076): Tailscale Serve, never Funnel. On widens where the dashboard answers.
 	remote([sub, ...rest]) {
@@ -680,6 +706,7 @@ const commands = {
 		const t = readTask(id, config);
 		if (!t) throw new Error(`no task "${id}": write ${homePath(`tasks/${id}.md`)}`);
 		if (t.error) throw new Error(`task ${id}: ${t.error}`);
+		if (!config.model) throw new Error(NO_MODEL);
 		const busy = busyRun(id);
 		if (busy) throw new Error(`task ${id} already waits or works (run ${busy.id}, ${busy.state})`);
 		const r = startTask(t, "manual");
@@ -728,6 +755,7 @@ const commands = {
 					? [`rusuban ${latest} is out: npm i -g rusuban, then rusuban service install to restart`]
 					: []),
 				`merges ${state.armed ? "armed" : "paused"}; projects: ${projects.join(", ") || "none"}`,
+				config.model ? `model of the runs: ${config.model}` : NO_MODEL,
 				`agents at work: ${runs.map((r) => `${r.title ?? r.kind} in ${r.project}, ${ago(r.startedAt)}`).join("; ") || "none"}`,
 				`log: ${log}`,
 			].join("\n"),
@@ -776,6 +804,10 @@ const commands = {
 				mode: await ask(
 					"What may agents run on this machine? bypass (anything the deny rules allow) or allowlist (what you list): ",
 					(a) => ["bypass", "allowlist"].includes(a),
+				),
+				model: await ask(
+					"Which Claude model do the runs use? Its Claude Code id or alias; there is no default: ",
+					(a) => MODEL.test(a),
 				),
 				armed:
 					(await ask(

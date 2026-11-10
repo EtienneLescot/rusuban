@@ -32,7 +32,7 @@ export const TOOLS = [
 	{
 		name: "state",
 		description:
-			"The instance: owner, host profile, limits, the merge switch, the projects with their mode, bypass and repos, and the settings waiting for the owner's confirmation.",
+			"The instance: owner, host profile, limits, the runs' model, the merge switch, the projects with their bypass and repos, and the settings waiting for the owner's confirmation.",
 		inputSchema: obj(),
 		run: () => {
 			const c = loadConfig();
@@ -41,6 +41,7 @@ export const TOOLS = [
 				hostProfile: c.permissions.mode,
 				remoteAccess: !!c.owner.tailscaleLogin,
 				limits: c.limits,
+				model: c.model ?? null,
 				mergesArmed: read("automerge.json", { armed: false }).armed === true,
 				channels: c.channels.map((ch) => ({
 					id: ch.id,
@@ -155,6 +156,13 @@ export const TOOLS = [
 			"The most workers at once and the longest run; raising either waits for the owner.",
 		inputSchema: obj({ maxWorkers: { type: "integer" }, maxRunMinutes: { type: "integer" } }),
 		run: ({ maxWorkers, maxRunMinutes }) => set({ kind: "limits", maxWorkers, maxRunMinutes }),
+	},
+	{
+		name: "model",
+		description:
+			"The Claude model every run uses, its Claude Code id or alias. There is no default: without one no run starts. A change applies at once.",
+		inputSchema: obj({ model: text }, ["model"]),
+		run: ({ model }) => set({ kind: "model", model }),
 	},
 	{
 		name: "owner",
