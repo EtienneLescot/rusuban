@@ -1,7 +1,7 @@
 // The app under a click test: the real server (startServer) on a free port, over a temporary instance
-// home seeded with two projects, a card in each, and two tasks, one of them at work; and a project
-// without a repo, with a task of its own. It reads no GitHub, and a run goes through the real runner
-// with fake-claude (run.mjs).
+// home seeded with two projects, a card in each, and two tasks, one of them at work; a project
+// without a repo, with a task of its own that ran this morning; and a task that names no project.
+// It reads no GitHub, and a run goes through the real runner with fake-claude (run.mjs).
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -179,6 +179,11 @@ export function seed(busyPid, checkout) {
 		homePath("tasks/post.md"),
 		"---\ntitle: Daily post\nproject: publications\n---\nWrite today's post.\n",
 	);
+	// A project since removed: its task shows in every project's section, with its error.
+	fs.writeFileSync(
+		homePath("tasks/letters.md"),
+		"---\ntitle: Newsletter\nproject: letters\n---\nWrite the newsletter.\n",
+	);
 	// The release task at work, held by a process of its own (a Stop pressed by mistake kills only it).
 	const id = "task-20261108100000-r001";
 	write(`runs/${id}/status.json`, {
@@ -203,10 +208,10 @@ export function seed(busyPid, checkout) {
 	fs.writeFileSync(homePath(`runs/${id}/run.log`), "10:00:00  Reading the merged PRs\n");
 	// Two Claude conversations in acme's checkout: one live on PR #11 from Claude Desktop, one ended
 	// in a terminal on issue #22.
-	const said = (id, entry, rows) =>
+	const said = (id, entry, rows, cwd = checkout) =>
 		fs.writeFileSync(
-			path.join(conversationsDir(checkout), `${id}.jsonl`),
-			`${rows.map((r) => JSON.stringify({ sessionId: id, cwd: checkout, entrypoint: entry, isSidechain: false, ...r })).join("\n")}\n`,
+			path.join(conversationsDir(cwd), `${id}.jsonl`),
+			`${rows.map((r) => JSON.stringify({ sessionId: id, cwd, entrypoint: entry, isSidechain: false, ...r })).join("\n")}\n`,
 		);
 	fs.mkdirSync(conversationsDir(checkout), { recursive: true });
 	said("aaaaaaaa-0000-4000-8000-000000000011", "claude-desktop", [
@@ -264,6 +269,40 @@ export function seed(busyPid, checkout) {
 		path.join(conversationsDir(checkout), "bbbbbbbb-0000-4000-8000-000000000022.jsonl"),
 		new Date("2026-11-01T10:05:00Z"),
 		new Date("2026-11-01T10:05:00Z"),
+	);
+	// The post task ran this morning in its project's scratch folder: its run and its conversation.
+	const scratch = homePath("scratch/publications");
+	const post = { id: "task-20261110083000-p001", session: "cccccccc-0000-4000-8000-000000000033" };
+	write(`runs/${post.id}/status.json`, {
+		...post,
+		kind: "task",
+		title: "Daily post",
+		project: "publications",
+		items: [],
+		cwd: scratch,
+		trigger: "schedule",
+		lock: "publications.task.post",
+		attempt: 1,
+		task: "post",
+		state: "done",
+		createdAt: NOW,
+		startedAt: NOW,
+		endedAt: NOW,
+		summary: "Posted the release thread.",
+	});
+	fs.mkdirSync(conversationsDir(scratch), { recursive: true });
+	said(
+		post.session,
+		"sdk-cli",
+		[
+			{ type: "user", timestamp: NOW, message: { role: "user", content: "Write today's post." } },
+			{
+				type: "assistant",
+				timestamp: NOW,
+				message: { role: "assistant", content: [{ type: "text", text: "Posted." }] },
+			},
+		],
+		scratch,
 	);
 	// The machines as the daemon probed them: mac held by a run, alice's desktop free, ci offline.
 	const lease = {

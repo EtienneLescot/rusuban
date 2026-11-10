@@ -94,6 +94,9 @@ In a project without a repo: `rusuban project create publications --title Public
 each task `project: publications`. The project holds their runs and conversations, and its page shows
 them where a graph would be. Nothing is read, judged or merged on GitHub for it.
 
+Each project's page shows only its own tasks, runs and conversations; the inbox gathers every
+project's cards.
+
 ### Can I use another forge, or another agent?
 
 No. GitHub only, through `gh`, and Claude Code only.
