@@ -477,11 +477,30 @@ const enqueue = (lock, id) => {
 	if (!q.includes(id)) write(queueName(lock), [...q, id]);
 };
 
+// The instance's workers at work: running, or out of their queue and starting.
+const workersAtWork = () =>
+	listRuns().filter(
+		(r) =>
+			r.kind === "worker" &&
+			(r.state === "running" || (r.state === "queued" && !queued(r.lock).includes(r.id))),
+	).length;
+
 export function startNext(lock) {
 	const q = queued(lock);
 	if (!q.length || holder(lock) || limitedUntil() > Date.now()) return;
+	// A worker past the limit waits in its queue, without a card, for a worker to end (FR-031).
+	if (readRun(q[0])?.kind === "worker" && workersAtWork() >= loadConfig().limits.maxWorkers) return;
 	write(queueName(lock), q.slice(1));
 	runner.launch(q[0]);
+}
+
+// As a worker ends or stops, the one that has waited longest starts.
+// ponytail: two workers ending at once can both launch one; the limit then holds on the next start.
+function startWaitingWorker() {
+	const waiting = listRuns().filter(
+		(r) => r.kind === "worker" && r.state === "queued" && queued(r.lock).includes(r.id),
+	);
+	if (waiting.length) startNext(waiting.at(-1).lock); // listRuns is newest first
 }
 
 // Asks for a run: started at once if its group is free and nobody waits, queued otherwise. A worker's
@@ -597,6 +616,7 @@ export function stopRun(id, why = "Stopped.") {
 	if (s.worktree) removeWorktree(s.worktree, slugOf(s));
 	releaseLock(s.lock, id);
 	startNext(s.lock);
+	if (s.kind === "worker") startWaitingWorker();
 	return stopped;
 }
 
@@ -747,6 +767,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			if (status.worktree) removeWorktree(status.worktree, slugOf(s));
 			releaseLock(s.lock, id);
 			startNext(s.lock);
+			if (s.kind === "worker") startWaitingWorker();
 			// A run's leases end with it (FR-062), whatever it did not release itself.
 			resolve(
 				config.machines?.length

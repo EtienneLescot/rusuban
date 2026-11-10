@@ -1,7 +1,7 @@
 // Workers: long work (a fix, a proof, a rebase) in its own headless run and its own git worktree of
 // Rusuban's clone of the repo, never in a person's checkout (research R11). At most
-// `limits.maxWorkers` wait or run at once, on every project of the instance; each one's final answer
-// becomes a report for the coordinator (src/agents.mjs).
+// `limits.maxWorkers` work at once, on every project of the instance; one started past the limit
+// waits its turn (src/agents.mjs). Each one's final answer becomes a report for the coordinator.
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -91,7 +91,7 @@ export function cleanStale(project, slugs = []) {
 	return stale;
 }
 
-export function startWorker({ config, project, name, item, mission }) {
+export function startWorker({ project, name, item, mission }) {
 	if (!NAME.test(name ?? ""))
 		throw new Error("a worker's name is 3 to 40 lowercase letters, digits, dashes");
 	if (!mission?.trim()) throw new Error("the mission is empty");
@@ -100,10 +100,6 @@ export function startWorker({ config, project, name, item, mission }) {
 		throw new Error(`worker ${name} is already at work`);
 	if (live.some((r) => r.project === project && r.items.includes(item)))
 		throw new Error(`a worker is already at work on ${item}`);
-	if (live.length >= config.limits.maxWorkers)
-		throw new Error(
-			`${live.length} workers are at work (limit ${config.limits.maxWorkers}): start this one when one ends`,
-		);
 	return requestRun({
 		kind: "worker",
 		project,

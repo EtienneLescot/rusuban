@@ -637,8 +637,12 @@ const commands = {
 		if (sub === "start" && name && ref && file) {
 			const item = parseItem(ref, p.repos);
 			const mission = fs.readFileSync(file, "utf8");
-			const r = startWorker({ config: loadConfig(), project: p.id, name, item, mission });
-			console.log(`worker ${name} ${r.state} on ${item} (run ${r.id})`);
+			const r = startWorker({ project: p.id, name, item, mission });
+			console.log(
+				r.state === "queued"
+					? `worker ${name} queued on ${item} (run ${r.id}): it starts by itself when a worker is free`
+					: `worker ${name} started on ${item} (run ${r.id})`,
+			);
 		} else if (sub === "stop" && name) {
 			stopWorker(p.id, name);
 			console.log(`worker ${name} stopped`);

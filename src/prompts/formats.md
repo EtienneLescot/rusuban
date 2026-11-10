@@ -75,5 +75,7 @@ mission in a file of your working folder (context, what to do, what not to do, w
 `rusuban worker start <name> <item> <mission.md>`
 
 `<name>` is lowercase letters, digits and dashes. `rusuban worker list` shows the workers; at most the
-configured number run at once. Never start a second worker on an item one is already working on.
+configured number run at once. Past it, a worker you start waits its turn and starts by itself when one
+ends: a busy slot is never a question for anyone. Never start a second worker on an item one is
+already working on.
 When a worker ends, its final answer comes back to the coordinator.

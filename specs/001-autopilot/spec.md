@@ -335,8 +335,10 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
 
 - **FR-030**: Every run (judge, act, worker, task, reply) MUST be a headless Claude Code session started
   by the same launcher, with the instance's permission profile and the built-in deny rules.
-- **FR-031**: A short coordinator run (`act`) MUST apply decisions and delegate long work to workers,
-  each in its own git worktree, at most `limits.maxWorkers` at once (instance config).
+- **FR-031**: A short coordinator run (`act`) MUST apply decisions and delegate long work to
+  workers, each in its own git worktree, at most `limits.maxWorkers` at once (instance config). A
+  worker started past the limit waits its turn, without a card, and starts as soon as one ends
+  (decided on 2026-11-10).
 - **FR-032**: Every run MUST record its session id, folder, linked items, machines held, status, live
   step and final summary.
 
