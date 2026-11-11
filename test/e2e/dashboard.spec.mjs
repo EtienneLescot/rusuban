@@ -201,8 +201,11 @@ test("Agents: Run now on a task at rest, none on a task at work", async ({ page,
 	await expect(page.locator("#toast")).toHaveText("Weekly digest started");
 	await expect(runNow("digest")).toHaveCount(0);
 	await expect(page.locator(".ag-run").filter({ hasText: "Weekly digest" })).toBeVisible();
-	// The model its session announced, the one asked for.
-	await expect(page.locator("#agents-view .ag-model").first()).toHaveText("claude-test");
+	// The model its session announced, the one asked for: it comes once two processes have started,
+	// the runner and fake-claude, which a loaded machine can take longer than 5 s to do.
+	await expect(page.locator("#agents-view .ag-model").first()).toHaveText("claude-test", {
+		timeout: 20_000,
+	});
 	await expect(page.locator("#agents-view .ag-model.off")).toHaveCount(0);
 });
 
