@@ -243,7 +243,8 @@ allowed in the dashboard it applies; from inside a run, both are refused.
   - `locks.json` carries R2 and R3 (the supply-chain paths, 300 lines and 15 files outside tests and docs), R4's zones, CodeRabbit required, and the Nix build and the Discord and bookkeeping workflows ignored. The priority scale is new: the old pilot had none, and agents would otherwise ask.
 - [x] T048 Propose them to `getopenscreen/openscreen` as `.rusuban/` in a PR, which Etienne merges
   - Merged: getopenscreen/openscreen#1507.
-- [ ] T049 Configure Etienne's instance: the `openscreen` project; the `publications` and `n8n-series` tasks moved to `~/.rusuban/tasks/`
+- [x] T049 Configure Etienne's instance: the `openscreen` project; the `publications` and `n8n-series` tasks moved to `~/.rusuban/tasks/`
+  - Done in practice by 2026-11-10: the `openscreen` project acts on `getopenscreen/openscreen` from its rules, and both tasks run from `~/.rusuban/tasks/` in the `publications` project, which has no repo (T128).
 - [x] T050 Shadow week: the project in `shadow` mode (judge only, GitHub writes denied, no merge), judgments compared daily with the old pilot's; gaps fixed in the prompts or the rules
   - Replaced on 2026-11-08, Etienne's decision: no formal shadow week. He tries Rusuban himself on OpenScreen, and v0.1 ships after his trials. The daily comparison task was declined.
   - Shadow mode itself was removed on 2026-11-09 (T127).
@@ -269,8 +270,9 @@ allowed in the dashboard it applies; from inside a run, both are refused.
 - [x] T130 A worker past the limit waits its turn instead of failing (FR-031), Etienne's decision of 2026-11-10 after the cards on #989 and #1522
   - `worker start` past `limits.maxWorkers` queues the worker; it starts by itself as soon as a worker ends or stops, the one that waited longest first. The prompt says a busy slot is never a question for anyone.
   - The limit is checked when a worker starts, not when it is asked for, so a worker asked again after a crash waits too.
-- [ ] T051 Switch: OpenScreen's `"mode"` removed from `config.json` (refused since T127), as the old pilot stops; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
+- [x] T051 Switch: OpenScreen's `"mode"` removed from `config.json` (refused since T127), as the old pilot stops; the `OpenScreenDashboard` Windows task repointed to `rusuban start` and `OpenScreenTasks` removed (the full installer is T074); shortcuts repointed; `.claude/pilot` archived read-only, its history not imported
   - Decided on 2026-11-08: the approval bypass, set per project (T115). `getopenscreen/openscreen` requires an approval that agents' PRs, pushed under the owner's account, cannot get; the switch turns the bypass on.
+  - Done on 2026-11-09, OpenScreen live on the product since. One difference with the plan: `OpenScreenDashboard` and `OpenScreenTasks` are disabled, neither removed nor repointed. Rusuban runs from a Windows task of its own, `Rusuban`, which starts `~/.rusuban/bin/start.vbs`. The shortcuts are repointed, and `.claude/pilot` carries an `ARCHIVED.md`.
 - [x] T052 Check that `grep -ri openscreen bin src web` finds nothing (SC-002)
   - Nothing found on 2026-11-08, with every phase on main (`validation.md`).
 
@@ -397,8 +399,9 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 - [x] T081 [P] Playwright tests in `test/e2e/`: answer a card, answer a conversation, release a machine
   - Started in Phase 6: `npm run test:e2e`, a CI job on Ubuntu with Chromium. Each test starts the real server on a free port over a seeded home of two projects; a run goes through the real runner with fake-claude. At 1440×900 and 390×844, with real clicks and taps: every view tab shows its view; a card opens and closes; an answered option leaves the cards to answer and is written to `answers.jsonl`; a filter changes the list; Agents shows Run now on a task at rest, none on a task at work, and Run now starts it. With the #7 click bug put back, five of the ten fail.
   - Answering a conversation came with Phase 7, at both widths: a Desktop session answered in a fork, through the real runner. Releasing a machine came with Phase 9: Release pressed twice ends the lease. A desktop's card lent is checked too.
-- [ ] T082 Run every check of quickstart.md (SC-001 to SC-007) and record the results in `specs/001-autopilot/validation.md`
+- [x] T082 Run every check of quickstart.md (SC-001 to SC-007) and record the results in `specs/001-autopilot/validation.md`
   - Recorded on 2026-11-08. Passed: SC-002's code, SC-003's time, SC-005, and SC-006 on the tests. To do with Etienne, each with its reason: SC-001, SC-004, SC-007, SC-003's links on real data, SC-006's live proof, and SC-002 from OpenScreen's rules once getopenscreen/openscreen#1507 merges.
+  - Recorded again on 2026-11-11, on main at `a473351`, with SC-008. Passed: SC-002 (OpenScreen live on the product since 2026-11-09), SC-003's time on real data, SC-005, SC-006 on the tests, SC-008. To do with Etienne: SC-004 before 0.1.0 (T106, T108), SC-003's links on a labelled sample; after 0.1.0, by his decision: SC-001 (T078), SC-006's live proof and SC-007 (T112).
 - [ ] T083 Remove `"private": true` from `package.json`, publish v0.1.0 on npm and write the release notes (the repo is public since M0)
 
 **After v1**: first the machine runner for graphical tests, screenshots and recordings (reflection P4);
