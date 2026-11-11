@@ -325,7 +325,7 @@ test("a service's daemon writes what it says to daemon.log, and status reads it 
 	assert.equal(down.status, 1);
 	assert.equal(
 		down.stdout,
-		`rusuban is not answering on http://127.0.0.1:${port}/: see ${path.join(home, "daemon.log")}\n`,
+		`rusuban is not running on http://127.0.0.1:${port}/: see ${path.join(home, "daemon.log")}\n`,
 	);
 	const daemon = spawn(process.execPath, [bin, "start", "--log"], { env, stdio: "ignore" });
 	try {
@@ -358,6 +358,41 @@ test("a service's daemon writes what it says to daemon.log, and status reads it 
 		}
 	} finally {
 		daemon.kill();
+	}
+});
+
+test("status tells a slow daemon from a stopped one: it waits, and says how long it took", async () => {
+	const home = tmp();
+	// A daemon that answers its state after 3.5 s, as a busy one did.
+	const slow = http.createServer(async (_req, res) => {
+		await sleep(3500);
+		res.setHeader("content-type", "application/json");
+		res.end(
+			JSON.stringify({ version: "0.1.0", startedAt: new Date().toISOString(), armed: false }),
+		);
+	});
+	await new Promise((r) => slow.listen(0, "127.0.0.1", r));
+	fs.writeFileSync(
+		path.join(home, "config.json"),
+		JSON.stringify({
+			version: 1,
+			owner: { login: "alice" },
+			port: slow.address().port,
+			permissions: { mode: "allowlist" },
+			limits: { maxWorkers: 1, maxRunMinutes: 10 },
+			model: "claude-test",
+			projects: [{ id: "demo", repos: [{ slug: "o/r" }] }],
+		}),
+	);
+	const bin = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
+	try {
+		const { stdout } = await execFileP(process.execPath, [bin, "status"], {
+			env: { ...process.env, RUSUBAN_HOME: home, RUSUBAN_REGISTRY: "http://127.0.0.1:9" },
+		});
+		assert.match(stdout, /^rusuban 0\.1\.0, up 0 min, on http:\/\/127\.0\.0\.1:\d+\/\n/);
+		assert.match(stdout, /\nslow: it took 3\.\d s to answer; its log says why: .*daemon\.log\n/);
+	} finally {
+		slow.close();
 	}
 });
 

@@ -84,8 +84,14 @@ export function globToRegExp(glob) {
 	return new RegExp(`^${re}$`);
 }
 
+// Each glob compiled once: the gates of every PR are computed at each page update.
+const compiled = new Map();
+const compile = (glob) => {
+	if (!compiled.has(glob)) compiled.set(glob, globToRegExp(glob));
+	return compiled.get(glob);
+};
 const matcher = (globs) => {
-	const res = (globs ?? []).map(globToRegExp);
+	const res = (globs ?? []).map(compile);
 	return (p) => res.some((r) => r.test(p));
 };
 

@@ -8,7 +8,7 @@ One binary, `rusuban`. An item is `owner/repo#n`, or `#n` when the project has o
 |---|---|
 | `init` | Checks `gh` and `claude` logins, takes the owner login from `gh`, asks the host permission mode, the runs' model and whether to arm automatic merges (no default for any), adds a first project, writes the limits out, installs the service, registers the MCP server (`claude mcp add --scope user rusuban`), prints and opens the URL. In a terminal only, once per instance, never from npx's cache; the port is the first free one from 8788. |
 | `start [--dry] [--log]` | Runs the daemon in the foreground. The service calls it with `--log`: what the daemon says, and a crash, also go to `daemon.log` in the instance home. |
-| `status` | URL (local and tailnet), uptime, the switch, projects, running agents, the log's path; exit 1 when the daemon does not answer. |
+| `status` | URL (local and tailnet), uptime, the switch, projects, running agents, the log's path. A daemon that answers after 3 s is said slow, with the time it took; exit 1 when nothing listens ("not running") or when it gives no answer in 30 s. |
 | `open` | Opens the dashboard. |
 | `project add <owner/repo> [--checkout <path>] [--to <project>]` | Adds a repo, to a new project (its id from the repo's name) or to an existing one; agents act on it as its rules say, so it is confirmed (FR-092). A repo belongs to one project. |
 | `project create <id> [--title <text>]` | A project without a repo (FR-096): its tasks, their runs and conversations; nothing read, judged or merged on GitHub. Applies at once. |

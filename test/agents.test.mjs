@@ -310,6 +310,40 @@ test("without a model no run starts: never one on Claude Code's default", async 
 	assert.ok(!fs.existsSync(homePath("x.log")), "claude is never started");
 });
 
+test("a run's status is read again when its file changes, and given as a copy", () => {
+	const id = "worker-20261111-0000-aa11";
+	const status = (over) =>
+		write(`runs/${id}/status.json`, {
+			id,
+			kind: "worker",
+			project: "demo",
+			state: "running",
+			pid: process.pid,
+			createdAt: "2026-11-11T00:00:00.000Z",
+			...over,
+		});
+	status({ step: "Reading" });
+	assert.equal(readRun(id).step, "Reading");
+	status({ step: "Writing the fix" }); // another size: read again
+	assert.equal(readRun(id).step, "Writing the fix");
+	assert.equal(listRuns("demo").find((r) => r.id === id).step, "Writing the fix");
+	// A caller's change stays its own.
+	readRun(id).step = "changed by a caller";
+	assert.equal(readRun(id).step, "Writing the fix");
+	// A run whose process died is interrupted, whatever its file says.
+	status({ step: "Writing the fix", pid: 999999 });
+	assert.equal(readRun(id).state, "interrupted");
+	// Settled, it is listed as it ended; gone, it is no longer read.
+	status({ state: "done", endedAt: "2026-11-11T00:05:00.000Z", summary: "Fixed." });
+	assert.equal(listRuns("demo").find((r) => r.id === id).summary, "Fixed.");
+	fs.rmSync(homePath(`runs/${id}`), { recursive: true });
+	assert.equal(readRun(id), null);
+	assert.equal(
+		listRuns("demo").some((r) => r.id === id),
+		false,
+	);
+});
+
 test("a run of a project no longer configured does not start", async () => {
 	const gone = await executeRun(request().id, {
 		config: { ...config, projects: [] },

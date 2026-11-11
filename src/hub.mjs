@@ -309,25 +309,31 @@ export async function scanHub({
 		return runSlugs.has(n) || folders.some((f) => n === f.slug || n.startsWith(`${f.slug}-`));
 	};
 
-	// One file per session, the newest: Claude Code copies a transcript when it moves a session.
+	// One file per session, the newest: Claude Code copies a transcript when it moves a session. A
+	// session stays while its file does. Every transcript's size and time are read off the daemon's
+	// loop, all at once: a pass looks at a thousand of them, and the page waits for none.
+	const candidates = new Set();
+	for (const d of dirents(root))
+		if (d.isDirectory() && wanted(d.name))
+			for (const f of dirents(path.join(root, d.name)))
+				if (f.isFile() && f.name.endsWith(".jsonl"))
+					candidates.add(path.join(root, d.name, f.name));
+	for (const file of Object.keys(prev.files)) candidates.add(file);
+	const stats = await Promise.all(
+		[...candidates].map((file) =>
+			fs.promises.stat(file).then(
+				(st) => ({ file, st }),
+				() => null,
+			),
+		),
+	);
 	const found = new Map();
-	const consider = (file) => {
-		let st;
-		try {
-			st = fs.statSync(file);
-		} catch {
-			return;
-		}
+	for (const { file, st } of stats.filter(Boolean)) {
 		const id = path.basename(file, ".jsonl");
 		const had = found.get(id);
 		if (!had || st.mtimeMs > had.mtime || (st.mtimeMs === had.mtime && st.size > had.size))
 			found.set(id, { file, size: st.size, mtime: st.mtimeMs });
-	};
-	for (const d of dirents(root))
-		if (d.isDirectory() && wanted(d.name))
-			for (const f of dirents(path.join(root, d.name)))
-				if (f.isFile() && f.name.endsWith(".jsonl")) consider(path.join(root, d.name, f.name));
-	for (const file of Object.keys(prev.files)) consider(file); // a session stays while its file does
+	}
 
 	const sessions = {};
 	const files = {};
@@ -497,9 +503,9 @@ const ORIGIN = { "claude-desktop": "desktop", cli: "terminal" };
 // A run's name for its session, whose first message is the assembled prompt: the run's own title
 // (a task's, a worker's, a reply's), else its kind and the time it started, "Judge 21:40".
 const KIND_NAME = { judge: "Judge", act: "Coordinator" };
+const CLOCK = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }); // made once
 export const runTitle = (r) =>
-	r.title ??
-	`${KIND_NAME[r.kind] ?? r.kind} ${new Date(r.startedAt ?? r.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+	r.title ?? `${KIND_NAME[r.kind] ?? r.kind} ${CLOCK.format(new Date(r.startedAt ?? r.createdAt))}`;
 
 // `listConversations`, with each session's origin as the page names it, its run, and the type and
 // title of each item the projects know, for the list's headings. A run's session shows the run's
