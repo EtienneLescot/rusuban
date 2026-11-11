@@ -16,8 +16,8 @@ the release notes every Friday".
 ## What waits for you
 
 A change that widens what agents may do, or where data goes, never applies from Claude. It waits as a
-card in the dashboard's inbox, marked **Setting**, with two answers: **Allow it** or **Don't allow
-it**. Claude tells you it is pending.
+card in the dashboard's inbox, under **Rules & settings**, marked **Setting**, with two answers:
+**Allow it** or **Don't allow it**. Claude tells you it is pending.
 
 What widens:
 

@@ -1,7 +1,8 @@
 // The app under a click test: the real server (startServer) on a free port, over a temporary instance
 // home seeded with two projects, a card in each, and two tasks, one of them at work; a project
 // without a repo, with a task of its own that ran this morning; and a task that names no project.
-// It reads no GitHub, and a run goes through the real runner with fake-claude (run.mjs).
+// Acme also has what waits in Rules & settings: a lock to lift, a rule proposal, a PR that changes
+// .rusuban/. It reads no GitHub; a run goes through the real runner with fake-claude (run.mjs).
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -11,7 +12,7 @@ import { test as base } from "@playwright/test";
 import { runner } from "../../src/agents.mjs";
 import { homePath, loadConfig, read, saveConfig, write } from "../../src/home.mjs";
 import { scanHub, slugOf } from "../../src/hub.mjs";
-import { applyJudgment } from "../../src/model.mjs";
+import { applyJudgment, applyProposal } from "../../src/model.mjs";
 import { startServer } from "../../src/server.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
@@ -115,8 +116,19 @@ export function seed(busyPid, checkout) {
 			{ name: "ci", os: "linux", ssh: "ci" },
 		],
 	});
+	const rulesPr = {
+		...pr("acme/widgets", 14, "A rule for theme requests"),
+		files: [
+			{ path: ".rusuban/rules/02-themes.md", additions: 3, deletions: 0, change: "MODIFIED" },
+		],
+	};
 	const acme = project("acme", "acme/widgets", {
-		prs: [pr("acme/widgets", 11, "Fix the crash on save"), pr("acme/widgets", 12, "Install docs")],
+		prs: [
+			pr("acme/widgets", 11, "Fix the crash on save"),
+			pr("acme/widgets", 12, "Install docs"),
+			pr("acme/widgets", 13, "Raise the upload limit"),
+			rulesPr,
+		],
 		issues: [
 			issue("acme/widgets", 21, "Dark mode"),
 			issue("acme/widgets", 22, "Crash when offline"),
@@ -131,6 +143,20 @@ export function seed(busyPid, checkout) {
 				owner: "alice",
 				next: "Alice decides.",
 				decision: card("Build dark mode?"),
+			},
+			// Judged to merge alone, held by the size lock: only a person lifts it.
+			{
+				...agent(13, "Raise the upload limit", "feature", true),
+				owner: "alice",
+				next: "Alice lifts the size lock, or not.",
+				decision: {
+					...card("Lift the size lock on this PR?"),
+					rec: "merge",
+					options: [
+						{ id: "merge", label: "Merge it", effect: "The server merges it.", merge: true },
+						{ id: "wait", label: "Keep the lock", effect: "I leave it open." },
+					],
+				},
 			},
 			{
 				n: 22,
@@ -152,6 +178,21 @@ export function seed(busyPid, checkout) {
 			checkedAt: NOW,
 		},
 	});
+	const judgment = read("projects/acme/judgment.json");
+	const rule = applyProposal(
+		{
+			items: ["#21", "#13"],
+			file: ".rusuban/rules/02-themes.md",
+			rule: "A theme request waits for a design before anyone builds it.",
+			q: "Make it a rule: theme requests wait for a design?",
+			ctx: "Two cards ask it, and the rules say nothing about it.",
+			done: [{ text: "Read both cards and their threads." }],
+			urgency: "digest",
+		},
+		judgment,
+		{ repos: ["acme/widgets"] },
+	).id;
+	write("projects/acme/judgment.json", judgment);
 	const orbit = project("orbit", "orbit/site", {
 		prs: [pr("orbit/site", 32, "Translate the home page")],
 		issues: [issue("orbit/site", 31, "New logo")],
@@ -329,7 +370,7 @@ export function seed(busyPid, checkout) {
 			},
 		],
 	});
-	return { cards: { acme, orbit } };
+	return { cards: { acme, orbit, rule } };
 }
 
 // Started for every test, on its own home and port; a test that needs the card ids asks for `app`.

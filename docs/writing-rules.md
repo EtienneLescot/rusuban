@@ -86,9 +86,12 @@ Rules may be written in any language. Cards, journal lines and final answers are
 
 ## Where the rules are silent
 
-The agents do not guess. A situation the rules do not cover becomes a card to the owner, with an
-option such as "Make it a rule": an agent opens a PR adding the rule to `.rusuban/rules/`, which a
-person merges. An answer can become a rule.
+The agents do not guess. A situation the rules do not cover becomes a card to the owner. A question
+on how the agents work, rather than on the item, waits in the inbox's **Rules & settings** tab.
+
+When the cards of several items ask the same, an agent proposes the rule that would answer them, on
+a card of its own in that tab: **Open the rule PR** opens a PR adding it to `.rusuban/rules/`, which
+a person merges on GitHub, and the items wait for it; **Not a rule** keeps them asked one by one.
 
 ## What rules cannot do
 

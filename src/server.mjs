@@ -53,6 +53,8 @@ import {
 	gatesOf,
 	inboxOf,
 	isEligible,
+	isProposal,
+	isRulesPr,
 	keyOf,
 	mergeOrdersOf,
 	parseItem,
@@ -811,7 +813,21 @@ export function inboxState(ctx) {
 		...settingsCards(ctx.config),
 		...desktopCards(ctx.config),
 	].sort((a, b) => String(b.card.createdAt).localeCompare(String(a.card.createdAt)));
-	return { cards, flags };
+	// The PRs that change .rusuban/ wait in Rules & settings for a person to merge them (FR-099).
+	const rulesPrs = projects.flatMap((p) =>
+		p.live.prs.filter(isRulesPr).map((pr) => ({
+			project: p.id,
+			projectTitle: p.title ?? p.id,
+			item: keyOf(pr),
+			title: pr.title,
+			url: pr.url,
+			author: pr.author,
+			draft: pr.draft,
+			ci: pr.ci.state,
+			updatedAt: pr.updatedAt,
+		})),
+	);
+	return { cards, flags, rulesPrs };
 }
 
 // Runs, at work first: running, queued, waiting for a usage limit, then the ended ones, newest first.
@@ -1111,7 +1127,8 @@ function answer(ctx, body, res) {
 	const p = ctx.config.projects.find((x) => x.id === body.project);
 	if (!p) return json(res, 404, { error: "unknown project" });
 	const dir = `projects/${p.id}`;
-	const item = itemOf(p, body.item);
+	// A rule proposal stands for its own item (FR-099).
+	const item = isProposal(body.card) ? body.card : itemOf(p, body.item);
 	const judgment = read(`${dir}/judgment.json`, { items: {} });
 	const answers = readJsonl(`${dir}/answers.jsonl`);
 	const { card, option, note } = body;
@@ -1128,7 +1145,7 @@ function answer(ctx, body, res) {
 	});
 	journal(p.id, {
 		kind: "answer",
-		item,
+		item: isProposal(item) ? null : item,
 		text: `Answered: ${(checked.chosen?.label ?? checked.note).slice(0, 200)}`,
 		by,
 	});

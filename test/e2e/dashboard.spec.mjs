@@ -90,7 +90,7 @@ test("answering an option takes the card off the list to answer, into answers.js
 	page,
 	isMobile,
 }) => {
-	const count = page.locator(".ibx-head .amber");
+	const count = page.locator('[data-queue="decisions"] b');
 	await expect(count).toHaveText("2");
 	await press(page.locator(`.ibx-item[data-card="${app.cards.acme}"]`), isMobile);
 	const other = page.locator('[data-option="close"]');
@@ -109,12 +109,72 @@ test("answering an option takes the card off the list to answer, into answers.js
 	await expect(count).toHaveText("1");
 });
 
+test("Rules & settings: a tab of the inbox for how the agents follow the projects", async ({
+	app,
+	page,
+	isMobile,
+}) => {
+	const tab = (q) => page.locator(`.ibx-seg [data-queue="${q}"]`);
+	await expect(tab("decisions")).toHaveAttribute("aria-selected", "true");
+	await expect(tab("decisions")).toHaveText("Decisions 2");
+	await expect(tab("rules")).toHaveText("Rules & settings 2");
+	await press(tab("rules"), isMobile);
+	await expect(tab("rules")).toHaveAttribute("aria-selected", "true");
+	// The lock to lift and the rule proposal, each tagged; then the PR that changes .rusuban/.
+	const items = page.locator("button.ibx-item");
+	await expect(items).toHaveCount(2);
+	await expect(items.locator(".tag")).toHaveText(["Rule proposal", "Lock"]);
+	await expect(items.first().locator(".ibx-meta")).toContainText("2 cards");
+	const rulesPr = page.locator("a.ibx-item");
+	await expect(rulesPr).toContainText("A rule for theme requests");
+	await expect(rulesPr).toContainText("CI green");
+	await expect(rulesPr).toHaveAttribute("href", "https://github.com/acme/widgets/pull/14");
+
+	await press(page.locator(`.ibx-item[data-card="${app.cards.rule}"]`), isMobile);
+	await expect(page.locator("[data-back]")).toHaveText("Rules & settings");
+	await expect(page.locator(".cv-chips .tag").first()).toHaveText("Rule proposal");
+	await expect(page.locator(".rule-text")).toHaveText(
+		"A theme request waits for a design before anyone builds it.",
+	);
+	await expect(page.locator(".rule-file")).toHaveText("Added to .rusuban/rules/02-themes.md");
+	await expect(page.locator(".seen")).toHaveText("Seen on #21#13");
+	await expect(page.locator(".cv-opt b")).toHaveText(["Open the rule PR", "Not a rule"]);
+	await expect(page.locator(".cv-opt.rec .badge")).toHaveText("Recommended");
+	if (!isMobile)
+		await expect(page.locator(".cv-free-label")).toHaveText("Or change the rule in your own words");
+	await press(page.locator('[data-option="open"]'), isMobile);
+	await press(page.locator("[data-send]"), isMobile);
+	await expect(page.locator("#toast")).toHaveText("Answer sent");
+	expect(readJsonl("projects/acme/answers.jsonl")).toMatchObject([
+		{ item: app.cards.rule, card: app.cards.rule, option: "open", by: "alice" },
+	]);
+	// Back from it is its queue, and the item a card stands for opens from "Seen on".
+	await press(page.locator("[data-back]"), isMobile);
+	await expect(tab("rules")).toHaveAttribute("aria-selected", "true");
+	await press(page.locator(`.ibx-item[data-card="${app.cards.rule}"]`), isMobile);
+	await press(page.locator(".seen [data-card]").first(), isMobile);
+	await expect(page.locator("article.cv .cv-q")).toHaveText("Build dark mode?");
+	await expect(page.locator("[data-back]")).toHaveText("Inbox");
+	await press(page.locator("[data-back]"), isMobile);
+	await expect(tab("decisions")).toHaveAttribute("aria-selected", "true");
+	// The PR that changes .rusuban/ is neither in the graph nor in the kanban.
+	await goTo(page, "kanban", isMobile);
+	await expect(page.locator("#kanban")).toContainText("Raise the upload limit");
+	await expect(page.locator("#kanban")).not.toContainText("A rule for theme requests");
+	if (!isMobile) {
+		await goTo(page, "graph", isMobile);
+		await expect(page.locator('[data-id="acme/widgets#13"]')).toHaveCount(1);
+		await expect(page.locator('[data-id="acme/widgets#14"]')).toHaveCount(0);
+	}
+});
+
 test("a filter changes the list", async ({ page, isMobile }) => {
 	await goTo(page, "kanban", isMobile);
 	// Yours, the agents' (newest first), then those waiting on others.
 	const labels = page.locator("#kanban .card-open b");
 	await expect(labels).toHaveText([
 		"Dark mode",
+		"Raise the upload limit",
 		"Install docs",
 		"Fix the crash on save",
 		"Crash when offline",
@@ -127,7 +187,7 @@ test("a filter changes the list", async ({ page, isMobile }) => {
 	await expect(labels).toHaveText(["Fix the crash on save", "Crash when offline"]);
 	await press(page.locator('#kind-chips [data-kind="all"]'), isMobile);
 	await press(page.locator('#own-chips [data-own="mine"]'), isMobile);
-	await expect(labels).toHaveText(["Dark mode"]);
+	await expect(labels).toHaveText(["Dark mode", "Raise the upload limit"]);
 });
 
 test("Agents: Run now on a task at rest, none on a task at work", async ({ page, isMobile }) => {
@@ -166,11 +226,14 @@ test("a setting asked from Claude waits as a card, and applies once the owner al
 		{ kind: "project.bypass", project: "acme", on: true },
 		{ origin: "mcp", by: "alice" },
 	);
+	// A setting is about how the agents follow the projects: it waits in Rules & settings.
+	await press(page.locator('[data-queue="rules"]'), isMobile);
 	const item = page.locator(".ibx-item", {
 		hasText: "Let the server merge with your bypass on acme?",
 	});
 	await press(item, isMobile);
 	await expect(page.locator(".cv-chips")).toContainText("Setting");
+	await expect(page.locator("[data-back]")).toHaveText("Rules & settings");
 	await expect(page.locator(".cv-ctx")).toContainText("Asked from Claude, through the MCP");
 	// Allowed or not, never answered in words, and nothing is recommended.
 	await expect(page.locator("#cv-free")).toHaveCount(0);
@@ -181,7 +244,7 @@ test("a setting asked from Claude waits as a card, and applies once the owner al
 	await press(page.locator("[data-send]"), isMobile);
 	await expect(page.locator("#toast")).toHaveText("Answer sent");
 	await expect(item).toHaveCount(0);
-	await expect(page.locator(".ibx-list")).toBeVisible();
+	await expect(page.locator(".ibx-list").first()).toBeVisible();
 	expect(read("config.json").projects[0].bypassApproval).toBe(true);
 });
 

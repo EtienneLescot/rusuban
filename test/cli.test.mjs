@@ -8,7 +8,10 @@ import { fileURLToPath } from "node:url";
 import { applyEvidence, applyJudgment, closeCard, parseItem } from "../src/model.mjs";
 
 const REPOS = ["o/r"];
-const live = { prs: [{ repo: "o/r", n: 1, head: "abc" }], issues: [{ repo: "o/r", n: 10 }] };
+const live = {
+	prs: [{ repo: "o/r", n: 1, head: "abc", files: [] }],
+	issues: [{ repo: "o/r", n: 10 }],
+};
 const fresh = () => ({ items: {} });
 const NOW = "2026-11-07T12:00:00.000Z";
 const LATER = "2026-11-09T12:00:00.000Z";
@@ -116,7 +119,7 @@ test("a judgment asks for a proof; a worker other than the judging run records i
 	assert.deepEqual([e.state, e.head, e.run, e.conversation], ["ok", "abc", "worker-2", "s-1"]);
 	// It survives a rejudge on the same head, never a new commit.
 	assert.equal(judge(prJ(), judgment).pr.evidence.state, "ok");
-	const moved = { prs: [{ repo: "o/r", n: 1, head: "def" }], issues: [] };
+	const moved = { prs: [{ repo: "o/r", n: 1, head: "def", files: [] }], issues: [] };
 	assert.equal(judge(prJ({ pr: { head: "def", auto: true } }), judgment, moved).pr.evidence, null);
 });
 
@@ -140,7 +143,7 @@ test("a merge order is an option of a PR's card, tied to the head the card was w
 	const first = prCard();
 	assert.equal(first.head, "abc");
 	assert.equal(prCard().id, first.id, "the same question on the same head is the same card");
-	const moved = { prs: [{ repo: "o/r", n: 1, head: "def" }], issues: [] };
+	const moved = { prs: [{ repo: "o/r", n: 1, head: "def", files: [] }], issues: [] };
 	const again = applyJudgment(
 		prJ({
 			owner: "alice",
@@ -263,6 +266,32 @@ test("the agent commands read and write a project's files", () => {
 	assert.equal(runAs("worker-1", "evidence", "#1", "running").status, 0);
 	const proof = JSON.parse(run("show", "#1").stdout).judgment.pr.evidence;
 	assert.deepEqual([proof.state, proof.run, proof.conversation], ["running", "worker-1", "s-9"]);
+	// A rule that answers the cards of two items is proposed once, then closed like a card.
+	fs.writeFileSync(
+		file,
+		JSON.stringify([
+			prJ({ owner: "alice", decision: card() }),
+			issueJ({ decision: card({ q: "Build this one?" }) }),
+		]),
+	);
+	assert.equal(run("judge", file).status, 0);
+	fs.writeFileSync(
+		file,
+		JSON.stringify({
+			items: ["#1", "#10"],
+			file: ".rusuban/rules/01-ask.md",
+			rule: "Ask before building a feature.",
+			q: "Make it a rule?",
+			ctx: "Two cards ask it.",
+			done: "Read both.",
+			urgency: "digest",
+		}),
+	);
+	const proposed = run("propose", file);
+	assert.equal(proposed.status, 0, proposed.stderr);
+	const [, id] = /rule proposal (rule:\S+) written, for o\/r#1, o\/r#10/.exec(proposed.stdout);
+	assert.match(run("propose", file).stderr, /already in the open rule proposal/);
+	assert.match(run("resolve", id, "Withdrawn.").stdout, /^card of rule:\S+ closed: replaced/);
 	assert.deepEqual(JSON.parse(run("answers").stdout), []);
 	assert.match(run("--version").stdout, /^rusuban \d+\.\d+\.\d+/);
 	assert.equal(run("nope").status, 1);

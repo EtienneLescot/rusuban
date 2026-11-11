@@ -42,9 +42,11 @@ import {
 import {
 	applyEvidence,
 	applyJudgment,
+	applyProposal,
 	closeCard,
 	flatten,
 	inputKey,
+	isProposal,
 	keyOf,
 	parseItem,
 	pendingAnswers,
@@ -170,7 +172,8 @@ Agent commands, inside a run (an item is owner/repo#n, or #n when the project ha
   todo                          what the agents must do, each with its reason
   show <item>                   live state and judgment of an item
   judge <file.json>             writes judgments: one object or a list
-  resolve <item> <text>         closes an item's open card, saying what happened
+  propose <file.json>           proposes a rule that answers the open cards of several items
+  resolve <item|rule:id> <text> closes an item's open card, or a rule proposal, saying what happened
   evidence <item> <todo|running|ok|fail> [url]
                                 records a proof for the live head; a worker run only
   log <kind> <item|-> <text> [url]
@@ -542,9 +545,20 @@ const commands = {
 			);
 		});
 	},
+	propose([file]) {
+		if (!file) throw new Error("usage: propose <file.json>");
+		const p = project();
+		const input = JSON.parse(fs.readFileSync(file, "utf8"));
+		withLock(p, () => {
+			const judgment = p.judgment();
+			const r = applyProposal(input, judgment, { repos: p.repos, by: p.by });
+			write(`${p.dir}/judgment.json`, judgment);
+			console.log(`rule proposal ${r.id} written, for ${r.items.join(", ")}`);
+		});
+	},
 	resolve([ref, ...text]) {
 		const p = project();
-		const key = parseItem(ref, p.repos);
+		const key = isProposal(ref) ? ref : parseItem(ref, p.repos);
 		withLock(p, () => {
 			const judgment = p.judgment();
 			const d = closeCard(judgment, key, text.join(" "), readJsonl(`${p.dir}/answers.jsonl`));

@@ -288,7 +288,7 @@ test("a fork's CI approval comes once per head", () => {
 	assert.deepEqual(todo({ examined: { "o/r#1": "sha0" } }), ["ci-approval@sha1"], "a new head");
 });
 
-test("lock-blocked: a PR judged mergeable alone that a project lock or .rusuban/ stops", () => {
+test("lock-blocked: a PR judged mergeable alone that a project lock stops", () => {
 	const todo = (p, j, rules = RULES) =>
 		todoOf({
 			live: { prs: [p], issues: [] },
@@ -299,10 +299,6 @@ test("lock-blocked: a PR judged mergeable alone that a project lock or .rusuban/
 	assert.deepEqual(
 		locked.map((t) => [t.reason, t.head, t.lock]),
 		[["lock-blocked", "sha1", "Locks: Locked paths: .github/workflows/ci.yml"]],
-	);
-	assert.equal(
-		todo(pr(1, { files: [file(".rusuban/rules/a.md")] }), fix(1))[0].reason,
-		"lock-blocked",
 	);
 	assert.equal(todo(pr(1, { files: [file("src/a.js", 400)] }), fix(1))[0].reason, "lock-blocked");
 	const proof = { needed: true, state: "fail", head: "sha1" };
@@ -320,6 +316,39 @@ test("lock-blocked: a PR judged mergeable alone that a project lock or .rusuban/
 	assert.deepEqual(todo(pr(1, { files: [file("crates/compositor/a.rs")] }), fix(1)), []);
 	const broken = { observeOnly: false, locks: null, errors: ["locks.json: bad"] };
 	assert.deepEqual(todo(pr(1), fix(1), broken), []);
+});
+
+test("a PR that changes .rusuban/ is a person's: out of the todo, the graph and its links", () => {
+	const rulesPr = pr(2, {
+		files: [file("src/a.js"), file(".rusuban/rules/02-ci.md")],
+		closes: [9],
+	});
+	const live = { prs: [pr(1), rulesPr], issues: [issue(9)] };
+	const held = {
+		...fix(2, { owner: "alice", revisitAt: undefined }),
+		decision: { id: "c", q: "?", options: [], createdAt: "2026-11-07T00:00:00Z", resolvedAt: null },
+	};
+	const todo = (items) => todoOf({ live, judgment: { items }, rules: { [REPO]: RULES } });
+	// Neither judged (unjudged, a new commit) nor carded (missing-card), nor revisited.
+	assert.deepEqual(
+		todo({}).map((t) => t.item),
+		["o/r#1", "o/r#9"],
+	);
+	assert.deepEqual(
+		todo({ "o/r#2": { ...held, decision: null } }).map((t) => t.item),
+		["o/r#1", "o/r#9"],
+	);
+	assert.deepEqual(
+		todo({ "o/r#2": fix(2, { revisitAt: "2000-01-01T00:00:00Z" }) }).map((t) => t.item),
+		["o/r#1", "o/r#9"],
+	);
+	const m = buildModel({ live, judgment: { items: {} }, rules: { [REPO]: RULES } });
+	assert.deepEqual(
+		m.nodes.map((n) => n.id),
+		["o/r#1", "o/r#9"],
+	);
+	assert.equal(m.counts.all, 2);
+	assert.ok(!m.edges.some((e) => e.from === "o/r#2" || e.to === "o/r#2"));
 });
 
 test("multi-repo: the same number in two repos is two items", () => {

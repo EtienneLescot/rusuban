@@ -1698,6 +1698,34 @@ a.num:hover .ext {
 	font-size: 18px;
 	color: var(--text-hi);
 }
+/* The inbox's two queues, in the view tabs' style (FR-099). */
+.ibx-seg {
+	display: flex;
+	gap: 6px;
+}
+.ibx-seg button {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 6px;
+	height: 32px;
+	padding: 0 14px;
+	border-radius: 8px;
+	border: 1px solid transparent;
+	background: transparent;
+	color: var(--text-3);
+}
+.ibx-seg button:hover {
+	color: var(--text-1);
+}
+.ibx-seg button[aria-selected="true"] {
+	border-color: var(--line-strong);
+	background: var(--fill-hover);
+	color: var(--text-hi);
+	font-weight: 600;
+}
+.ibx-seg b {
+	font-weight: 600;
+}
 .ibx-list {
 	display: flex;
 	flex-direction: column;
@@ -1758,6 +1786,14 @@ a.num:hover .ext {
 	fill: none;
 	stroke: currentColor;
 	stroke-width: 2.4;
+}
+.ibx-sub {
+	font-size: 12px;
+	color: var(--text-3);
+}
+a.ibx-item {
+	color: inherit;
+	text-decoration: none;
 }
 .ibx-empty {
 	margin: 8px 0;
@@ -1850,6 +1886,30 @@ a.num:hover .ext {
 .tag.you {
 	background: rgba(245, 158, 11, 0.14);
 	color: var(--amber-text);
+}
+/* A rule proposal: the rule as it will read, its file, the cards it answers. */
+.rule-text {
+	margin: 4px 0 0;
+	padding: 10px 14px;
+	border-left: 3px solid #a78bfa;
+	border-radius: 6px;
+	background: rgba(167, 139, 250, 0.08);
+	color: var(--text-hi);
+	font-size: 14px;
+	line-height: 1.45;
+	white-space: pre-wrap;
+}
+.rule-file {
+	font-size: 12px;
+	color: var(--text-3);
+}
+.seen {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	font-size: 12px;
+	color: var(--text-3);
 }
 .cv-q {
 	margin: 0;

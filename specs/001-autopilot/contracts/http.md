@@ -11,7 +11,7 @@ dashboard's origin (local or `ts.net`) and the `x-rusuban: 1` header, and a body
 |---|---|---|
 | GET | `/`, `/app.js`, `/app.css` | the page, no build |
 | GET | `/api/state?project=<id>` | the project's model: nodes, edges, cards, runs, freshness, journal |
-| GET | `/api/inbox` | open cards of every project, the settings waiting for a confirmation (`type: "setting"`, card id `setting:<id>`) and the desktops a run asks for (`type: "lease"`, card id `lease:<run>:<machine>`), newest first; both are answered allow or deny |
+| GET | `/api/inbox` | open cards of every project, the settings waiting for a confirmation (`type: "setting"`, card id `setting:<id>`) and the desktops a run asks for (`type: "lease"`, card id `lease:<run>:<machine>`), newest first; both are answered allow or deny. With the rule proposals (`type: "rule"`, card id `rule:<id>`). Each card's `about` says where it waits (FR-099): `proposal`, `rule`, `lock` or `setting` in Rules & settings, none in Decisions. `rulesPrs` lists the open PRs that change `.rusuban/`: `{ project, item, title, url, author, draft, ci, updatedAt }` |
 | GET | `/api/events` | SSE: `state`, `inbox`, `agents` (the project's runs and tasks, a task naming no project included, and the machines when the project has a repo) and `hub` (the project's conversations, the index's age), the project being the one the `state` names (FR-097) on each change, `: ping` every 15 s |
 | GET | `/api/conversations?project=&item=&origin=&q=` | Conversation list, newest activity first, with the index's age and the titles of the items they name |
 | GET | `/api/conversations/<id>?before=<offset>` | one page of a transcript: user text, assistant text, tool calls (name and short input), results cut to 2 KB; its `before` is the byte offset of the page before it, null at the start |
@@ -25,7 +25,7 @@ dashboard's origin (local or `ts.net`) and the `x-rusuban: 1` header, and a body
 
 | Method | Path | Body | Effect |
 |---|---|---|---|
-| POST | `/api/answer` | `{ project, item, card, option, note? }` | records the answer, starts the coordinator; refuses a replaced card. On a `setting:<id>` card, `option` is `allow` or `deny` (never a note): the owner's confirmation (FR-092) |
+| POST | `/api/answer` | `{ project, item, card, option, note? }` | records the answer, starts the coordinator; refuses a replaced card. On a `setting:<id>` card, `option` is `allow` or `deny` (never a note): the owner's confirmation (FR-092). A `rule:<id>` card needs no `item`: the proposal stands for its own |
 | POST | `/api/ask` | `{ project, text, item? }` | records a request, starts the coordinator |
 | POST | `/api/automerge` | `{ armed }` | the global merge switch, stored in `automerge.json` |
 | POST | `/api/refresh` | `{ project? }` | immediate GitHub read |

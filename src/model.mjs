@@ -33,6 +33,10 @@ const SHARED_IGNORE = [
 const HUB_AT = 4;
 
 export const keyOf = (item) => `${item.repo}#${item.n}`;
+// A PR that changes .rusuban/ changes how the agents follow the project: a person merges it on
+// GitHub, the agents never judge it, and it waits in Rules & settings, not in the graph (FR-099).
+const OWN_FOLDER = /^\.rusuban(\/|$)/;
+export const isRulesPr = (pr) => pr.files.some((f) => OWN_FOLDER.test(f.path));
 export const isPerson = (owner) =>
 	typeof owner === "string" && !ROLES.includes(owner) && LOGIN.test(owner);
 const gate = (state, detail) => ({ state, detail });
@@ -163,7 +167,6 @@ function judgmentGate(pr, j, observeOnly) {
 	return gate("ok", j.pr.why || "Judged mergeable alone");
 }
 
-const OWN_FOLDER = /^\.rusuban(\/|$)/;
 function locksGate(pr, rules) {
 	const paths = pr.files.map((f) => f.path);
 	if (paths.some((p) => OWN_FOLDER.test(p)))
@@ -412,8 +415,9 @@ export function refusedOf(journal = []) {
 
 // The reasons of contracts/cli.md, plus `conflict`. No delay is built in: an item comes back to the
 // agents at its judgment's revisitAt, which the agent sets from the project's rules. Items of repos
-// without rules never appear (FR-024). A refusal comes once: a card written after it settles it. A
-// fork's CI approval comes once per head: `examined` holds, per PR, the head a judge ended on.
+// without rules never appear (FR-024), nor a PR that changes .rusuban/ (FR-099). A refusal comes
+// once: a card written after it settles it. A fork's CI approval comes once per head: `examined`
+// holds, per PR, the head a judge ended on.
 export function todoOf({
 	live,
 	judgment,
@@ -425,11 +429,11 @@ export function todoOf({
 	const acting = actingRepos(rules);
 	const items = judgment.items ?? {};
 	const out = [];
+	const prs = live.prs.filter((p) => acting.has(p.repo) && !isRulesPr(p));
 	const open = new Map(
-		[...live.prs, ...live.issues].filter((i) => acting.has(i.repo)).map((i) => [keyOf(i), i]),
+		[...prs, ...live.issues.filter((i) => acting.has(i.repo))].map((i) => [keyOf(i), i]),
 	);
-	for (const pr of live.prs) {
-		if (!acting.has(pr.repo)) continue;
+	for (const pr of prs) {
 		const item = keyOf(pr);
 		const j = items[item];
 		const stop = hasOpenCard(j) ? null : lockStop(pr, j, rules[pr.repo]);
@@ -478,6 +482,26 @@ export function todoOf({
 
 // ── Writing judgments (the agent CLI is their only writer) ────────────────────────────────────
 const isRefList = (v) => Array.isArray(v) && v.every((x) => refKey(x, "o/r") !== null);
+// A card that asks how the agents follow the project rather than about its item (FR-099): a
+// situation the rules leave open about how the agents work, or what only a person lifts.
+const ABOUT = ["rule", "lock"];
+
+// What the agents did: a sentence or two, or a list of steps, each with the link that shows it (a
+// comment, a report, `run:<id>` for a run's conversation). Then how urgently the rules ping.
+function checkDoneAndUrgency(d, what) {
+	const steps = Array.isArray(d.done) ? d.done : [d.done];
+	const step = (s) =>
+		(typeof s === "string" && s.trim()) ||
+		(typeof s?.text === "string" &&
+			s.text.trim() &&
+			(s.href == null || /^(https?:\/\/|run:[\w.-]+$)/.test(s.href)));
+	if (!steps.length || !steps.every(step))
+		fail(
+			`${what}.done is required: what the agent already did or checked, a sentence or a list of { text, href? } (href a URL or run:<id>)`,
+		);
+	if (!["now", "digest"].includes(d.urgency))
+		fail(`${what}.urgency is "now" or "digest", from the rules`);
+}
 
 // The item a judgment is about: `item` ("owner/repo#n" or "#n"), or `n` in a one-repo project.
 export const inputKey = (input, repos) => parseItem(input.item ?? String(input.n ?? ""), repos);
@@ -493,6 +517,8 @@ export function applyJudgment(
 	const pr = live.prs.find((p) => keyOf(p) === key);
 	const issue = live.issues.find((i) => keyOf(i) === key);
 	if (!pr && !issue) fail(`${key} is neither an open PR nor an open issue`);
+	if (pr && isRulesPr(pr))
+		fail(`${key} changes .rusuban/: a person merges it on GitHub, the agents do not judge it`);
 	const type = pr ? "pr" : "issue";
 	const prev = judgment.items[key] ?? {};
 	const next = { ...prev, ...input, type };
@@ -558,20 +584,9 @@ export function applyJudgment(
 			fail(`${key}: decision.to must be the owner, ${next.owner}`);
 		if (!d.q || !d.ctx || !Array.isArray(d.options) || d.options.length < 2)
 			fail(`${key}: decision is { urgency, done, q, ctx, rec, why, options[2+] }`);
-		// What the agents did: a sentence or two, or a list of steps, each with the link that shows it
-		// (a comment, a report, `run:<id>` for a run's conversation).
-		const steps = Array.isArray(d.done) ? d.done : [d.done];
-		const step = (s) =>
-			(typeof s === "string" && s.trim()) ||
-			(typeof s?.text === "string" &&
-				s.text.trim() &&
-				(s.href == null || /^(https?:\/\/|run:[\w.-]+$)/.test(s.href)));
-		if (!steps.length || !steps.every(step))
-			fail(
-				`${key}: decision.done is required: what the agent already did or checked, a sentence or a list of { text, href? } (href a URL or run:<id>)`,
-			);
-		if (!["now", "digest"].includes(d.urgency))
-			fail(`${key}: decision.urgency is "now" or "digest", from the rules`);
+		checkDoneAndUrgency(d, `${key}: decision`);
+		if (d.about != null && !ABOUT.includes(d.about))
+			fail(`${key}: decision.about is "rule" or "lock", or none when the question is the item's`);
 		for (const o of d.options) {
 			if (!o.id || !o.label || !o.effect) fail(`${key}: every option has id, label and effect`);
 			// A merge order (FR-044): the server merges the PR on the head this card was written on.
@@ -647,9 +662,14 @@ const answersFor = (key, d, answers) =>
 			(a.card ? a.card === d.id : Date.parse(a.at) >= Date.parse(d.createdAt ?? 0)),
 	);
 
+// A card by its key: an item's, or a rule proposal's (`rule:<id>`), which stands for its own item.
+export const isProposal = (key) => String(key ?? "").startsWith("rule:");
+const cardOf = (judgment, key) =>
+	isProposal(key) ? judgment.proposals?.[key] : judgment.items?.[key]?.decision;
+
 // Closes an open card with its outcome: resolved when it was answered, replaced otherwise.
 export function closeCard(judgment, key, text, answers = [], now = new Date().toISOString()) {
-	const d = judgment.items[key]?.decision;
+	const d = cardOf(judgment, key);
 	if (!d || d.resolvedAt) fail(`${key} has no open card`);
 	if (!String(text ?? "").trim()) fail("say what happened, in a sentence");
 	Object.assign(d, {
@@ -674,7 +694,7 @@ export function cardState(item, d, answers = []) {
 // An answer to a card (T037), checked before the daemon records it, once: a replaced card or one
 // already answered refuses it. A free answer is option "other" with a note.
 export function checkAnswer({ judgment, answers = [], item, card, option, note }) {
-	const d = judgment.items?.[item]?.decision;
+	const d = cardOf(judgment, item);
 	if (!d || d.id !== card) return { status: 404, error: "this item has no such card" };
 	const state = cardState(item, d, answers);
 	if (state === "replaced")
@@ -688,41 +708,78 @@ export function checkAnswer({ judgment, answers = [], item, card, option, note }
 	return { chosen, note: text };
 }
 
+// Where an open card waits (FR-099): Rules & settings when it asks how the agents follow the
+// project rather than about its item, Decisions otherwise. The judge says so (`about`). A PR it let
+// merge alone needs a person for nothing else: to lift what holds it when an option orders the
+// merge, to say how the agents work otherwise.
+export function aboutOf(j) {
+	const d = j.decision;
+	if (d.about) return d.about;
+	if (j.pr?.auto === true) return d.options.some((o) => o.merge) ? "lock" : "rule";
+	return null;
+}
+
 // The inbox (contracts/http.md): the cards of every project that wait for their person, or whose
-// answer is being carried out, newest first.
+// answer is being carried out, newest first, each with the queue it waits in (`about`).
 export function inboxOf(projects) {
 	const out = [];
 	for (const { id, title, live, judgment, answers = [] } of projects) {
 		const open = new Map([...live.prs, ...live.issues].map((i) => [keyOf(i), i]));
+		const entry = (key, d, more) => ({
+			project: id,
+			projectTitle: title ?? id,
+			item: key,
+			...more,
+			card: d,
+			answer: answersFor(key, d, answers).at(-1) ?? null,
+		});
 		for (const [key, j] of Object.entries(judgment.items ?? {})) {
 			const d = j.decision;
 			if (!d || d.resolvedAt || d.state === "replaced") continue;
 			const it = open.get(key);
-			out.push({
-				project: id,
-				projectTitle: title ?? id,
-				item: key,
-				type: j.type,
-				label: j.label || it?.title || key,
-				kind: j.kind ?? null,
-				author: it?.author ?? null,
-				url: it?.url ?? null,
-				itemOpen: !!it,
-				judgedBy: j.judgedBy ?? null,
-				evidence: j.pr?.evidence ?? null,
-				card: d,
-				answer: answersFor(key, d, answers).at(-1) ?? null,
-			});
+			out.push(
+				entry(key, d, {
+					type: j.type,
+					label: j.label || it?.title || key,
+					kind: j.kind ?? null,
+					author: it?.author ?? null,
+					url: it?.url ?? null,
+					itemOpen: !!it,
+					judgedBy: j.judgedBy ?? null,
+					evidence: j.pr?.evidence ?? null,
+					about: aboutOf(j),
+				}),
+			);
 		}
+		// A rule proposal is about no one item: like a setting's card, it names none.
+		for (const d of Object.values(judgment.proposals ?? {}))
+			if (!d.resolvedAt)
+				out.push(
+					entry(d.id, d, {
+						item: null,
+						type: "rule",
+						label: `Rule proposal for ${d.items.length} cards`,
+						kind: null,
+						author: null,
+						url: null,
+						itemOpen: true,
+						judgedBy: d.by ?? null,
+						evidence: null,
+						about: "proposal",
+					}),
+				);
 	}
 	return out.sort((a, b) => String(b.card.createdAt).localeCompare(String(a.card.createdAt)));
 }
 
-// The latest answer to each open card.
+// The latest answer to each open card, a rule proposal's with its rule.
 export function pendingAnswers(judgment, answers) {
 	const out = [];
-	for (const [key, j] of Object.entries(judgment.items ?? {})) {
-		const d = j.decision;
+	const cards = [
+		...Object.entries(judgment.items ?? {}).map(([key, j]) => [key, j.decision]),
+		...Object.entries(judgment.proposals ?? {}),
+	];
+	for (const [key, d] of cards) {
 		if (!d || d.resolvedAt) continue;
 		const a = answersFor(key, d, answers).at(-1);
 		if (a)
@@ -732,9 +789,70 @@ export function pendingAnswers(judgment, answers) {
 				card: d.id,
 				q: d.q,
 				chosen: d.options.find((o) => o.id === a.option) ?? null,
+				...(isProposal(key) ? { rule: d.rule, file: d.file, repo: d.repo, items: d.items } : {}),
 			});
 	}
 	return out;
+}
+
+// ── Rule proposals (FR-099) ───────────────────────────────────────────────────────────────────
+// Open cards that one rule would answer: an agent proposes the rule once, in a card of its own in
+// Rules & settings, instead of a "Make it a rule" option on each. Its options are the server's:
+// the owner opens the rule PR or keeps being asked item by item; a free answer changes the rule.
+const RULES_FILE = /^\.rusuban\/rules\/[\w.-]+\.md$/;
+export function applyProposal(
+	input,
+	judgment,
+	{ repos, now = new Date().toISOString(), by = null },
+) {
+	const items = [...new Set((input.items ?? []).map((r) => parseItem(String(r), repos)))];
+	if (items.length < 2) fail("a rule proposal answers the open cards of two items at least: items");
+	const repo = items[0].split("#")[0];
+	if (items.some((k) => !k.startsWith(`${repo}#`)))
+		fail("a rule proposal's items are of one repo: the rule goes to that repo's rules");
+	const proposals = judgment.proposals ?? {};
+	for (const k of items) {
+		if (!hasOpenCard(judgment.items[k])) fail(`${k} has no open card for the rule to answer`);
+		const other = Object.values(proposals).find((x) => !x.resolvedAt && x.items.includes(k));
+		if (other) fail(`${k} is already in the open rule proposal ${other.id}`);
+	}
+	if (typeof input.rule !== "string" || !input.rule.trim())
+		fail("rule is required: the rule, as it will read in its file");
+	if (!RULES_FILE.test(input.file ?? ""))
+		fail("file is the rules file it goes to: .rusuban/rules/<name>.md");
+	if (!input.q || !input.ctx)
+		fail("a rule proposal is { items, file, rule, q, ctx, done, urgency }");
+	checkDoneAndUrgency(input, "a rule proposal");
+	const id = `rule:${Date.parse(now)}-${Math.random().toString(36).slice(2, 6)}`;
+	proposals[id] = {
+		id,
+		repo,
+		file: input.file,
+		rule: input.rule.trim(),
+		items,
+		urgency: input.urgency,
+		done: input.done,
+		q: input.q,
+		ctx: input.ctx,
+		rec: "open",
+		why: null,
+		options: [
+			{
+				id: "open",
+				label: "Open the rule PR",
+				effect: `I open a PR adding this rule to ${input.file}, and its ${items.length} items wait for it without a card. Once a person merges it on GitHub, the rule decides them.`,
+			},
+			{ id: "no", label: "Not a rule", effect: "I keep asking item by item." },
+		],
+		to: judgment.items[items[0]].decision.to,
+		by,
+		createdAt: now,
+		resolvedAt: null,
+		outcome: null,
+		state: "open",
+	};
+	judgment.proposals = proposals;
+	return proposals[id];
 }
 
 // A person's merge orders (FR-044): an answered card whose chosen option says `merge: true`. The
@@ -1007,7 +1125,7 @@ export function settledOf(key, j, answers = [], now = Date.now()) {
 
 // ── The whole model the page shows ────────────────────────────────────────────────────────────
 export function buildModel({
-	live,
+	live: read,
 	judgment,
 	rules = {},
 	answers = [],
@@ -1017,6 +1135,8 @@ export function buildModel({
 	me = null,
 	now = Date.now(),
 }) {
+	// A PR that changes .rusuban/ is not the project's work: it waits in Rules & settings (FR-099).
+	const live = { ...read, prs: read.prs.filter((p) => !isRulesPr(p)) };
 	const items = judgment.items ?? {};
 	const edges = edgesOf(live, items);
 	// Agents at work light their items: a run's own items, then the items its recent lines cite.
