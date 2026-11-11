@@ -6,7 +6,7 @@ import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { listRuns, requestRun, stopRun } from "./agents.mjs";
-import { homePath } from "./home.mjs";
+import { homeDir, homePath } from "./home.mjs";
 
 const NAME = /^[a-z0-9][a-z0-9-]{2,39}$/;
 const git = (args, cwd) =>
@@ -105,21 +105,25 @@ export async function releaseFiles(run) {
 	if (run.wslWork && RUN_ID.test(run.id)) await wslRemove([run.id]);
 }
 
-// The worktrees git knows in a clone, its own folder aside.
+// The worktrees git knows in a clone, its own folder aside: git lists it first, by its real path,
+// which is not the one Rusuban knows where a link leads to it (macOS's /var is /private/var).
 function registered(clone) {
 	try {
 		return git(["worktree", "list", "--porcelain"], clone)
 			.split("\n")
 			.filter((l) => l.startsWith("worktree "))
-			.map((l) => path.resolve(l.slice("worktree ".length)))
-			.filter((p) => p !== path.resolve(clone));
+			.slice(1)
+			.map((l) => path.resolve(l.slice("worktree ".length)));
 	} catch {
 		return [];
 	}
 }
-// Paths compared as the file system does: without case on Windows.
+// Paths compared as the file system finds them: through links, and without case on Windows.
 const norm = (p) => {
-	const r = path.resolve(p);
+	let r = path.resolve(p);
+	try {
+		r = fs.realpathSync.native(r);
+	} catch {}
 	return process.platform === "win32" ? r.toLowerCase() : r;
 };
 const inside = (p, dir) =>
@@ -187,6 +191,8 @@ export async function sweep(config) {
 			const clone = cloneOf(slug);
 			if (!fs.existsSync(clone)) continue;
 			for (const wt of registered(clone)) {
+				// Never a folder holding the clone or Rusuban's home, whatever git says.
+				if (inside(clone, wt) || inside(homeDir(), wt)) continue;
 				const now = alive();
 				if (now.some((r) => inside(wt, r.worktree) || inside(wt, r.workDir))) continue;
 				const own = [...ended.values()].find(
