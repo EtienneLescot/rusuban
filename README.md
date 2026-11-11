@@ -9,13 +9,18 @@ Rusuban (留守番) is the Japanese word for whoever minds the house while you a
 
 ## What it does
 
-- **Judges every issue and PR against your rules**, with Claude Code, and acts where they let it: it
-  asks for a rebase, fixes a bug in its own worktree, and merges what your rules and its locks allow.
+- **Judges every issue and PR against your rules**, with Claude Code on the model you choose, and acts
+  where they let it: it asks for a rebase, fixes a bug in its own worktree, and merges what your rules
+  and its locks allow.
 - **Brings you only the decisions your rules keep for you**, as cards with options and their effects,
-  in one inbox for all your projects. It pings you on ntfy, Slack, Discord, Teams or e-mail.
+  in one inbox for all your projects. You answer from the inbox or from the item's own card. It pings
+  you on ntfy, Slack, Discord, Teams or e-mail.
+- **Keeps your rules growing**: a question on how the agents work, a lock to lift or a setting to
+  allow waits apart, under Rules & settings. When several cards ask the same, it proposes the rule
+  that would answer them; a PR that changes your rules is yours to merge.
 - **Keeps every Claude conversation** held in your project's folders, linked to the issue or PR it is
   about. You read and answer them from the dashboard, on your desktop or your phone.
-- **Runs recurring tasks** written as text.
+- **Runs recurring tasks** written as text, in a project of their own when they concern no repo.
 - **Reserves your test machines** over SSH, one agent at a time. Your own desktop only after your yes.
 - **Is set up from Claude**: its MCP server changes any setting, and whatever widens what agents may do
   waits for your yes in the dashboard.
@@ -29,9 +34,9 @@ npm install -g rusuban
 rusuban init
 ```
 
-`init` asks how agents may use this machine and whether to arm automatic merges: there is no default
-for either. It adds your first repo in shadow mode, installs the service that keeps Rusuban running,
-registers its MCP server for Claude Code, and opens the dashboard.
+`init` asks which Claude model the runs use, how agents may use this machine and whether to arm
+automatic merges: there is no default for any of them. It adds your first repo, installs the service
+that keeps Rusuban running, registers its MCP server for Claude Code, and opens the dashboard.
 
 Then write your rules in your repo, under `.rusuban/rules/`: see [Writing rules](docs/writing-rules.md)
 and the [examples](examples/rules/). Without rules, Rusuban only observes.
