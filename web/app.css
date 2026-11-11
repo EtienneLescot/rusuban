@@ -1831,6 +1831,14 @@ a.ibx-item {
 	background: rgba(245, 158, 11, 0.14);
 	color: var(--amber-text);
 }
+/* A run's role (FR-103): development in a worktree, or judgment without one. */
+.tag.ag-role {
+	flex: 0 0 auto;
+	font-size: 11px;
+}
+.tag.ag-role.judgment {
+	--tag: #a78bfa;
+}
 /* A rule proposal: the rule as it will read, its file, the cards it answers. */
 .rule-text {
 	margin: 4px 0 0;
@@ -2649,6 +2657,15 @@ body[data-showing="conversations"] .filters > :not(.views) {
 #agents-view .ag-model.off {
 	color: var(--amber-text);
 }
+/* Short of room in a head, the model gives way first, before a run's name and role. */
+#agents-view .ag-head .ag-model,
+#agents-view .ag-line-head .ag-model {
+	flex: 0 100 auto;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
 
 /* Phone: one screen at a time, picked in the tab bar; an open card covers them all. */
 @media (max-width: 720px) {
@@ -2910,6 +2927,10 @@ body[data-showing="conversations"] .filters > :not(.views) {
 	.ag-line-head .ag-name {
 		flex: 0 1 auto;
 		font-size: 14px;
+	}
+	#agents-view .ag-model-pre,
+	#agents-view .ag-head .ag-model:not(.off) {
+		display: none;
 	}
 	.ag-line .ag-sum {
 		white-space: normal;

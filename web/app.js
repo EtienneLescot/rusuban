@@ -132,7 +132,8 @@ const T = {
 	today: "today",
 	yesterday: "yesterday",
 	tomorrow: "tomorrow",
-	runKinds: { judge: "Judge", act: "Coordinator", worker: "Worker", task: "Task" },
+	runKinds: { judge: "Judge", act: "Coordinator", worker: "Worker", task: "Task", reply: "Reply" },
+	roles: { dev: "Development", judgment: "Judgment" },
 	runState: {
 		running: "running",
 		queued: "queued",
@@ -1272,6 +1273,13 @@ const AT_WORK = ["running", "queued"];
 // A run a card points at (its conversation links) is lit.
 const lit = (r) => runFocus && (r.id === runFocus || r.items?.includes(runFocus));
 const runLabel = (r) => `${T.runKinds[r.kind] ?? r.kind}${r.title ? ` ${r.title}` : ""}`;
+// Development works in its own worktree and builds; judgment reads, decides and writes, with
+// neither (FR-103). A task run is its owner's, either.
+const ROLE = { worker: "dev", judge: "judgment", act: "judgment", reply: "judgment" };
+const roleTag = (kind) =>
+	ROLE[kind] ? `<span class="tag ag-role ${ROLE[kind]}">${T.roles[ROLE[kind]]}</span>` : "";
+// Beside its role, a worker goes by its name alone, as in Conversations.
+const roleLabel = (r) => (r.kind === "worker" && r.title ? r.title : runLabel(r));
 // A run's item, named as the inbox names it when its project is the one shown, by number otherwise.
 const itemRef = (project, key) => {
 	const n = String(key).split("#")[1];
@@ -1295,7 +1303,9 @@ const conversationLink = (r) =>
 const modelHtml = (r) => {
 	if (!r.model) return "";
 	const off = r.modelAsked && !r.model.includes(r.modelAsked);
-	return `<span class="mono ag-model${off ? " off" : ""}"${off ? ` title="${esc(T.modelAsked(r.modelAsked))}"` : ""}>${esc(r.model)}</span>`;
+	// On a phone, the id without its "claude-": the run's name and role keep their room.
+	const [, pre, rest] = r.model.match(/^(claude-)?(.*)$/);
+	return `<span class="mono ag-model${off ? " off" : ""}" title="${esc(off ? T.modelAsked(r.modelAsked) : r.model)}">${pre ? `<span class="ag-model-pre">${pre}</span>` : ""}${esc(rest)}</span>`;
 };
 const stateDot = (r) =>
 	`<i class="sd ${esc(r.state)}" role="img" aria-label="${esc(T.runState[r.state] ?? r.state)}"></i>`;
@@ -1306,8 +1316,8 @@ function runCardHtml(r) {
 		? `<span>${T.queued}</span>`
 		: `<span class="mono" data-since="${esc(r.startedAt ?? r.createdAt)}"></span>`;
 	return `<div class="ag-run${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}">
-		<div class="ag-head">${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b><span class="mono">${esc(runRef(r))}</span><span class="grow"></span>${modelHtml(r)}${time}</div>
-		${queued ? "" : `<span class="ag-step clamp2" title="${esc(plain(r.step))}">${md(r.step) || T.starting}</span>`}
+		<div class="ag-head">${stateDot(r)}<b class="ag-name">${esc(roleLabel(r))}</b>${roleTag(r.kind)}<span class="mono">${esc(runRef(r))}</span><span class="grow"></span>${modelHtml(r)}${time}</div>
+		${queued && !r.step ? "" : `<span class="ag-step clamp2" title="${esc(plain(r.step))}">${md(r.step) || T.starting}</span>`}
 		<div class="ag-actions">${queued ? "" : conversationLink(r)}<span class="grow"></span><button type="button" class="ag-stop${stopArmed === r.id ? " armed" : ""}" data-stop="${esc(r.id)}">${stopArmed === r.id ? T.confirmStop : T.stop}</button></div>
 	</div>`;
 }
@@ -1370,7 +1380,7 @@ function recentHtml(r, ph) {
 		r.state === "limited" && r.retryAt
 			? T.limitedUntil(clock(r.retryAt))
 			: shortWhen(r.endedAt ?? r.createdAt);
-	const who = `${stateDot(r)}<b class="ag-name">${esc(runLabel(r))}</b>`;
+	const who = `${stateDot(r)}<b class="ag-name">${esc(roleLabel(r))}</b>${roleTag(r.kind)}`;
 	const sum = `<span class="ag-sum${ph ? " clamp2" : ""}" title="${esc(plain(r.summary))}">${md(r.summary)}</span>`;
 	const attrs = `class="ag-line${lit(r) ? " lit" : ""}" id="run-${esc(r.id)}"`;
 	if (!ph)
@@ -1464,7 +1474,9 @@ const convState = (c) =>
 					: "ended";
 const convOrigin = (c) =>
 	c.origin === "rusuban"
-		? `${T.origins.rusuban}${c.runKind ? ` · ${c.runKind}` : ""}`
+		? [T.origins.rusuban, T.roles[ROLE[c.runKind]], T.runKinds[c.runKind] ?? c.runKind]
+				.filter(Boolean)
+				.join(" · ")
 		: (T.origins[c.origin] ?? c.origin);
 // A reply forks unless Rusuban started the session and its run has ended (research R6b).
 const convForks = (c) => !c.run || ["queued", "running"].includes(c.runState);

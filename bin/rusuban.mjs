@@ -64,7 +64,7 @@ import {
 } from "../src/service.mjs";
 import { changeSetting, FIRST_LIMITS, initInstance, maskTarget, planOf } from "../src/settings.mjs";
 import { busyRun, listTasks, readTask, startTask, tasksState } from "../src/tasks.mjs";
-import { listWorkers, startWorker, stopWorker } from "../src/workers.mjs";
+import { listWorkers, startWorker, stopWorker, workRootOf } from "../src/workers.mjs";
 
 const { version } = JSON.parse(
 	fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
@@ -152,6 +152,8 @@ const USAGE = `rusuban ${version}
                                 the host profile: what agents may run on this machine
   model [<id>]                  the Claude model every run uses, its Claude Code id or alias, or
                                 the one set; there is no default, and without one no run starts
+  work-root [<path>]            where each worker gets its work folder, removed with it, or the
+                                one set (default: work/ in the Rusuban home)
   channel add <type> <target> [--urgency now,digest] [--quiet HH:MM-HH:MM] [--digest HH:MM]
           | channel list | channel test <id> | channel remove <id>
                                 where cards ping you: ntfy, Slack, Discord, Teams, e-mail
@@ -422,6 +424,13 @@ async function modelCommand([model, ...rest]) {
 	return setting({ kind: "model", model }, model, (s) => s.runModel === model);
 }
 
+// Where workers put what is not their worktree (FR-103); read as each worker starts.
+async function workRootCommand([dir, ...rest]) {
+	if (rest.length) throw new Error("usage: work-root [<path>]");
+	if (!dir) return console.log(workRootOf(loadConfig()));
+	return setting({ kind: "workRoot", path: dir }, dir, () => true);
+}
+
 // The host profile (FR-025): what agents may run on this machine.
 async function permissionsCommand([mode, ...rest]) {
 	if (!["bypass", "allowlist"].includes(mode) || rest.length)
@@ -502,6 +511,7 @@ const commands = {
 	machine: machineCommand,
 	permissions: permissionsCommand,
 	model: modelCommand,
+	"work-root": workRootCommand,
 	channel: channelCommand,
 	// Remote access (T076): Tailscale Serve, never Funnel. On widens where the dashboard answers.
 	remote([sub, ...rest]) {

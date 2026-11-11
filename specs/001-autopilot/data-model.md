@@ -30,6 +30,7 @@ file has **one writer**. `rusuban` is the product name.
 | `leases/answers.json` | daemon, under the host lock | `{ "<run> <machine>": { yes, by, at } }`: the owner's answers, which the waiting command reads |
 | `tasks/<id>.md` | the user | Task |
 | `worktrees/<p>/<run>/` | worker launcher | git worktree of a worker |
+| `<workRoot>/<run>/` | worker launcher | a worker's work folder (FR-103): builds, exports, temporary files, other worktrees of the clone |
 
 `config.json` is created with mode 600: it holds channel secrets.
 
@@ -56,6 +57,8 @@ file has **one writer**. `rusuban` is the product name.
 - `model`: the Claude model every run uses (FR-098), a Claude Code id or alias, passed as `--model`.
   Asked at init, no default; a config without one loads, but no run starts until `rusuban model`
   sets it.
+- `workRoot` (optional): an absolute path where each worker gets its work folder (FR-103); `work/` in
+  the home without it. `rusuban work-root` and the MCP's `work_root` set it.
 - `version`: the format of the whole instance home, config.json and every state file under it (FR-074).
   A rusuban that finds a newer one refuses to load it; a change to any file's format bumps it, and the
   update that brings it migrates the home on load. Version 1 has no migration yet.
@@ -158,10 +161,15 @@ message? }], createdAt, resolvedAt, outcome }`
 ### Run
 
 `{ id, kind: "judge" | "act" | "worker" | "task" | "reply", project, items[], session, cwd, worktree,
-leases[], trigger, state, startedAt, endedAt, exitCode, step, summary, crash?, modelAsked, model }`
+workDir?, wslWork?, leases[], trigger, state, startedAt, endedAt, exitCode, step, summary, crash?,
+modelAsked, model }`
 
 - `modelAsked` is the config's model the run was started on; `model` is the one its session
   announced in its init event (FR-098).
+- A worker's `workDir` is `<workRoot>/<run>`, and on Windows `wslWork` its folder in WSL,
+  `rusuban-work/<run>` under the WSL home (FR-103). Both go with its worktree when it ends or stops.
+  A queued worker short of room on a disk says so in `step`: `Waits for room: 4.2 GB free on G:\,
+  10 GB needed`.
 
 - `state`: `queued → running → done | failed | stopped`; `running` with a dead pid reads `interrupted`.
 - An interrupted run is journaled once by the daemon, with why: the error its runner noted in `crash`

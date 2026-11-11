@@ -348,6 +348,24 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   opens in. There is no default: `init` asks for it, `rusuban model` and the MCP change it at once,
   journaled; without one no run starts, and the page and `status` say why. Each run records the
   model its session announced, which the page shows, marked when it is not the one asked for.
+- **FR-103**: Runs MUST be of two sorts, kept apart, as Etienne asked on 2026-11-11, and the Agents
+  view and Conversations say which: development, a worker in its own worktree, which builds; and
+  judgment (judge, coordinator, reply), which reads, decides and writes, with no worktree and no
+  build. Disks are Rusuban's to keep clean:
+  - A worker gets a work folder, `<workRoot>/<run>`, named in its prompt and in `RUSUBAN_WORK`, and
+    in WSL `~/rusuban-work/<run>`. Builds, exports, temporary files and any other worktree of the
+    repo go there, never in a folder of the agent's choosing. `workRoot` is in the instance config,
+    set by `rusuban work-root` and the MCP at once; by default `work/` in the home.
+  - What a worker opened goes when it ends or is stopped: its worktree, its work folder with the
+    worktrees it added to the clone, its WSL folder.
+  - At the daemon's start, then once a day, a sweep removes what runs that ended left behind, and
+    journals the room it freed. Never a live run's; never a folder named after a run this instance
+    does not know, which may be another instance's. A worktree of the clone outside every run's
+    folders goes only while no worker or task lives, since nobody can tell whose it is.
+  - Nothing is removed by following a junction or a link.
+  - Before a worker starts, the disks it writes on (the worktrees' and the work root's) each need
+    10 GB free. Short of that, it waits in its queue, the reason in its status, and starts once there
+    is room.
 
 **Decisions and pings**
 

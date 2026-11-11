@@ -356,6 +356,25 @@ test("a run's Conversation opens it: in a terminal on this PC, in the reader on 
 	await expect(page.locator("#conv-reader")).toContainText("Write today's post.");
 });
 
+test("development and judgment runs are told apart; a worker short of room says why it waits", async ({
+	page,
+	isMobile,
+}) => {
+	if (isMobile) await press(page.locator("#menu"), true);
+	await page.selectOption("#project", "orbit");
+	if (isMobile) await press(page.locator("#menu"), true);
+	await goTo(page, "agents", isMobile);
+	const worker = page.locator("#agents-view .ag-run").filter({ hasText: "fix-32" });
+	await expect(worker.locator(".ag-role")).toHaveText("Development");
+	await expect(worker.locator(".ag-step")).toHaveText(
+		"Waits for room: 4.2 GB free on G:\\, 10 GB needed",
+	);
+	const judge = page.locator("#agents-view .ag-line").filter({ hasText: "Judged #31" });
+	await expect(judge.locator(".ag-role")).toHaveText("Judgment");
+	// Nothing wider than the page, at a phone's width too.
+	expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
+});
+
 test("a project without a repo shows its tasks and runs, never an empty board, and reads no GitHub", async ({
 	page,
 	isMobile,

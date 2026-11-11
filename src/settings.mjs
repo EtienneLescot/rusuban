@@ -323,6 +323,23 @@ export function planOf(config, change) {
 				said: `model: ${model}, for every run from the next one.`,
 			};
 		}
+		// Where workers put what is not their worktree (FR-103): each gets its own folder there, made
+		// and removed by Rusuban. It widens nothing: it applies at once, journaled.
+		case "workRoot": {
+			if (typeof change.path !== "string" || !path.isAbsolute(change.path))
+				throw new Error("the work root is an absolute path");
+			const dir = path.resolve(change.path);
+			if (config.workRoot === dir)
+				return { project: null, same: `the work root is ${dir} already.` };
+			return {
+				project: null,
+				widens: false,
+				apply: (c) => {
+					c.workRoot = dir;
+				},
+				said: `work root: ${dir}, for every worker from the next one.`,
+			};
+		}
 		case "limits": {
 			const next = { ...config.limits };
 			for (const k of ["maxWorkers", "maxRunMinutes"])

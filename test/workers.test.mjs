@@ -5,9 +5,19 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { executeRun, listRuns, readRun, runner } from "../src/agents.mjs";
+import { executeRun, kickQueues, listRuns, readRun, runner } from "../src/agents.mjs";
 import { homePath, readJsonl, saveConfig, write } from "../src/home.mjs";
-import { cleanStale, cloneOf, startWorker, stopWorker, worktreeOf } from "../src/workers.mjs";
+import {
+	cloneOf,
+	disk,
+	releaseFiles,
+	startWorker,
+	stopWorker,
+	sweep,
+	workDirOf,
+	worktreeOf,
+	wsl,
+} from "../src/workers.mjs";
 
 const FAKE = [
 	process.execPath,
@@ -33,12 +43,23 @@ const config = {
 	channels: [],
 };
 
+// WSL and the disks are the test's: what a run asks of WSL is kept, and every disk has room.
+const wslCalls = [];
+let wslOut = "";
+wsl.run = async (script) => {
+	wslCalls.push(script);
+	return wslOut;
+};
+
 // A scratch home whose clone of o/r already exists, from a local origin with one commit on main.
 beforeEach(() => {
 	const home = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-workers-"));
 	process.env.RUSUBAN_HOME = home;
 	saveConfig(config);
 	launched.length = 0;
+	wslCalls.length = 0;
+	wslOut = "";
+	disk.free = () => 100e9;
 	const src = path.join(home, "src");
 	fs.mkdirSync(src);
 	git(["init", "-q", "-b", "main"], src);
@@ -117,13 +138,108 @@ test("a worker that cannot get its worktree fails, and still reports", async () 
 	assert.equal(readJsonl("projects/demo/reports.jsonl")[0].state, "failed");
 });
 
-test("stale worktrees are cleaned at start, a live run's kept", () => {
-	const { id } = start("fix-7", "o/r#7");
-	fs.mkdirSync(worktreeOf("demo", id), { recursive: true });
+test("a worker gets a work folder in its prompt, env and tools, and it goes with the run", async () => {
+	const { id } = start("fix-8", "o/r#8");
+	const done = await executeRun(id, { config, command: FAKE });
+	const work = workDirOf(id, config);
+	const reported = JSON.parse(done.summary);
+	assert.equal(reported.work, work);
+	assert.equal(reported.args[reported.args.indexOf("--add-dir") + 1], work);
+	const prompt = fs.readFileSync(homePath(`runs/${id}/prompt.md`), "utf8");
+	assert.ok(prompt.includes(`- Your work folder: \`${work}\``));
+	assert.equal(readRun(id).workDir, work);
+	assert.ok(!fs.existsSync(work), "the work folder goes with the run, and what was built in it");
+	// In WSL, its own folder goes too, named by its run id alone.
+	if (process.platform === "win32")
+		assert.deepEqual(wslCalls, [`cd "$HOME/rusuban-work" 2>/dev/null && rm -rf -- ${id}`]);
+});
+
+test("removing a run's folders never follows a junction", async () => {
+	const outside = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-checkout-"));
+	fs.writeFileSync(path.join(outside, "keep.txt"), "a person's file\n");
+	const id = "worker-20261111000000-abcd";
+	const workDir = workDirOf(id, config);
+	const worktree = worktreeOf("demo", id);
+	for (const dir of [workDir, worktree]) {
+		fs.mkdirSync(dir, { recursive: true });
+		fs.symlinkSync(outside, path.join(dir, "node_modules"), "junction");
+	}
+	await releaseFiles({ id, items: ["o/r#1"], workDir, worktree });
+	assert.ok(!fs.existsSync(workDir) && !fs.existsSync(worktree));
+	assert.equal(fs.readFileSync(path.join(outside, "keep.txt"), "utf8"), "a person's file\n");
+});
+
+test("the sweep removes what ended runs left, never a live run's nor another instance's", async () => {
+	const root = homePath("work");
+	const live = start("fix-9", "o/r#9");
+	const ended = start("fix-10", "o/r#10");
+	const crashed = start("fix-11", "o/r#11");
+	const status = (run, over) =>
+		write(`runs/${run.id}/status.json`, { ...readRun(run.id), ...over });
+	const folders = (run) => [path.join(root, run.id), worktreeOf("demo", run.id)];
+	for (const dir of [...folders(live), ...folders(ended), path.join(root, crashed.id)])
+		fs.mkdirSync(dir, { recursive: true });
+	fs.mkdirSync(path.join(root, ended.id, "target"));
+	status(live, { workDir: folders(live)[0], worktree: folders(live)[1] });
+	status(ended, {
+		state: "done",
+		workDir: folders(ended)[0],
+		worktree: folders(ended)[1],
+		wslWork: `rusuban-work/${ended.id}`,
+	});
+	// One that crashed before its status named its work folder.
+	status(crashed, { state: "failed" });
+	// Another instance's run, in a work root they share: unknown here, so kept.
+	const foreign = path.join(root, "worker-20260101000000-beef");
+	fs.mkdirSync(foreign);
 	fs.mkdirSync(worktreeOf("demo", "worker-gone"), { recursive: true });
-	assert.deepEqual(cleanStale("demo", ["o/r"]), ["worker-gone"]);
-	assert.ok(fs.existsSync(worktreeOf("demo", id)));
-	write(`runs/${id}/status.json`, { ...readRun(id), state: "done" });
-	assert.deepEqual(cleanStale("demo", ["o/r"]), [id]);
-	assert.ok(!fs.existsSync(homePath(`worktrees/demo/${id}`)));
+	wslOut = `${ended.id}\nworker-20260101000000-beef\n`;
+	// 2 GB more room once the ended run's build output is gone.
+	disk.free = () => (fs.existsSync(path.join(root, ended.id, "target")) ? 50e9 : 52e9);
+
+	const gone = await sweep(config);
+	assert.ok(folders(live).every((d) => fs.existsSync(d)));
+	assert.ok(fs.existsSync(foreign));
+	for (const dir of [
+		...folders(ended),
+		path.join(root, crashed.id),
+		worktreeOf("demo", "worker-gone"),
+	])
+		assert.ok(!fs.existsSync(dir), dir);
+	assert.deepEqual(wslCalls.slice(1), [
+		`cd "$HOME/rusuban-work" 2>/dev/null && rm -rf -- ${ended.id}`,
+	]);
+	assert.deepEqual([gone.get("demo").folders.length, gone.get("demo").bytes], [5, 2e9]);
+	wslOut = "worker-20260101000000-beef\n";
+	assert.equal((await sweep(config)).size, 0, "nothing left the next time");
+});
+
+test("a worktree of the clone outside every run's folders goes once no worker lives", async () => {
+	const legacy = path.join(process.env.RUSUBAN_HOME, "tmp-legacy", "wt");
+	git(["worktree", "add", "-q", "--detach", legacy, "origin/main"], cloneOf("o/r"));
+	const w = start("fix-12", "o/r#12");
+	await sweep(config);
+	assert.ok(fs.existsSync(legacy), "maybe the live worker's, made before work folders");
+	write(`runs/${w.id}/status.json`, { ...readRun(w.id), state: "done" });
+	await sweep(config);
+	assert.ok(!fs.existsSync(legacy));
+	assert.doesNotMatch(git(["worktree", "list"], cloneOf("o/r")), /tmp-legacy/);
+});
+
+test("short of room, a worker waits with the reason in its status, and starts once there is", () => {
+	disk.free = () => 4.2e9;
+	const { id, state } = start("fix-13", "o/r#13");
+	assert.equal(state, "queued");
+	assert.ok(!launched.includes(id));
+	assert.match(readRun(id).step, /^Waits for room: 4\.2 GB free on .+, 10 GB needed$/);
+	// A drive unplugged has no room either: the queues go on.
+	disk.free = () => {
+		throw new Error("ENOENT: no such drive");
+	};
+	kickQueues();
+	assert.match(readRun(id).step, /^Waits for room: .+ cannot be read$/);
+	disk.free = () => 100e9;
+	kickQueues();
+	assert.ok(launched.includes(id));
+	assert.equal(readRun(id).step, null);
 });

@@ -129,6 +129,8 @@ export function validateConfig(raw) {
 		errors.push(
 			"model must be a Claude Code model id or alias, such as the one `claude --model` takes",
 		);
+	if (c.workRoot != null && !(typeof c.workRoot === "string" && path.isAbsolute(c.workRoot)))
+		errors.push("workRoot must be an absolute path");
 	const projects = c.projects ?? [];
 	if (!Array.isArray(projects)) errors.push("projects must be a list");
 	const ids = new Set();
@@ -202,6 +204,7 @@ export function validateConfig(raw) {
 		permissions: { mode: perm.mode, allow: perm.allow ?? [], deny: perm.deny ?? [] },
 		limits: { maxWorkers: c.limits.maxWorkers, maxRunMinutes: c.limits.maxRunMinutes },
 		...(c.model ? { model: c.model } : {}),
+		...(c.workRoot ? { workRoot: c.workRoot } : {}),
 		projects: projects.map((p) => ({
 			id: p.id,
 			title: p.title || p.id,
