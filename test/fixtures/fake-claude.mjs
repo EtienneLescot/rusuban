@@ -1,6 +1,7 @@
 // Stands in for `claude -p --output-format stream-json` in tests: reads the prompt on stdin, prints
 // the events a real session prints, and reports the arguments it got in its final answer.
-import { delimiter } from "node:path";
+import { writeFileSync } from "node:fs";
+import { delimiter, join } from "node:path";
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 let prompt = "";
@@ -24,6 +25,8 @@ emit({
 	message: { content: [{ type: "tool_use", name: "Bash", input: { command: "gh pr merge 1" } }] },
 });
 await sleep(Number(process.env.FAKE_CLAUDE_MS ?? 0));
+// A worker builds in its work folder, as its prompt says: something there for the run's end to remove.
+if (process.env.RUSUBAN_WORK) writeFileSync(join(process.env.RUSUBAN_WORK, "build.out"), "built\n");
 // FAKE_CLAUDE_LIMIT: the run hits a usage limit, with that text as its result.
 const limit = process.env.FAKE_CLAUDE_LIMIT;
 const searchPath = Object.entries(process.env).find(([k]) => k.toUpperCase() === "PATH")?.[1] ?? "";
@@ -36,6 +39,7 @@ emit({
 			args: process.argv.slice(2),
 			run: process.env.RUSUBAN_RUN,
 			project: process.env.RUSUBAN_PROJECT,
+			work: process.env.RUSUBAN_WORK,
 			cwd: process.cwd(),
 			cli: searchPath.split(delimiter)[0],
 		}),

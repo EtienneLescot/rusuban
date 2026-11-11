@@ -25,7 +25,7 @@ import {
 } from "./home.mjs";
 import { lastProbes, releaseRun } from "./machines.mjs";
 import { flatten, pendingAnswers, refusedOf, todoOf } from "./model.mjs";
-import { prepareWorktree, removeWorktree } from "./workers.mjs";
+import { lowOnRoom, prepareWorktree, ROOM, releaseFiles, WSL_WORK, workDirOf } from "./workers.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/rusuban.mjs", import.meta.url));
 const PROMPTS = new URL("./prompts/", import.meta.url);
@@ -237,6 +237,11 @@ function contextOf({ p, kind, run, config, pending, task }) {
 		}),
 		...machinesContext(config),
 		`- This run: \`${run}\`, a ${kind} run${task ? ` of the task \`${task.id}\` (“${task.title}”), started ${STARTED[task.trigger] ?? task.trigger}` : ""}. The agent CLI is \`rusuban\` (also \`node "${BIN}"\`).`,
+		...(kind === "worker" && run
+			? [
+					`- Your work folder: \`${workDirOf(run, config)}\`${process.platform === "win32" ? `; in WSL, \`~/${WSL_WORK}/${run}\`` : ""}.`,
+				]
+			: []),
 		"",
 		"## Open cards",
 		"",
@@ -554,8 +559,18 @@ const workersAtWork = () =>
 export function startNext(lock) {
 	const q = queued(lock);
 	if (!q.length || holder(lock) || limitedUntil() > Date.now()) return;
-	// A worker past the limit waits in its queue, without a card, for a worker to end (FR-031).
-	if (readRun(q[0])?.kind === "worker" && workersAtWork() >= loadConfig().limits.maxWorkers) return;
+	const next = readRun(q[0]);
+	if (next?.kind === "worker") {
+		const config = loadConfig();
+		// Short of room on a disk, a worker waits in its queue, its status saying why; the queues are
+		// tended every 30 s, so it starts once there is room (FR-103).
+		const low = lowOnRoom(config);
+		if (next.step !== low && (low || next.step?.startsWith(ROOM)))
+			write(statusName(next.id), { ...read(statusName(next.id)), step: low });
+		if (low) return;
+		// A worker past the limit waits in its queue, without a card, for a worker to end (FR-031).
+		if (workersAtWork() >= config.limits.maxWorkers) return;
+	}
 	write(queueName(lock), q.slice(1));
 	runner.launch(q[0]);
 }
@@ -679,7 +694,8 @@ export function stopRun(id, why = "Stopped.") {
 	else killTree(s.pid);
 	const stopped = { ...s, state: "stopped", endedAt: new Date().toISOString(), summary: why };
 	write(statusName(id), stopped);
-	if (s.worktree) removeWorktree(s.worktree, slugOf(s));
+	// Its files go off the daemon's loop: a worker's folders can weigh gigabytes (FR-103).
+	releaseFiles(s).catch(() => {});
 	releaseLock(s.lock, id);
 	startNext(s.lock);
 	if (s.kind === "worker") startWaitingWorker();
@@ -733,7 +749,7 @@ export function kickQueues(now = Date.now()) {
 		const due = r.state === "limited" && Date.parse(r.retryAt) <= now;
 		const lost = r.state === "interrupted" && !r.endedAt; // its end set when it is journaled
 		if (!due && !lost) continue;
-		if (lost && r.worktree) removeWorktree(r.worktree, slugOf(r));
+		if (lost) releaseFiles(r).catch(() => {});
 		const again = due || (r.attempt ?? 1) < 3 ? askAgain(r) : null;
 		const settled = { ...r, ...(again && { retriedBy: again.id }) };
 		if (lost) {
@@ -775,12 +791,13 @@ function shimDir() {
 	return dir;
 }
 
-function runEnv(id, project) {
+function runEnv(id, project, workDir) {
 	const env = {
 		...process.env,
 		RUSUBAN_HOME: homeDir(),
 		RUSUBAN_RUN: id,
 		RUSUBAN_PROJECT: project,
+		...(workDir && { RUSUBAN_WORK: workDir }),
 	};
 	const key = Object.keys(env).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
 	env[key] = `${shimDir()}${path.delimiter}${env[key] ?? ""}`;
@@ -810,6 +827,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 		const status = {
 			...s,
 			state: "running",
+			step: null, // what it waited for, if anything
 			startedAt,
 			pid: process.pid,
 			log: `${startedAt.replace(/[:.]/g, "-")}.log`,
@@ -830,18 +848,19 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 				});
 				requestCoordinator(s.project, "worker");
 			}
-			if (status.worktree) removeWorktree(status.worktree, slugOf(s));
+			// What a worker opened goes with it (FR-103), and its leases too (FR-062), whatever it did
+			// not release itself.
+			const released = s.kind === "worker" ? releaseFiles(status) : Promise.resolve();
 			releaseLock(s.lock, id);
 			startNext(s.lock);
 			if (s.kind === "worker") startWaitingWorker();
-			// A run's leases end with it (FR-062), whatever it did not release itself.
 			resolve(
-				config.machines?.length
-					? releaseRun(config, id).then(
-							() => status,
-							() => status,
-						)
-					: status,
+				released
+					.then(() => (config.machines?.length ? releaseRun(config, id) : null))
+					.then(
+						() => status,
+						() => status,
+					),
 			);
 		};
 		let prompt;
@@ -858,6 +877,10 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 					run: id,
 				});
 				status.cwd = status.worktree;
+				// Its work folder, and in WSL its own: everything else it makes goes there (FR-103).
+				status.workDir = workDirOf(id, config);
+				fs.mkdirSync(status.workDir, { recursive: true });
+				if (process.platform === "win32") status.wslWork = `${WSL_WORK}/${id}`;
 			}
 			status.cwd ??= scratchOf(s.project);
 			fs.mkdirSync(status.cwd, { recursive: true });
@@ -914,12 +937,14 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			logFile: homePath(`runs/${id}/${status.log}`),
 			model: config.model,
 			// A reply resumes its session, in place, or as a fork that leaves the original as it was.
-			args: s.resume
-				? [...args, "--resume", s.resume, ...(s.forkOf ? ["--fork-session"] : [])]
-				: args,
+			args: [
+				...args,
+				...(status.workDir ? ["--add-dir", status.workDir] : []),
+				...(s.resume ? ["--resume", s.resume, ...(s.forkOf ? ["--fork-session"] : [])] : []),
+			],
 			command,
 			maxMinutes: config.limits?.maxRunMinutes,
-			env: runEnv(id, s.project),
+			env: runEnv(id, s.project, status.workDir),
 			onSession: (session, model) => {
 				status.session = session;
 				status.model = model;

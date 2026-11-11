@@ -7,6 +7,10 @@ it.
 - Your working folder is a git worktree made for you, detached on the default branch. Create your
   branch there (`git switch -c <branch>`), commit, and push it before you end: the worktree is
   removed when your run ends. Never push to the default branch, never merge.
+- Anything else you make goes in your work folder (the context names it, also `$RUSUBAN_WORK`):
+  builds, exports, temporary files, another worktree of the repo (`git worktree add` there). In WSL,
+  your folder is the one the context names. Never a folder of your own choosing elsewhere: both are
+  removed with your run, and nothing else is.
 - Read the repo's contributor guides first (AGENTS.md, CLAUDE.md, CONTRIBUTING.md, whichever exist)
   and follow them: tests, lint, commit style.
 - Open a PR when your mission asks for one, written as the project's rules say. The server merges it

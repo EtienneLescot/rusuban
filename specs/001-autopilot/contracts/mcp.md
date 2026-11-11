@@ -40,6 +40,7 @@ Settings. Each one returns `{ state, text }`, where `state` is:
 | `merge_switch { armed }` | `armed` is true |
 | `limits { maxWorkers?, maxRunMinutes? }` | either one goes up |
 | `model { model }` | never: the runs' model widens neither what agents may do nor where data goes (FR-098) |
+| `work_root { path }` | never: each worker's folder there is Rusuban's to make and remove (FR-103) |
 | `owner { login }` | always |
 | `task_write { id, title, project, schedule?, lock?, cwd?, prompt }` | always: its card shows the task, or the diff of its file |
 | `task_remove { id }` | never: the task stops, its file is kept as `<id>.md.removed` |

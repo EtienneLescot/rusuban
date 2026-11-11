@@ -357,6 +357,35 @@ export function seed(busyPid, checkout) {
 		],
 		scratch,
 	);
+	// Orbit's runs: a worker waiting for room on its disk, and a judge that ended (FR-103).
+	const run = (id, fields) =>
+		write(`runs/${id}/status.json`, {
+			id,
+			project: "orbit",
+			session: null,
+			trigger: "coordinator",
+			attempt: 1,
+			createdAt: NOW,
+			...fields,
+		});
+	run("worker-20261111100000-o001", {
+		kind: "worker",
+		title: "fix-32",
+		items: ["orbit/site#32"],
+		lock: "orbit.worker.fix-32",
+		state: "queued",
+		step: "Waits for room: 4.2 GB free on G:\\, 10 GB needed",
+	});
+	run("judge-20261111090000-o002", {
+		kind: "judge",
+		session: "dddddddd-0000-4000-8000-000000000044",
+		items: ["orbit/site#31"],
+		lock: "orbit.judge",
+		state: "done",
+		startedAt: NOW,
+		endedAt: NOW,
+		summary: "Judged #31: it waits on its author.",
+	});
 	// The machines as the daemon probed them: mac held by a run, alice's desktop free, ci offline.
 	const lease = {
 		machine: "mac",

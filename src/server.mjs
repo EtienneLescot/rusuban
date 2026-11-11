@@ -81,7 +81,7 @@ import {
 	tasksState,
 	waiting,
 } from "./tasks.mjs";
-import { cleanStale } from "./workers.mjs";
+import { sweep } from "./workers.mjs";
 
 const WEB = new URL("../web/", import.meta.url);
 const STATIC = {
@@ -365,6 +365,7 @@ const DEPS = {
 	releaseLease,
 	dispatch,
 	sendPing,
+	sweep,
 };
 const since = (iso, ref) => Date.parse(iso) >= Date.parse(ref);
 
@@ -1415,11 +1416,23 @@ export async function startServer({
 				ctx.tailnet = (await tailnetName()) ?? ctx.tailnet;
 			}, 300_000),
 		);
-	for (const p of config.projects)
-		cleanStale(
-			p.id,
-			p.repos.map((r) => r.slug),
-		);
+	// What ended runs left on the disks goes at start, then once a day, journaled with the room it
+	// freed (FR-103).
+	const passSweep = async () => {
+		try {
+			for (const [project, g] of await depsOf(ctx).sweep(ctx.config))
+				journal(project, {
+					kind: "cleanup",
+					item: null,
+					text: `Cleanup: ${g.folders.length} folder${g.folders.length > 1 ? "s" : ""} of ended runs removed, ${(g.bytes / 1e9).toFixed(1)} GB freed.`,
+					by: "server",
+				});
+		} catch (e) {
+			ctx.say(`cleanup: ${firstLine(e)}`);
+		}
+	};
+	passSweep();
+	timers.push(setInterval(passSweep, 86_400_000));
 	if (polling) for (const p of config.projects) startLoop(ctx, p);
 	// The conversations hub (T105): a pass at start, then every 30 s, one at a time, new bytes only.
 	let scanning = false;

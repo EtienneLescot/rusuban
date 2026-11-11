@@ -147,6 +147,13 @@ starts the coordinator, which applies the answer.
 - [x] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
   - `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The runs view is the Agents drawer: runs at work first with a two-tap Stop, the last 30 with their conversation, the one a card points at lit.
 
+- [x] T139 Disks kept clean, development apart from judgment (FR-103), Etienne's request of 2026-11-11: agents left builds and worktrees in `G:\tmp-*` and in WSL's home, and `git worktree remove` emptied the main checkout's `node_modules` three times through a junction
+  - Development (worker) and judgment (judge, coordinator, reply) are tagged in the Agents view and named in Conversations; the coordinator's prompt says it builds nothing.
+  - Each worker gets `<workRoot>/<run>`, and `~/rusuban-work/<run>` in WSL, in its prompt, `RUSUBAN_WORK` and `--add-dir`. `rusuban work-root` and the MCP's `work_root` set the root.
+  - Its worktree, work folder and WSL folder go when it ends or stops, through `fs.rm`, which unlinks a junction without following it, then `git worktree prune`.
+  - A sweep at the daemon's start and every day, journaled per project with the room it freed. A worktree of the clone outside every run's folders goes once no worker or task lives.
+  - 10 GB free on the worktrees' and the work root's disks before a worker starts; short of that it waits, `Waits for room: 4.2 GB free on G:\, 10 GB needed` in its status.
+  - Tests: the work folder in prompt, env and tools, gone at the end; a junction to a person's files survives; the sweep keeps a live run's folders and another instance's; a legacy worktree goes once no worker lives; a worker waits for room, then starts.
 - [x] T138 [US4] A run's Conversation opens the conversation (FR-054), Etienne's request of 2026-11-11: the link of the Agents view opened `/api/runs/<id>/log`, raw JSON
   - On the host it resumes the session in a terminal, as "Open in terminal" does; from a phone, or another machine of the tailnet where no terminal opens, it opens the reader. On a phone the whole line of a recent run does it.
   - Click tests at both widths; the terminal is a stub there, so no window opens during the tests.

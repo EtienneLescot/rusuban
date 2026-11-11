@@ -165,6 +165,13 @@ export const TOOLS = [
 		run: ({ model }) => set({ kind: "model", model }),
 	},
 	{
+		name: "work_root",
+		description:
+			"The folder where each worker gets its work folder (builds, exports, temporary files), removed with it; an absolute path. A change applies from the next worker.",
+		inputSchema: obj({ path: text }, ["path"]),
+		run: ({ path }) => set({ kind: "workRoot", path }),
+	},
+	{
 		name: "owner",
 		description: "Makes another GitHub login the owner; it waits for the current owner.",
 		inputSchema: obj({ login: text }, ["login"]),

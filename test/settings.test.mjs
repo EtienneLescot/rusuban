@@ -56,11 +56,25 @@ test("what widens agents' rights, and what narrows them", () => {
 	assert.equal(widens({ kind: "model", model: "claude-opus-5-5" }), false);
 	for (const bad of ["", "--dangerously-skip-permissions", "opus 5", undefined])
 		assert.throws(() => widens({ kind: "model", model: bad }), /a model is a Claude Code model id/);
+	// Where workers build widens nothing either: their folders there are Rusuban's to make and remove.
+	assert.equal(widens({ kind: "workRoot", path: path.resolve("/rusuban-work") }), false);
+	for (const bad of ["", "work", undefined])
+		assert.throws(
+			() => widens({ kind: "workRoot", path: bad }),
+			/the work root is an absolute path/,
+		);
 	assert.throws(
 		() => widens({ kind: "project.bypass", project: "nope", on: true }),
 		/no project "nope"/,
 	);
 	assert.throws(() => widens({ kind: "owner.change" }), /unknown setting/);
+});
+
+test("the work root applies at once, and stays in config.json", () => {
+	const root = path.resolve("/rusuban-work");
+	assert.equal(changeSetting({ kind: "workRoot", path: root }, as).state, "applied");
+	assert.equal(loadConfig().workRoot, root);
+	assert.equal(changeSetting({ kind: "workRoot", path: root }, as).state, "unchanged");
 });
 
 test("narrowing applies at once; widening waits as a card; a terminal's typed confirmation applies it", () => {
