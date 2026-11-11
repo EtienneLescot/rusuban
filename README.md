@@ -1,7 +1,7 @@
 # Rusuban
 
-Rusuban minds your project while you're away. It follows the rules you write in your repo, keeps every
-Claude conversation of the project in one place, and calls you only when your rules say so.
+Rusuban minds your project while you're away. It follows the rules you write in your repo, keeps the
+Claude conversations about the project in one place, and calls you only when your rules say so.
 
 Rusuban (留守番) is the Japanese word for whoever minds the house while you are out.
 
@@ -18,8 +18,9 @@ Rusuban (留守番) is the Japanese word for whoever minds the house while you a
 - **Keeps your rules growing**: a question on how the agents work, a lock to lift or a setting to
   allow waits apart, under Rules & settings. When several cards ask the same, it proposes the rule
   that would answer them; a PR that changes your rules is yours to merge.
-- **Keeps every Claude conversation** held in your project's folders, linked to the issue or PR it is
-  about. You read and answer them from the dashboard, on your desktop or your phone.
+- **Keeps the Claude conversations about your issues and PRs**, held in your project's folders, each
+  linked to the item it is about, with its own agents' runs. You read and answer them from the
+  dashboard, on your desktop or your phone.
 - **Runs recurring tasks** written as text, in a project of their own when they concern no repo.
 - **Reserves your test machines** over SSH, one agent at a time. Your own desktop only after your yes.
 - **Is set up from Claude**: its MCP server changes any setting, and whatever widens what agents may do

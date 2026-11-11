@@ -19,7 +19,8 @@ The first release.
     cards ask the same, the agents propose the rule that would answer them.
   - Open cards are judged again once when an update changes what deserves one.
 - **Pings** to ntfy, Slack, Discord, Teams and e-mail.
-- **Every Claude conversation** of a project, linked to its items, read and answered in the dashboard.
+- **The Claude conversations about a project's items**, linked to them, and its agents' runs, read and
+  answered in the dashboard.
 - **Projects**: each project's page shows its own items, tasks, runs and conversations; a project may
   have no repo, for tasks about none.
 - **Recurring tasks** written as text.
