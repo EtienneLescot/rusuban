@@ -123,8 +123,11 @@ test("Rules & settings: a tab of the inbox for how the agents follow the project
 	// The lock to lift and the rule proposal, each tagged; then the PR that changes .rusuban/.
 	const items = page.locator("button.ibx-item");
 	await expect(items).toHaveCount(2);
-	await expect(items.locator(".tag")).toHaveText(["Rule proposal", "Lock"]);
-	await expect(items.first().locator(".ibx-meta")).toContainText("2 cards");
+	// Both were seeded in the same instant on a fast machine: their order is not the test's.
+	expect((await items.locator(".tag").allInnerTexts()).sort()).toEqual(["Lock", "Rule proposal"]);
+	const proposal = page.locator(`.ibx-item[data-card="${app.cards.rule}"]`);
+	await expect(proposal.locator(".ibx-meta")).toContainText("Rule proposal");
+	await expect(proposal.locator(".ibx-meta")).toContainText("2 cards");
 	const rulesPr = page.locator("a.ibx-item");
 	await expect(rulesPr).toContainText("A rule for theme requests");
 	await expect(rulesPr).toContainText("CI green");
