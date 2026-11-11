@@ -2,6 +2,7 @@
 // project read or written by another: judgment, journal, rules, locks, answers. A real daemon reads a
 // fake GitHub and starts recorders instead of agents; the owner's `project` commands change its
 // config while it runs.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import { execFile, spawnSync } from "node:child_process";
 import fs from "node:fs";

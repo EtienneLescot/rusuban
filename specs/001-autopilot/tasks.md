@@ -147,6 +147,9 @@ starts the coordinator, which applies the answer.
 - [x] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
   - `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The runs view is the Agents drawer: runs at work first with a two-tap Stop, the last 30 with their conversation, the one a card points at lit.
 
+- [x] T140 Tests that leave nothing behind, Etienne's request of 2026-11-11: the suite had left 14,767 `rusuban-*` folders in the temp folder since 2026-11-07
+  - Every test process takes its temporary folders from one root of its own, `test/tmp-root.mjs`, imported first by every test file and the click tests' fixture. It goes when the process exits, its tests failed or not, with what the processes it started wrote there; a root that cannot go fails the file. Each click test's home also goes with it.
+  - Guards: a test file that fails on purpose, and a process it starts, leave nothing; every test file imports the root first. A full run of the unit and click tests leaves nothing in the temp folder.
 - [x] T139 Disks kept clean, development apart from judgment (FR-103), Etienne's request of 2026-11-11: agents left builds and worktrees in `G:\tmp-*` and in WSL's home, and `git worktree remove` emptied the main checkout's `node_modules` three times through a junction
   - Development (worker) and judgment (judge, coordinator, reply) are tagged in the Agents view and named in Conversations; the coordinator's prompt says it builds nothing.
   - Each worker gets `<workRoot>/<run>`, and `~/rusuban-work/<run>` in WSL, in its prompt, `RUSUBAN_WORK` and `--add-dir`. `rusuban work-root` and the MCP's `work_root` set the root.

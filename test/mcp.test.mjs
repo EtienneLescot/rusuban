@@ -1,5 +1,6 @@
 // Rusuban's MCP server (T122, T123), spoken to on stdio as Claude Code does: each setting through the
 // settings module, what widens waits for the owner, no tool answers a card, nothing inside a run.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import fs from "node:fs";

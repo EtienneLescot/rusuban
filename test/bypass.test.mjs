@@ -1,6 +1,7 @@
 // The approval bypass (FR-029, T115) and refused merges (T116): `--admin` only on a merge the server
 // makes anyway, only once the base branch's rules, read from GitHub, are met; the owner's commands
 // closed to agents (T117). GitHub is replaced by recorders; the guard and the cycle are the real ones.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";

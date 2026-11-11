@@ -1,6 +1,7 @@
 // Decision cards (T036, T039): their derived state, the answers they take once, the inbox; and the
 // routes that record answers and requests, list and stop runs (T037, T101), on a real server whose
 // agent starters are recorders.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";

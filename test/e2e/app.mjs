@@ -3,6 +3,7 @@
 // without a repo, with a task of its own that ran this morning; and a task that names no project.
 // Acme also has what waits in Rules & settings: a lock to lift, a rule proposal, a PR that changes
 // .rusuban/. It reads no GitHub; a run goes through the real runner with fake-claude (run.mjs).
+import "../tmp-root.mjs";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -417,7 +418,8 @@ export function seed(busyPid, checkout) {
 export const test = base.extend({
 	app: [
 		async ({ page }, use) => {
-			process.env.RUSUBAN_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-e2e-"));
+			const home = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-e2e-"));
+			process.env.RUSUBAN_HOME = home;
 			process.env.FAKE_CLAUDE_MS = "3000"; // a run started from the page stays at work a while
 			const busy = spawn(process.execPath, ["-e", "setTimeout(() => {}, 600000)"], {
 				stdio: "ignore",
@@ -450,6 +452,8 @@ export const test = base.extend({
 			await use(seeded);
 			await srv.close();
 			for (const c of children) c.kill();
+			// Its home goes with it; a fake claude a killed run started may hold it a few seconds more.
+			await fs.promises.rm(home, { recursive: true, force: true, maxRetries: 10 });
 		},
 		{ auto: true },
 	],

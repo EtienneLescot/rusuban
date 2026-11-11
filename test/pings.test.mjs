@@ -2,6 +2,7 @@
 // dispatch by urgency, digest time and quiet hours; a failed send tried again, then journaled.
 // Nothing leaves the machine: the dispatch sends to a recorder, the sender to a local server and to
 // nodemailer's JSON transport.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import http from "node:http";
 import { test } from "node:test";
