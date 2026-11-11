@@ -1143,6 +1143,19 @@ export function settledOf(key, j, answers = [], now = Date.now()) {
 	};
 }
 
+// The next time the model changes by the clock alone, after `now`: a revisit falls due (`overdue`),
+// a settled card goes (`settled`). Until then the model built from the same files is the same.
+export function clockChangesAt(judgment, now = Date.now()) {
+	let at = Number.POSITIVE_INFINITY;
+	for (const j of Object.values(judgment.items ?? {})) {
+		const revisit = Date.parse(j.revisitAt);
+		if (ROLES.includes(j.owner) && revisit > now) at = Math.min(at, revisit);
+		const goes = Date.parse(j.decision?.resolvedAt) + 48 * 3600e3;
+		if (goes > now) at = Math.min(at, goes);
+	}
+	return at;
+}
+
 // ── The whole model the page shows ────────────────────────────────────────────────────────────
 export function buildModel({
 	live: read,
@@ -1159,18 +1172,10 @@ export function buildModel({
 	const live = { ...read, prs: read.prs.filter((p) => !isRulesPr(p)) };
 	const items = judgment.items ?? {};
 	const edges = edgesOf(live, items);
-	// Agents at work light their items: a run's own items, then the items its recent lines cite.
-	const working = new Map();
-	for (const r of runs) {
-		if (r.state !== "running") continue;
-		for (const k of [...(r.items ?? []), ...(r.focus ?? [])])
-			if (!working.has(k)) working.set(k, r);
-	}
 	const node = (type, it, j) => {
 		const id = keyOf(it);
 		const open = j?.decision && !j.decision.resolvedAt ? j.decision : null;
 		const answer = open ? (answersFor(id, open, answers).at(-1) ?? null) : null;
-		const w = working.get(id);
 		return {
 			id,
 			repo: it.repo,
@@ -1192,7 +1197,7 @@ export function buildModel({
 			overdue: ROLES.includes(j?.owner) && !(Date.parse(j.revisitAt) > now),
 			decision: open ? { ...open, answer } : null,
 			settled: settledOf(id, j, answers, now),
-			activity: w ? { name: w.title || w.kind, step: w.step ?? "", since: w.startedAt } : null,
+			activity: null,
 			observeOnly: rules[it.repo]?.observeOnly !== false,
 		};
 	};
@@ -1246,7 +1251,7 @@ export function buildModel({
 	}));
 	const counts = { all: nodes.length, mine: 0, agent: 0, others: 0 };
 	for (const n of nodes) counts[groupOf(n, me)]++;
-	return {
+	const model = {
 		nodes,
 		edges,
 		frames,
@@ -1261,4 +1266,24 @@ export function buildModel({
 		counts,
 		armed,
 	};
+	return withActivity(model, runs);
+}
+
+// Agents at work light their items: a run's own items, then the items its recent lines cite, each
+// item by the first run found. Kept apart from the model, so a run's every step neither builds nor
+// sends the whole model again: the page lays it over the nodes.
+export function activityOf(runs) {
+	const at = new Map();
+	for (const r of runs) {
+		if (r.state !== "running") continue;
+		for (const k of [...(r.items ?? []), ...(r.focus ?? [])])
+			if (!at.has(k))
+				at.set(k, { name: r.title || r.kind, step: r.step ?? "", since: r.startedAt });
+	}
+	return Object.fromEntries(at);
+}
+export function withActivity(model, runs) {
+	const at = activityOf(runs);
+	if (!Object.keys(at).length) return model;
+	return { ...model, nodes: model.nodes.map((n) => (at[n.id] ? { ...n, activity: at[n.id] } : n)) };
 }

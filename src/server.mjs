@@ -20,6 +20,7 @@ import {
 	requestCoordinator,
 	requestRun,
 	stopRun,
+	withRunsListed,
 } from "./agents.mjs";
 import { branchRules, headChecks, mergePr, poll, readProject } from "./github.mjs";
 import {
@@ -27,9 +28,12 @@ import {
 	homePath,
 	journal,
 	loadConfig,
+	memo,
 	read,
 	readJournal,
 	readJsonl,
+	readJsonlShared,
+	readShared,
 	sealMatches,
 	validateConfig,
 	write,
@@ -42,15 +46,17 @@ import {
 	lastProbes,
 	probeMachines,
 	pruneAsks,
-	queueOf,
+	QUEUE,
 	releaseLease,
 	saveProbes,
 	tendLeases,
 } from "./machines.mjs";
 import {
+	activityOf,
 	buildModel,
 	bypassStops,
 	checkAnswer,
+	clockChangesAt,
 	flatten,
 	gatesOf,
 	inboxOf,
@@ -65,13 +71,7 @@ import {
 } from "./model.mjs";
 import { dashboardUrl, dispatch, sendPing } from "./pings.mjs";
 import { loadRules, rulesChange } from "./rules.mjs";
-import {
-	changeSetting,
-	confirmRequest,
-	flagOutsideEdit,
-	settingsCards,
-	settingsLog,
-} from "./settings.mjs";
+import { changeSetting, confirmRequest, flagOutsideEdit, settingsCards } from "./settings.mjs";
 import {
 	busyRun,
 	dueTasks,
@@ -94,6 +94,18 @@ const { version } = JSON.parse(
 	fs.readFileSync(new URL("../package.json", import.meta.url), "utf8"),
 );
 const hash = (v) => crypto.createHash("sha1").update(v).digest("hex");
+// A value's JSON and its hash, made once per value: an unchanged state is the same object
+// (`memo`), so neither a page update nor `GET /api/state` serializes it again.
+const bodies = new WeakMap();
+function bodyOf(value) {
+	let b = bodies.get(value);
+	if (!b) {
+		const body = JSON.stringify(value);
+		b = { value, body, h: hash(body) };
+		bodies.set(value, b);
+	}
+	return b;
+}
 const firstLine = (e) =>
 	String(e?.stderr || e?.message || e)
 		.trim()
@@ -177,6 +189,24 @@ function readBody(req) {
 }
 
 // ── What the page shows ───────────────────────────────────────────────────────────────────────
+// The end of a file, read alone: a long run's log is megabytes.
+function tailOf(file, bytes) {
+	const fd = fs.openSync(file, "r");
+	try {
+		const { size } = fs.fstatSync(fd);
+		const buf = Buffer.alloc(Math.min(size, bytes));
+		fs.readSync(fd, buf, 0, buf.length, size - buf.length);
+		return buf.toString("utf8");
+	} finally {
+		fs.closeSync(fd);
+	}
+}
+// A project's files as the page reads them when they are missing: the same object every time, so
+// what is computed from them is computed once.
+const NO_LIVE = Object.freeze({ repos: Object.freeze({}) });
+const NO_JUDGMENT = Object.freeze({ items: Object.freeze({}) });
+const NO_RULES = Object.freeze({});
+
 // What a running run works on right now: the open items its log lines of the last two minutes
 // cite (`gh pr view 1374`, `rusuban show #1374`, its sentences), six at most, latest first.
 function focusOf(run, live) {
@@ -185,7 +215,7 @@ function focusOf(run, live) {
 	for (const i of [...live.prs, ...live.issues]) byN.set(i.n, [...(byN.get(i.n) ?? []), keyOf(i)]);
 	let text;
 	try {
-		text = fs.readFileSync(homePath(`runs/${run.id}/${run.log}`), "utf8").slice(-8000);
+		text = tailOf(homePath(`runs/${run.id}/${run.log}`), 8000);
 	} catch {
 		return [];
 	}
@@ -204,8 +234,12 @@ function focusOf(run, live) {
 	return found.slice(0, 6);
 }
 
-export const isArmed = () => read("automerge.json", { armed: false }).armed === true;
+export const isArmed = () => readShared("automerge.json", NO_RULES).armed === true;
 
+// A project's state, built again only from what changed since the last time (SC-008): its files are
+// read once per change, its model built again when one of them changes or each minute, for what
+// depends on the time (a revisit, a card settled a while ago); the runs at work are laid over it.
+// The same state is the same object, so a page update sends nothing and serializes nothing.
 export function stateOf(ctx, projectId) {
 	const { config } = ctx;
 	const me = config.owner.login;
@@ -232,13 +266,105 @@ export function stateOf(ctx, projectId) {
 			journal: [],
 		};
 	const dir = `projects/${p.id}`;
-	const liveFile = read(`${dir}/live.json`, { repos: {} });
-	const live = flatten(liveFile);
-	const rules = read(`${dir}/rules.json`, {});
+	const liveFile = readShared(`${dir}/live.json`, NO_LIVE);
+	const live = memo(`live ${p.id}`, [liveFile], () => flatten(liveFile));
+	const rules = readShared(`${dir}/rules.json`, NO_RULES);
+	const judgment = readShared(`${dir}/judgment.json`, NO_JUDGMENT);
+	const answers = readJsonlShared(`${dir}/answers.jsonl`);
 	const journalAll = readJournal(p.id);
 	const runs = listRuns(p.id)
 		.slice(0, 30)
 		.map((r) => ({ ...r, focus: focusOf(r, live) }));
+	const shownRuns = runs.map(
+		({
+			id,
+			kind,
+			title,
+			items,
+			state,
+			step,
+			startedAt,
+			endedAt,
+			summary,
+			session,
+			createdAt,
+			retryAt,
+		}) => ({
+			id,
+			kind,
+			title,
+			items,
+			state,
+			step,
+			startedAt,
+			endedAt,
+			summary,
+			session,
+			createdAt,
+			retryAt: retryAt ?? null,
+		}),
+	);
+	const runsKey = JSON.stringify([shownRuns, runs.map((r) => r.focus)]);
+	const built = memo(
+		`model ${p.id}`,
+		[live, judgment, rules, answers, journalAll, armed, me, clockOf(p.id, judgment)],
+		() => buildModel({ live, judgment, rules, answers, journal: journalAll, runs: [], armed, me }),
+	);
+	const refreshing = ctx.loops.get(p.id)?.isRunning() ?? false;
+	const loopError = ctx.errors.get(p.id);
+	return memo(
+		`state ${p.id}`,
+		[ctx, config, built, liveFile, rules, journalAll, runsKey, refreshing, loopError],
+		() => {
+			const s = projectState({
+				ctx,
+				p,
+				base,
+				liveFile,
+				rules,
+				journalAll,
+				model: built,
+				activity: activityOf(runs),
+				shownRuns,
+				refreshing,
+			});
+			bodies.set(s, stateBody(s));
+			return s;
+		},
+	);
+}
+
+// A project's model changes by the clock only at the times its judgment names: a new epoch then.
+const clocks = new Map(); // project → { judgment, next, epoch }
+function clockOf(project, judgment) {
+	const now = Date.now();
+	let c = clocks.get(project);
+	if (!c || c.judgment !== judgment || now >= c.next) {
+		c = { judgment, next: clockChangesAt(judgment, now), epoch: now };
+		clocks.set(project, c);
+	}
+	return c.epoch;
+}
+
+// A project's state as JSON, its model, by far its biggest part, serialized once per model.
+function stateBody(s) {
+	const model = bodyOf(s.model);
+	const rest = JSON.stringify({ ...s, model: undefined });
+	return { value: s, body: `${rest.slice(0, -1)},"model":${model.body}}`, h: hash(rest + model.h) };
+}
+
+function projectState({
+	ctx,
+	p,
+	base,
+	liveFile,
+	rules,
+	journalAll,
+	model,
+	activity,
+	shownRuns,
+	refreshing,
+}) {
 	const repos = p.repos.map((r) => r.slug);
 	const checked = repos.map((s) => liveFile.repos?.[s]?.checkedAt);
 	const branches = new Set(repos.map((s) => liveFile.repos?.[s]?.defaultBranch).filter(Boolean));
@@ -257,22 +383,15 @@ export function stateOf(ctx, projectId) {
 			observeOnly: repos.length > 0 && repos.every((s) => rules[s]?.observeOnly !== false),
 			defaultBranch: branches.size === 1 ? [...branches][0] : null,
 		},
-		model: buildModel({
-			live,
-			judgment: read(`${dir}/judgment.json`, { items: {} }),
-			rules,
-			answers: readJsonl(`${dir}/answers.jsonl`),
-			journal: journalAll,
-			runs,
-			armed,
-			me,
-		}),
+		model,
+		// The items agents work on now, laid over the model's nodes by the page.
+		activity,
 		// Nothing is read on GitHub for a project without a repo.
 		freshness: !repos.length
 			? null
 			: {
 					checkedAt: checked.every(Boolean) ? checked.sort()[0] : null,
-					refreshing: ctx.loops.get(p.id)?.isRunning() ?? false,
+					refreshing,
 					intervalMs: p.refreshSec * 1000,
 					error: errors[0] ?? null,
 					repos: Object.fromEntries(
@@ -307,35 +426,7 @@ export function stateOf(ctx, projectId) {
 				];
 			}),
 		),
-		runs: runs.map(
-			({
-				id,
-				kind,
-				title,
-				items,
-				state,
-				step,
-				startedAt,
-				endedAt,
-				summary,
-				session,
-				createdAt,
-				retryAt,
-			}) => ({
-				id,
-				kind,
-				title,
-				items,
-				state,
-				step,
-				startedAt,
-				endedAt,
-				summary,
-				session,
-				createdAt,
-				retryAt: retryAt ?? null,
-			}),
-		),
+		runs: shownRuns,
 		journal: journalAll.slice(-40).reverse(),
 	};
 }
@@ -764,8 +855,20 @@ function stopLoop(ctx, id) {
 // settings module journals each change with its origin. A config that does not load leaves the
 // running one.
 export function reloadConfig(ctx) {
-	const text = textOf(homePath("config.json"));
-	if (text === null || text === ctx.configText) return;
+	// Read again only once its time or size changed, or while it is young enough to hide a change.
+	const file = homePath("config.json");
+	let st;
+	try {
+		st = fs.statSync(file);
+	} catch {
+		return;
+	}
+	const stamp = `${st.mtimeMs} ${st.size}`;
+	if (stamp === ctx.configStamp && Date.now() - st.mtimeMs > 2000) return;
+	const text = textOf(file);
+	if (text === null) return;
+	ctx.configStamp = stamp;
+	if (text === ctx.configText) return;
 	ctx.configText = text;
 	let next;
 	try {
@@ -798,40 +901,55 @@ function send(res, status, type, body) {
 	res.end(body);
 }
 const json = (res, status, v) =>
-	send(res, status, "application/json; charset=utf-8", JSON.stringify(v));
+	send(
+		res,
+		status,
+		"application/json; charset=utf-8",
+		v && typeof v === "object" ? bodyOf(v).body : JSON.stringify(v),
+	);
 
 // ── Cards, requests and runs (T037, T101) ─────────────────────────────────────────────────────
 // The inbox: every project's cards waiting for their person, the settings waiting for the owner's
 // confirmation, and what was flagged for the owner in the last 7 days (merges and pushes the server
 // did not make, rules changes, refusals, settings that widened).
+// Built again only when one of the files it comes from changes, or each hour for the week's window.
 export function inboxState(ctx) {
-	const week = Date.now() - 7 * 86400e3;
 	const projects = ctx.config.projects.map((p) => {
 		const dir = `projects/${p.id}`;
+		const liveFile = readShared(`${dir}/live.json`, NO_LIVE);
 		return {
 			id: p.id,
 			title: p.title,
-			live: flatten(read(`${dir}/live.json`, {})),
-			judgment: read(`${dir}/judgment.json`, { items: {} }),
-			answers: readJsonl(`${dir}/answers.jsonl`),
+			live: memo(`live ${p.id}`, [liveFile], () => flatten(liveFile)),
+			judgment: readShared(`${dir}/judgment.json`, NO_JUDGMENT),
+			answers: readJsonlShared(`${dir}/answers.jsonl`),
+			journal: readJsonlShared(`${dir}/journal.jsonl`),
 		};
 	});
-	const flags = ctx.config.projects
+	const log = readJsonlShared("settings.jsonl");
+	// The settings that wait for the owner (FR-092) and the desktops a run asks for (T070) are cards
+	// like the others, newest first with them.
+	const asked = [...settingsCards(ctx.config), ...desktopCards(ctx.config)];
+	const hour = Math.floor(Date.now() / 3600e3);
+	const deps = [ctx.config, log, JSON.stringify(asked), hour];
+	for (const p of projects) deps.push(p.live, p.judgment, p.answers, p.journal);
+	return memo("inbox", deps, () => inboxOfAll(projects, log, asked));
+}
+
+function inboxOfAll(projects, log, asked) {
+	const week = Date.now() - 7 * 86400e3;
+	const flags = projects
 		.flatMap((p) =>
-			readJsonl(`projects/${p.id}/journal.jsonl`)
+			p.journal
 				.filter((e) => e.notify && Date.parse(e.at) > week)
 				.map((e) => ({ project: p.id, ...e })),
 		)
-		.concat(settingsLog().filter((e) => e.notify && Date.parse(e.at) > week))
+		.concat(log.filter((e) => e.notify && Date.parse(e.at) > week))
 		.sort((a, b) => String(b.at).localeCompare(String(a.at)))
 		.slice(0, 50);
-	// The settings that wait for the owner (FR-092) and the desktops a run asks for (T070) are cards
-	// like the others, newest first with them.
-	const cards = [
-		...inboxOf(projects),
-		...settingsCards(ctx.config),
-		...desktopCards(ctx.config),
-	].sort((a, b) => String(b.card.createdAt).localeCompare(String(a.card.createdAt)));
+	const cards = [...inboxOf(projects), ...asked].sort((a, b) =>
+		String(b.card.createdAt).localeCompare(String(a.card.createdAt)),
+	);
 	// The PRs that change .rusuban/ wait in Rules & settings for a person to merge them (FR-099).
 	const rulesPrs = projects.flatMap((p) =>
 		p.live.prs.filter(isRulesPr).map((pr) => ({
@@ -880,7 +998,7 @@ export const runsOf = (project = null) =>
 export function machinesState(ctx) {
 	const last = ctx.machines ?? lastProbes();
 	const probes = new Map((last?.probes ?? []).map((p) => [p.name, p]));
-	const queue = queueOf();
+	const queue = readShared(QUEUE, NO_RULES);
 	return {
 		checkedAt: last?.at ?? null,
 		error: ctx.machinesError ?? null,
@@ -1029,15 +1147,30 @@ const itemOf = (p, ref) => {
 
 // ── Conversations (T058 to T060) ──────────────────────────────────────────────────────────────
 // The list, filtered by project, item, origin or words of its title, and the index's age.
-const conversationsOf = (ctx, q = new URLSearchParams()) => ({
-	...hubState(ctx.hubIndex, ctx.config, {
+// A project's whole list, which every page update asks for, is built again only when the index, a
+// run or a project's items change.
+function conversationsOf(ctx, q = new URLSearchParams()) {
+	const filters = {
 		project: q.get("project"),
 		item: q.get("item"),
 		origin: q.get("origin"),
 		q: q.get("q") ?? "",
-	}),
-	error: ctx.hubError ?? null,
-});
+	};
+	const list = () => ({
+		...hubState(ctx.hubIndex, ctx.config, filters),
+		error: ctx.hubError ?? null,
+	});
+	if (filters.item || filters.origin || filters.q) return list();
+	const runs = listRuns()
+		.map((r) => `${r.id} ${r.kind} ${r.state} ${r.title ?? ""} ${r.forkOf ?? ""}`)
+		.join("\n");
+	const lives = ctx.config.projects.map((p) => readShared(`projects/${p.id}/live.json`, NO_LIVE));
+	return memo(
+		`hub ${filters.project ?? ""}`,
+		[ctx.hubIndex, ctx.config, ctx.hubError, runs, ...lives],
+		list,
+	);
+}
 
 // An answer from the dashboard starts a reply run (journaled as the owner's); "Open in terminal" opens
 // a window of this machine, so it is refused from anywhere but this machine.
@@ -1252,7 +1385,7 @@ async function handle(ctx, req, res) {
 		}
 		if (req.method === "GET" && url.pathname === "/api/state") {
 			const t = performance.now();
-			const state = stateOf(ctx, url.searchParams.get("project"));
+			const state = withRunsListed(() => stateOf(ctx, url.searchParams.get("project")));
 			slow(ctx, "a project's state", t);
 			return json(res, 200, state);
 		}
@@ -1341,14 +1474,10 @@ export async function startServer({
 	// Each client gets its project's state, runs, tasks and conversations, the one its state names,
 	// and the inbox of all projects, each when it changes. A broadcast computes each of them once for
 	// every page that shows it (`memo`): the pages of one project share them.
-	ctx.push = (client, force = false, memo = new Map()) => {
+	ctx.push = (client, force = false, seen = new Map()) => {
 		const once = (key, compute) => {
-			if (!memo.has(key)) {
-				const value = compute();
-				const body = JSON.stringify(value);
-				memo.set(key, { value, body, h: hash(body) });
-			}
-			return memo.get(key);
+			if (!seen.has(key)) seen.set(key, bodyOf(compute()));
+			return seen.get(key);
 		};
 		const send = (event, { body, h }, key) => {
 			if (h === client[key] && !force) return;
@@ -1375,16 +1504,18 @@ export async function startServer({
 	// never the daemon nor a write that already happened: said once per distinct error.
 	let lastError = null;
 	ctx.broadcast = (force = false) => {
-		const memo = new Map();
+		const seen = new Map();
 		const t = performance.now();
-		for (const c of ctx.clients)
-			try {
-				ctx.push(c, force, memo);
-			} catch (e) {
-				if (firstLine(e) === lastError) continue;
-				lastError = firstLine(e);
-				ctx.say(`page update failed: ${lastError}`);
-			}
+		withRunsListed(() => {
+			for (const c of ctx.clients)
+				try {
+					ctx.push(c, force, seen);
+				} catch (e) {
+					if (firstLine(e) === lastError) continue;
+					lastError = firstLine(e);
+					ctx.say(`page update failed: ${lastError}`);
+				}
+		});
 		slow(ctx, `the update of ${ctx.clients.size} page(s)`, t);
 	};
 	const server = http.createServer((req, res) => handle(ctx, req, res));
@@ -1440,7 +1571,7 @@ export async function startServer({
 		if (scanning) return;
 		scanning = true;
 		try {
-			ctx.hubIndex = await depsOf(ctx).scanHub({ config: ctx.config });
+			ctx.hubIndex = await depsOf(ctx).scanHub({ config: ctx.config, last: ctx.hubIndex });
 			ctx.hubError = null;
 		} catch (e) {
 			ctx.hubError = firstLine(e);

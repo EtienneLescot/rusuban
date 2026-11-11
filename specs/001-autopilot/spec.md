@@ -525,7 +525,8 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
 - **SC-007**: Enrolling a new SSH machine takes under 5 minutes.
 - **SC-008**: The dashboard's state answers within 200 ms at the 95th percentile on an instance of
   OpenScreen's size (some 80 open items, 1,100 conversations, 76 runs), during a GitHub read and while
-  a judge takes up 52 cards, however many pages are open (Etienne's request of 2026-11-11).
+  a judge takes up 52 cards, however many pages are open, and while builds keep every core and the
+  disk busy (Etienne's requests of 2026-11-11).
 
 ## Assumptions
 

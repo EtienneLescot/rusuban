@@ -491,8 +491,7 @@ export const queued = (lock) => read(queueName(lock), []);
 const statuses = new Map(); // status file → { key, status }
 const settled = (s) =>
 	!!s.retriedBy || (!!s.endedAt && !["queued", "running", "limited"].includes(s.state));
-function statusOf(id, listed) {
-	const file = homePath(statusName(id));
+function statusOf(id, listed, file = homePath(statusName(id))) {
 	const hit = statuses.get(file);
 	if (listed && hit?.status && settled(hit.status)) return hit.status;
 	let st;
@@ -517,15 +516,33 @@ const runOf = (status) => {
 };
 export const readRun = (id) => runOf(statusOf(id, false));
 
-export function listRuns(project = null) {
+// Every run's status, newest first.
+function scanRuns() {
+	const dir = homePath("runs");
 	let ids = [];
 	try {
-		ids = fs.readdirSync(homePath("runs")).filter((d) => d !== "locks" && !d.endsWith(".json"));
+		ids = fs.readdirSync(dir).filter((d) => d !== "locks" && !d.endsWith(".json"));
 	} catch {}
 	return ids
-		.map((id) => runOf(statusOf(id, true)))
-		.filter((r) => r && (!project || r.project === project))
+		.map((id) => statusOf(id, true, `${dir}${path.sep}${id}${path.sep}status.json`))
+		.filter(Boolean)
 		.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
+}
+// A page update asks for the runs several times (its project's state, the Agents view, the tasks,
+// the conversations): one listing serves it all, taken as it starts and dropped as it ends. Nothing
+// else runs meanwhile, the daemon having one loop.
+let listed = null;
+export function withRunsListed(fn) {
+	if (listed) return fn();
+	listed = scanRuns();
+	try {
+		return fn();
+	} finally {
+		listed = null;
+	}
+}
+export function listRuns(project = null) {
+	return (listed ?? scanRuns()).filter((s) => !project || s.project === project).map(runOf);
 }
 
 // A run of this kind for the project that waits or works.

@@ -371,6 +371,9 @@ test("development and judgment runs are told apart; a worker short of room says 
 	);
 	const judge = page.locator("#agents-view .ag-line").filter({ hasText: "Judged #31" });
 	await expect(judge.locator(".ag-role")).toHaveText("Judgment");
+	// The worker at work on #31 shows on its item: its activity comes apart from the model.
+	await goTo(page, "kanban", isMobile);
+	await expect(page.locator("#kanban .card.working")).toContainText("New logo");
 	// Nothing wider than the page, at a phone's width too.
 	expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
 });

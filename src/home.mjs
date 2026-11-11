@@ -41,13 +41,7 @@ export function write(name, value, { mode } = {}) {
 	replace(tmp, target);
 }
 
-export function readJsonl(name) {
-	let text;
-	try {
-		text = fs.readFileSync(homePath(name), "utf8");
-	} catch {
-		return [];
-	}
+function parseJsonl(text) {
 	const out = [];
 	for (const line of text.split("\n")) {
 		if (!line.trim()) continue;
@@ -56,6 +50,77 @@ export function readJsonl(name) {
 		} catch {} // a line cut short by a crash is skipped, not the whole file
 	}
 	return out;
+}
+
+export function readJsonl(name) {
+	let text;
+	try {
+		text = fs.readFileSync(homePath(name), "utf8");
+	} catch {
+		return [];
+	}
+	return parseJsonl(text);
+}
+
+// ── What the page reads every two seconds (SC-008) ────────────────────────────────────────────
+// A file the page shows is parsed once per change, and its value shared by every reader: frozen, so
+// none changes it for the others. Its time and size of last write say whether it changed, once it
+// is two seconds old: a file written twice within the clock's step may keep both, so a younger one
+// is read again, and parsed only if its text differs.
+const freeze = (v) => {
+	if (v && typeof v === "object" && !Object.isFrozen(v)) {
+		Object.freeze(v);
+		for (const x of Object.values(v)) freeze(x);
+	}
+	return v;
+};
+const shared = new Map(); // file → { stamp, settled, text, value }
+function sharedOf(name, parse, fallback) {
+	const file = homePath(name);
+	let st;
+	try {
+		st = fs.statSync(file);
+	} catch {
+		shared.delete(file);
+		return fallback;
+	}
+	const stamp = `${st.mtimeMs} ${st.size}`;
+	const settled = Date.now() - st.mtimeMs > 2000;
+	const hit = shared.get(file);
+	if (hit?.stamp === stamp && hit.settled) return hit.value;
+	let text;
+	try {
+		text = fs.readFileSync(file, "utf8");
+	} catch {
+		return fallback;
+	}
+	const value = hit?.text === text ? hit.value : freeze(parse(text, fallback));
+	shared.set(file, { stamp, settled, text, value });
+	return value;
+}
+const parseJson = (text, fallback) => {
+	try {
+		return JSON.parse(text);
+	} catch {
+		return fallback;
+	}
+};
+export const readShared = (name, fallback) => sharedOf(name, parseJson, fallback);
+// A missing file is the same empty list each time, so what is computed from it stays computed.
+const NONE = Object.freeze([]);
+export const readJsonlShared = (name) => sharedOf(name, parseJsonl, NONE);
+
+// The value last computed from the same inputs, compared one by one by identity: shared files, and
+// whatever else it depends on. One per key and instance home.
+const memos = new Map();
+export function memo(key, deps, compute) {
+	const k = `${homeDir()} ${key}`;
+	const m = memos.get(k);
+	if (m && m.deps.length === deps.length && m.deps.every((d, i) => Object.is(d, deps[i])))
+		return m.value;
+	const value = compute();
+	memos.set(k, { deps, value });
+	return value;
 }
 
 export function append(name, entry) {
@@ -73,12 +138,22 @@ export const agentLog = (project, entry) =>
 	append(`projects/${project}/agent-log.jsonl`, stamp(entry));
 // The settings' own journal (written by src/settings.mjs) joins a project's: its changes, and those of
 // the whole instance, such as the host profile.
-export const readJournal = (project) =>
-	[
-		...readJsonl(`projects/${project}/journal.jsonl`),
-		...readJsonl(`projects/${project}/agent-log.jsonl`),
-		...readJsonl("settings.jsonl").filter((e) => e.project === project || e.project == null),
-	].sort((a, b) => String(a.at).localeCompare(String(b.at)));
+export function readJournal(project) {
+	const parts = [
+		readJsonlShared(`projects/${project}/journal.jsonl`),
+		readJsonlShared(`projects/${project}/agent-log.jsonl`),
+		readJsonlShared("settings.jsonl"),
+	];
+	return memo(`journal ${project}`, parts, () =>
+		Object.freeze(
+			[
+				...parts[0],
+				...parts[1],
+				...parts[2].filter((e) => e.project === project || e.project == null),
+			].sort((a, b) => String(a.at).localeCompare(String(b.at))),
+		),
+	);
+}
 
 // ── Instance config ───────────────────────────────────────────────────────────────────────────
 const LOGIN = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/;

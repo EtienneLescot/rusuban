@@ -5,8 +5,8 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { agentLog, read, readJsonl, saveConfig } from "../src/home.mjs";
-import { checkPost, checkRequest, startServer } from "../src/server.mjs";
+import { agentLog, read, readJsonl, saveConfig, write as writeFile } from "../src/home.mjs";
+import { checkPost, checkRequest, startServer, stateOf } from "../src/server.mjs";
 
 const OWNER = { login: "alice", tailscaleLogin: "alice@example.com" };
 const TAILNET = "box.tail1234.ts.net";
@@ -96,6 +96,47 @@ const ours = () => ({
 	origin: `http://127.0.0.1:${srv.port}`,
 	"x-rusuban": "1",
 	"content-type": "application/json",
+});
+
+test("a project's state is built again only from what changed; a run's step leaves the model as is", async () => {
+	const { ctx } = srv;
+	const first = stateOf(ctx, "demo");
+	assert.equal(stateOf(ctx, "demo"), first, "nothing changed: the same state, serialized once");
+	// A worker at work: each of its steps changes what the page lays over the items, not the model.
+	const id = "worker-20261111120000-c0de";
+	const step = (text) =>
+		writeFile(`runs/${id}/status.json`, {
+			id,
+			kind: "worker",
+			title: "fix-1",
+			project: "demo",
+			items: ["o/r#1"],
+			state: "running",
+			pid: process.pid,
+			createdAt: "2026-11-11T12:00:00.000Z",
+			startedAt: "2026-11-11T12:00:01.000Z",
+			step: text,
+		});
+	step("Reading the issue");
+	const working = stateOf(ctx, "demo");
+	assert.notEqual(working, first);
+	assert.equal(working.model, first.model, "the model is not built again for a run's step");
+	assert.deepEqual(working.activity["o/r#1"], {
+		name: "fix-1",
+		step: "Reading the issue",
+		since: "2026-11-11T12:00:01.000Z",
+	});
+	step("Writing the fix");
+	assert.equal(stateOf(ctx, "demo").activity["o/r#1"].step, "Writing the fix");
+	// Its JSON, the model's part reused, reads as the state itself.
+	const served = JSON.parse((await call("GET", "/api/state?project=demo")).text);
+	assert.deepEqual(served, JSON.parse(JSON.stringify(stateOf(ctx, "demo"))));
+	// One of the project's files changes: the model is built again.
+	writeFile("projects/demo/judgment.json", { items: {} });
+	assert.notEqual(stateOf(ctx, "demo").model, first.model);
+	fs.rmSync(path.dirname(path.join(process.env.RUSUBAN_HOME, `runs/${id}/status.json`)), {
+		recursive: true,
+	});
 });
 
 test("the state and its live stream are served on loopback, merges paused until armed", async () => {

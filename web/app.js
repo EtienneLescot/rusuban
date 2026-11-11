@@ -2049,6 +2049,8 @@ function connect() {
 	);
 	es.addEventListener("state", (ev) => {
 		S = JSON.parse(ev.data);
+		// The items agents work on come apart from the model, which a run's steps leave as it is.
+		for (const n of S.model.nodes) n.activity = S.activity?.[n.id] ?? null;
 		// The server picks the first project when none or an unknown one was asked for.
 		if (S.project && S.project.id !== ui.project) {
 			ui.project = S.project.id;
