@@ -417,13 +417,16 @@ export function refusedOf(journal = []) {
 // agents at its judgment's revisitAt, which the agent sets from the project's rules. Items of repos
 // without rules never appear (FR-024), nor a PR that changes .rusuban/ (FR-099). A refusal comes
 // once: a card written after it settles it. A fork's CI approval comes once per head: `examined`
-// holds, per PR, the head a judge ended on.
+// holds, per PR, the head a judge ended on. `stamp` is the product's card rules as they are now
+// (agents.mjs CARD_RULES): an open card written under others comes back once, unless answered.
 export function todoOf({
 	live,
 	judgment,
 	rules = {},
 	refused = new Map(),
 	examined = {},
+	answers = [],
+	stamp = null,
 	now = Date.now(),
 }) {
 	const acting = actingRepos(rules);
@@ -474,6 +477,15 @@ export function todoOf({
 		if (!open.has(item)) continue;
 		if (isPerson(j.owner) && !hasOpenCard(j))
 			out.push({ item, type: j.type, reason: "missing-card" });
+		// A card written before an update of what deserves one: taken up once, unless it is answered,
+		// for then the coordinator carries out the answer (FR-101).
+		if (
+			stamp &&
+			hasOpenCard(j) &&
+			j.decision.writtenUnder !== stamp &&
+			!answersFor(item, j.decision, answers).length
+		)
+			out.push({ item, type: j.type, reason: "stale-card" });
 		if (ROLES.includes(j.owner) && !(Date.parse(j.revisitAt) > now))
 			out.push({ item, type: j.type, reason: "revisit-due", revisitAt: j.revisitAt ?? null });
 	}
@@ -511,7 +523,7 @@ export function applyJudgment(
 	input,
 	live,
 	judgment,
-	{ repos, now = new Date().toISOString(), by = null },
+	{ repos, now = new Date().toISOString(), by = null, stamp = null },
 ) {
 	const key = inputKey(input, repos);
 	const pr = live.prs.find((p) => keyOf(p) === key);
@@ -612,6 +624,8 @@ export function applyJudgment(
 				: `${key}@${Date.parse(now)}-${Math.random().toString(36).slice(2, 6)}`,
 			head,
 			to: next.owner,
+			// The product's card rules it was written under, whatever the input says (FR-101).
+			writtenUnder: stamp,
 			createdAt: same ? prev.decision.createdAt : now,
 			resolvedAt: null,
 			outcome: null,

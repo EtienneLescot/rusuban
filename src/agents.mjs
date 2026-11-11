@@ -156,6 +156,15 @@ const PARTS = {
 	reply: [],
 };
 const promptOf = (name) => fs.readFileSync(new URL(`${name}.md`, PROMPTS), "utf8").trim();
+// What deserves a card is the product's to say, in the judge's prompt: its own part, the card
+// formats and the safety frame. Every card carries their fingerprint, and an open card written
+// under another one is judged again, once (FR-101). Line endings do not count: a checkout that
+// turns them into CRLF writes the same cards.
+export const CARD_RULES = crypto
+	.createHash("sha256")
+	.update(["judge", "formats", "frame"].map(promptOf).join("\n").replace(/\r\n/g, "\n"))
+	.digest("hex")
+	.slice(0, 12);
 export const coordinatorLock = (project) => `${project}.coordinator`;
 export const scratchOf = (project) => homePath(`scratch/${project}`);
 
@@ -843,6 +852,8 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 							rules: read(`${dir}/rules.json`, {}),
 							refused: refusedOf(readJsonl(`${dir}/journal.jsonl`)),
 							examined: read(`${dir}/triggers.json`, {}).examined,
+							answers: readJsonl(`${dir}/answers.jsonl`),
+							stamp: CARD_RULES,
 						}).length;
 			if (idle)
 				return end({

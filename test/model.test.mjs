@@ -351,6 +351,36 @@ test("a PR that changes .rusuban/ is a person's: out of the todo, the graph and 
 	assert.ok(!m.edges.some((e) => e.from === "o/r#2" || e.to === "o/r#2"));
 });
 
+test("stale-card: a card written under other card rules comes back once, never once answered", () => {
+	const held = (writtenUnder) => ({
+		...fix(1, { owner: "alice", revisitAt: undefined }),
+		decision: {
+			id: "c",
+			q: "?",
+			options: [],
+			createdAt: "2026-11-07T00:00:00Z",
+			resolvedAt: null,
+			writtenUnder,
+		},
+	});
+	const stale = (j, { stamp = "v2", answers = [] } = {}) =>
+		todoOf({
+			live: { prs: [pr(1)], issues: [] },
+			judgment: { items: { [`${REPO}#1`]: j } },
+			rules: { [REPO]: RULES },
+			answers,
+			stamp,
+		})
+			.filter((t) => t.reason === "stale-card")
+			.map((t) => t.item);
+	assert.deepEqual(stale(held("v1")), ["o/r#1"]);
+	assert.deepEqual(stale(held(undefined)), ["o/r#1"], "a card from before the stamps");
+	assert.deepEqual(stale(held("v2")), [], "written under the rules as they are");
+	assert.deepEqual(stale(held("v1"), { stamp: null }), [], "nothing to compare with");
+	const answer = { item: "o/r#1", card: "c", option: "x", at: "2026-11-08T00:00:00Z" };
+	assert.deepEqual(stale(held("v1"), { answers: [answer] }), [], "its answer is carried out");
+});
+
 test("multi-repo: the same number in two repos is two items", () => {
 	const live = { prs: [pr(1), pr(1, { repo: "o/b", head: "other" })], issues: [], merged: [] };
 	const judgment = { items: { "o/r#1": fix(1) } };

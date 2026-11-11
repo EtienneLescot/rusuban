@@ -138,6 +138,9 @@ message? }], createdAt, resolvedAt, outcome }`
 - Resolution is derived, so no file has two writers: a card is resolved when `answers.jsonl` (daemon)
   holds an answer for its id, replaced when the agent CLI's `resolve` marks it in `judgment.json`.
 - In v1 every card is delivered to the owner; `to` still names its intended login.
+- `writtenUnder` (FR-101): the fingerprint of the product's card rules the card was written under,
+  stamped by the agent CLI whatever the input says. An open, unanswered card under another one comes
+  back to the judge once, as `stale-card`; judged again with its question, it keeps its id.
 - `about` (FR-099): `"rule"` or `"lock"` when the card asks how the agents follow the project, so it
   waits in Rules & settings; none when it is the item's question. A card on a PR judged `auto` is
   one or the other without it: `"lock"` when an option orders the merge, `"rule"` otherwise.

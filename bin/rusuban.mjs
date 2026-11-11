@@ -10,6 +10,7 @@ import readline from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
+	CARD_RULES,
 	executeRun,
 	listRuns,
 	NO_MODEL,
@@ -517,6 +518,8 @@ const commands = {
 				rules: read(`${p.dir}/rules.json`, {}),
 				refused: refusedOf(readJsonl(`${p.dir}/journal.jsonl`)),
 				examined: read(`${p.dir}/triggers.json`, {}).examined,
+				answers: readJsonl(`${p.dir}/answers.jsonl`),
+				stamp: CARD_RULES,
 			}),
 		);
 	},
@@ -538,7 +541,8 @@ const commands = {
 		withLock(p, () => {
 			const judgment = p.judgment();
 			const live = p.live();
-			for (const j of list) applyJudgment(j, live, judgment, { repos: p.repos, by: p.by });
+			for (const j of list)
+				applyJudgment(j, live, judgment, { repos: p.repos, by: p.by, stamp: CARD_RULES });
 			write(`${p.dir}/judgment.json`, judgment);
 			console.log(
 				`${list.length} judgment${list.length > 1 ? "s" : ""} written: ${list.map((j) => inputKey(j, p.repos)).join(", ")}`,

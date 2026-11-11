@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { CARD_RULES } from "../src/agents.mjs";
 import { applyEvidence, applyJudgment, closeCard, parseItem } from "../src/model.mjs";
 
 const REPOS = ["o/r"];
@@ -275,6 +276,21 @@ test("the agent commands read and write a project's files", () => {
 		]),
 	);
 	assert.equal(run("judge", file).status, 0);
+	// Each card carries the card rules it was written under; one from before an update comes back
+	// once, and judged again with its question it keeps its id (FR-101).
+	const judgmentFile = path.join(home, "projects/demo/judgment.json");
+	const written = JSON.parse(fs.readFileSync(judgmentFile, "utf8"));
+	const before = written.items["o/r#10"].decision;
+	assert.equal(before.writtenUnder, CARD_RULES);
+	assert.ok(!todo().includes("o/r#10:stale-card"));
+	written.items["o/r#10"].decision.writtenUnder = "an-older-rusuban";
+	put("projects/demo/judgment.json", written);
+	assert.ok(todo().includes("o/r#10:stale-card"));
+	fs.writeFileSync(file, JSON.stringify(issueJ({ decision: card({ q: "Build this one?" }) })));
+	assert.equal(run("judge", file).status, 0);
+	assert.ok(!todo().includes("o/r#10:stale-card"));
+	const after = JSON.parse(fs.readFileSync(judgmentFile, "utf8")).items["o/r#10"].decision;
+	assert.deepEqual([after.id, after.writtenUnder], [before.id, CARD_RULES]);
 	fs.writeFileSync(
 		file,
 		JSON.stringify({

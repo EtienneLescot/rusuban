@@ -382,6 +382,13 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   and, without a card waiting, a request to Claude about the item is written there. The request goes
   to the coordinator with the item, like the owner's other requests. Nothing in the card is wider
   than it, at a phone's width too.
+- **FR-101**: An open card MUST be judged again, once, when an update of Rusuban changes what deserves
+  a card, as Etienne asked on 2026-11-11, so no card outlives the rules it was written under. Each
+  card keeps the fingerprint of the product's card rules it was written under: the judge's prompt,
+  the card formats and the safety frame. An unanswered open card under another fingerprint comes
+  back to the judge (`stale-card`), which closes what the product now does alone, gives `about` to
+  what belongs in Rules & settings, and drops the options that no longer exist. A card that keeps its
+  question keeps its id. A card already answered is left to the coordinator, which carries it out.
 
 **Conversations hub**
 
