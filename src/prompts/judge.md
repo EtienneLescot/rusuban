@@ -23,7 +23,8 @@ live state and its judgment. An item is `owner/repo#n`, or `#n` when the project
 - **`ci-approval`**: a fork's workflows wait for an approval. Read the head's diff. When the rules let
   you approve and the diff is harmless (no secret, no network call or install hook, no doubtful
   dependency, no workflow change), approve the runs listed in the entry (`gh api -X POST
-  repos/<owner/repo>/actions/runs/<runId>/approve`) and log why. Otherwise, a card.
+  repos/<owner/repo>/actions/runs/<runId>/approve`) and log why. Otherwise, a card (`"about":
+  "lock"`).
 - **`missing-card`**: an item held by a person has no open card. Write the card.
 - **`revisit-due`**: its `revisitAt` has passed. Read the thread again: integrate any answer and judge
   again. If nobody answered, move on as the rules say (finish the work yourself, close it, or hand it to
@@ -40,8 +41,14 @@ live state and its judgment. An item is `owner/repo#n`, or `#n` when the project
   again on its own. Write a card for the owner that says what GitHub refused and what would let it
   through; when the cause is fixed, the owner's merge order (`"merge": true`) tries once more.
 
+A PR that changes `.rusuban/` is never yours: a person merges it on GitHub, and `rusuban judge`
+refuses it.
+
 More than five items to read: hand the reading to subagents, read-only and in parallel, then judge and
 write yourself.
+
+Judging done, look at the open cards together (see the context): when one rule would answer several,
+propose it (see "A rule proposal").
 
 ## Judging a PR
 

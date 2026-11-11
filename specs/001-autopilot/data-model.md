@@ -12,8 +12,8 @@ file has **one writer**. `rusuban` is the product name.
 | `settings.jsonl` | the settings module | `{ at, kind: "setting", setting, project, origin, by, state, text, request?, notify? }`, `state` one of `applied`, `pending`, `confirmed`, `declined`; shown in the journal |
 | `projects/<p>/live.json` | daemon | per repo: `{ checkedAt, changedAt, prs[], issues[], merged[] }` |
 | `projects/<p>/rules.json` | daemon | per repo: `{ treeSha, text, locks, loadedAt }` from the default branch |
-| `projects/<p>/judgment.json` | agent CLI only | `{ items: { "<owner/repo#n>": Judgment } }` |
-| `projects/<p>/answers.jsonl` | daemon | `{ at, item, card, option, note, by }` |
+| `projects/<p>/judgment.json` | agent CLI only | `{ items: { "<owner/repo#n>": Judgment }, proposals: { "rule:<id>": Rule proposal } }` |
+| `projects/<p>/answers.jsonl` | daemon | `{ at, item, card, option, note, by }`; a rule proposal's `item` is its own id |
 | `projects/<p>/asks.jsonl` | daemon | `{ at, text, item?, by }` |
 | `projects/<p>/journal.jsonl` | daemon | `{ at, kind, item?, text, href?, by }` |
 | `projects/<p>/agent-log.jsonl` | agent CLI, under the judgment lock | same shape; the dashboard shows both files as one journal |
@@ -138,6 +138,19 @@ message? }], createdAt, resolvedAt, outcome }`
 - Resolution is derived, so no file has two writers: a card is resolved when `answers.jsonl` (daemon)
   holds an answer for its id, replaced when the agent CLI's `resolve` marks it in `judgment.json`.
 - In v1 every card is delivered to the owner; `to` still names its intended login.
+- `about` (FR-099): `"rule"` or `"lock"` when the card asks how the agents follow the project, so it
+  waits in Rules & settings; none when it is the item's question. A card on a PR judged `auto` is
+  one or the other without it: `"lock"` when an option orders the merge, `"rule"` otherwise.
+
+### Rule proposal (keyed `rule:<id>`, FR-099)
+
+`{ id, repo, file, rule, items: ["<owner/repo#n>"], q, ctx, done, urgency, rec: "open", options:
+[open, no], to, by, createdAt, resolvedAt, outcome, state }`
+
+- Written by `rusuban propose`: two items or more, of one repo, each with an open card and in no other
+  open proposal; `file` is `.rusuban/rules/<name>.md`. Its options are the server's: "Open the rule
+  PR" and "Not a rule".
+- Answered and closed like a card, its id standing for its item.
 
 ### Run
 

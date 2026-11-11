@@ -9,12 +9,13 @@
 ```
 
 - Read through the GitHub API at the default branch (research R4). A PR that touches `.rusuban/` is
-  never merged automatically, whatever the rules say.
+  never merged automatically, whatever the rules say: a person merges it on GitHub. The agents never
+  judge it, and the dashboard shows it in Rules & settings, not in the graph or the kanban (FR-099).
 - Without `rules/`, Rusuban does nothing autonomous: it reads GitHub and gathers conversations, the
   owner's own requests still run, and the dashboard shows how to add rules, with examples.
 - A rules change applies at the next read; it is journaled with its diff and the owner is pinged.
-- Where the rules are silent, agents ask the owner on a card, which offers to turn the answer into a
-  rule.
+- Where the rules are silent, agents ask the owner on a card. When the cards of several items ask
+  the same, they propose the rule that would answer them, on a card of its own (FR-099).
 - The rules say everything about behavior. Typical sections, none required:
   - what agents do alone, what comes to a person;
   - autonomy: what may be merged, closed, answered, and how long a third party is waited for;

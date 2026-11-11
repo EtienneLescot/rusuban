@@ -147,6 +147,11 @@ starts the coordinator, which applies the answer.
 - [x] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
   - `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The runs view is the Agents drawer: runs at work first with a two-tap Stop, the last 30 with their conversation, the one a card points at lit.
 
+- [x] T133 [US2] The inbox's Rules & settings queue (FR-099), Etienne's decision of 2026-11-10, its mockup validated as is on 2026-11-11
+  - A tab beside Decisions, on a desktop and a phone, its count in amber. It holds, each tagged: the silent rules (`about: "rule"`), the locks (`about: "lock"`), the settings waiting for the owner and the rule proposals, then the PRs that change `.rusuban/`. A card on a PR judged to merge alone is a lock or a silent rule by itself. The desktops a run asks for stay in Decisions; back from a card is its tab.
+  - `rusuban propose`: one rule for the open cards of several items of one repo, on a card of its own, with the server's options "Open the rule PR" and "Not a rule". The prompts drop the "Make it a rule" option; the judge looks at the open cards together once it has judged. An accepted proposal: a worker opens the PR, and its items wait for it without a card.
+  - A PR that changes `.rusuban/` is a person's to merge on GitHub: never in the agents' todo, refused by `rusuban judge`, out of the graph, the kanban and their links.
+  - The open cards it concerns join the queue with the update, without a migration: OpenScreen's #1472 (a silent rule), #1515, #1484 and #1391 (locks) are on PRs judged to merge alone.
 - [x] T131 [US2] An issue follows the PR that addresses it (FR-040), Etienne's decision of 2026-11-10 after the card on #1473
   - While a PR that closes, names or links an issue has an open card, the agent CLI refuses a card on the issue and says how to judge it instead: held by the agents, its next naming the PR. The judge's prompt says so, and folds an issue's open card into its PR's when the PR gets one.
 ---

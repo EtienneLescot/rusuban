@@ -29,7 +29,9 @@ They hold in every project, and no setting lifts them:
 - **No open review thread.**
 - **The head unchanged since the judgment**: a new commit sends the PR back to the judge.
 - **No conflict**, and rebaseable when the repo merges by rebase.
-- **`.rusuban/` never changes without a person**: a PR that touches it never merges alone.
+- **`.rusuban/` never changes without a person**: a PR that touches it never merges alone. A person
+  merges it on GitHub; the agents never judge it, and the dashboard lists it under **Rules &
+  settings**, out of the graph and the kanban.
 - **No direct push to a default branch**: denied to agents, and a commit that reaches the branch outside
   a PR is flagged.
 - **The merge switch**, in the dashboard's header, for the whole instance. Merges start paused.
@@ -62,8 +64,9 @@ the head the card was written on, once:
 - the PR is mergeable, with no conflict;
 - the head has not moved since the card.
 
-Your order lifts the rest, for that head only: the Reviews, Judgment, Locks and Evidence gates, the
-`.rusuban/` lock included.
+Your order lifts the rest, for that head only: the Reviews, Judgment, Locks and Evidence gates. On a
+PR judged to merge alone, which only a lock holds, the card waits in the inbox's **Rules & settings**
+tab, marked **Lock**.
 
 ### The approval bypass
 

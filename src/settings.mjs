@@ -681,6 +681,8 @@ export function settingsCards(config) {
 		itemOpen: true,
 		judgedBy: null,
 		evidence: null,
+		// It waits in Rules & settings (FR-099).
+		about: "setting",
 		card: {
 			id: `setting:${r.id}`,
 			to: config.owner.login,

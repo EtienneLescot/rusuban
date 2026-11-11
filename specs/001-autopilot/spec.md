@@ -312,7 +312,8 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   owner, set at init, never to the repo's rules: whoever can merge in the repo must not gain a shell on
   a maintainer's machine.
 - **FR-026**: When the rules say nothing about a situation, the agent MUST ask the owner on a card
-  rather than act; the card offers to turn the answer into a rule.
+  rather than act. When the cards of several items ask the same, the agent proposes the rule that
+  would answer them, on a card of its own (FR-099).
 - **FR-027**: A rules change on the default branch MUST apply at the next read; it is journaled with its
   diff and the owner is pinged. No rule can widen the instance's permission profile.
 - **FR-028**: Removed on 2026-11-09, Etienne's decision. Projects had a mode, `live` or `shadow` (judge
@@ -362,6 +363,20 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   the answer lifts the project's own locks (paths, size, evidence) for that head only.
 - **FR-045**: A ping MUST link straight to its card, on the tailnet address when remote access is on.
   In v1 every card goes to the owner; a card meant for another login says so.
+- **FR-099**: The inbox MUST keep the questions on how the agents follow a project apart from the
+  items' own, as Etienne decided on 2026-11-10 and validated on its mockup on 2026-11-11: a tab
+  "Rules & settings" beside "Decisions", on a desktop and a phone. It holds, each tagged:
+  - a silent rule: a card on how the agents work, which the judge marks so (`about: "rule"`);
+  - a lock: what only a person lifts (`about: "lock"`). A card on a PR judged to merge alone is one
+    or the other by itself, a lock when an option orders the merge;
+  - a setting waiting for the owner (FR-092);
+  - a rule proposal: one rule that would answer the open cards of several items, proposed on a card
+    of its own instead of a "Make it a rule" option on each. "Open the rule PR" opens it and the
+    items wait for it without a card; "Not a rule" keeps them asked one by one;
+  - the PRs that change `.rusuban/`. A person merges them on GitHub: the agents never judge them, and
+    they leave the graph and the kanban.
+
+  The desktops a run asks for stay in Decisions. A card's item stays where it is in the graph.
 
 **Conversations hub**
 

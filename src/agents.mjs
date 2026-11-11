@@ -232,8 +232,15 @@ function contextOf({ p, kind, run, config, pending, task }) {
 		"## Open cards",
 		"",
 		...list(
-			Object.entries(judgment.items ?? {}).filter(([, j]) => j.decision && !j.decision.resolvedAt),
-			([k, j]) => `- ${k}, to @${j.decision.to}: ${j.decision.q}`,
+			[
+				...Object.entries(judgment.items ?? {})
+					.filter(([, j]) => j.decision && !j.decision.resolvedAt)
+					.map(([k, j]) => `- ${k}, to @${j.decision.to}: ${j.decision.q}`),
+				...Object.values(judgment.proposals ?? {})
+					.filter((r) => !r.resolvedAt)
+					.map((r) => `- Rule proposal \`${r.id}\`, for ${r.items.join(", ")}: ${r.q}`),
+			],
+			(line) => line,
 		),
 	];
 	if (pending)
@@ -246,7 +253,10 @@ function contextOf({ p, kind, run, config, pending, task }) {
 				const chose = o
 					? `chose "${o.label}"${o.merge ? ", a merge order the server carries out" : ""}. Effect: ${o.effect}${o.message ? ` Message: ${o.message}` : ""}`
 					: "answered freely";
-				return `- ${a.item}, card \`${a.card}\` ("${a.q}"): @${a.by ?? config.owner.login} ${chose}${a.note ? ` Note: ${a.note}` : ""}`;
+				const what = a.rule
+					? `Rule proposal \`${a.card}\` ("${a.q}") for ${a.items.join(", ")}, its rule for ${a.repo}'s ${a.file}: "${a.rule}"`
+					: `${a.item}, card \`${a.card}\` ("${a.q}")`;
+				return `- ${what}: @${a.by ?? config.owner.login} ${chose}${a.note ? ` Note: ${a.note}` : ""}`;
 			}),
 			"",
 			"## Requests from the owner",

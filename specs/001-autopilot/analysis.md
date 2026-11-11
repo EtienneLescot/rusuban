@@ -38,7 +38,7 @@ are recorded in the spec's Clarifications.
 | Gap | Resolution |
 |---|---|
 | No mockups for the new views | A mockup validated by Etienne before each interface phase: T100, T102, T104, T111 |
-| How an agent applies rules it does not know in advance | Silent rules mean a card that offers to turn the answer into a rule (FR-026, T096) |
+| How an agent applies rules it does not know in advance | Silent rules mean a card; the cards of several items one rule would answer, a rule proposal (FR-026, FR-099, T096, T133) |
 | The reflection on several people and several machines | [reflection-team-and-machines.md](reflection-team-and-machines.md); P1 to P3 in v1, the runner (P4) first after v1 |
 | The worker limit had no field | `limits { maxWorkers, maxRunMinutes }` in the instance config (T084) |
 | The old pilot's history | Not imported; archived read-only (assumption, open to change) |

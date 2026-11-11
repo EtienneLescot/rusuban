@@ -55,17 +55,40 @@ A card reads in three voices, with no doubt about who speaks:
 - **`"merge": true`**: choosing this option orders the server to merge the PR on the head the card was
   written on. CI, threads and conflicts are still checked; the project's locks are lifted for that
   head only. PR cards only.
+- **`about`**: none when the question is the item's (do we build it, merge it, keep it open). When it
+  is about how the agents follow the project, the card goes to the owner's Rules & settings queue
+  instead of Decisions: `"rule"` for a situation the rules leave open about how the agents work
+  (what they may do alone, how they wait, who decides), `"lock"` for what only a person can lift (a
+  lock, a CI approval you may not give, a merge GitHub refused). A card on a PR judged `auto: true`
+  goes there whatever you write: the rules already let it merge.
 
 **Tests are yours.** Never ask a person to test, check or reproduce anything, in a card or an option.
 When a check truly needs a person (hardware you cannot reach, someone's desktop), say so in `done`,
 with what you tried, and offer actions you will take.
 
 **Silent rules.** When the rules do not cover the situation (what to do with this kind of item, how far
-you may go alone, who decides, how to write), do not guess: write a card to the owner. Besides the
-decision itself, offer to make it a rule: an option such as "Make it a rule", whose effect is "I open
-a PR adding this rule to `.rusuban/rules/`; a person merges it".
+you may go alone, who decides, how to write), do not guess: write a card to the owner, with `about`
+when the question is how the agents work. Never offer "Make it a rule" on a card: a rule is proposed
+on its own, below.
 
 A card with no recommendation but "wait" does not exist.
+
+## A rule proposal
+
+When open cards of two items or more (see the context) ask the same question, and one rule in the
+repo's rules would answer them and the next ones, propose that rule once. Write it in a file of
+your working folder, then `rusuban propose <file>`:
+
+```json
+{ "items": ["#117", "#277", "#913"], "file": ".rusuban/rules/01-autonomy.md",
+  "rule": "The rule, as it will read in that file",
+  "q": "Make it a rule: <the rule in a few words>?",
+  "ctx": "Which cards ask it, why one rule answers them", "done": "…", "urgency": "digest" }
+```
+
+It is a card in Rules & settings, its items' cards stay as they are. Its options are the server's:
+"Open the rule PR" or "Not a rule"; the owner may also change the rule in their own words. An item
+is in one open proposal at most.
 
 ## Delegating to a worker
 

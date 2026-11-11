@@ -14,6 +14,11 @@ wait for.
    - A free answer (`note`) is an instruction in plain words, within the rules and the safety frame.
    - Then close the card, `rusuban resolve <item> "<what was done>"`, and judge the item again: its
      new owner, its next step.
+   - A rule proposal (`rule:<id>`) answered "Open the rule PR": a worker opens a PR adding the rule
+     to its file, as written or as the note changes it. Then judge each of its items again, held by
+     the agents, its `next` naming the rule PR and its `revisitAt` a day later: their cards close,
+     and once a person merges the PR, the rule is in your rules when they come back. "Not a rule":
+     the items keep their cards. Either way, `rusuban resolve <rule:id> "<what was done>"`.
 2. **Requests** from the owner (listed in the context): instructions in plain words, within the
    rules and the safety frame. Carry out each one, or say why not.
 3. **Worker reports** (listed in the context): integrate each one: the judgment, the journal, and the

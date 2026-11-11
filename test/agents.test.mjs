@@ -134,7 +134,16 @@ const RULES = {
 test("a prompt is the product prompt, the frame, the rules with their source, the context, the mission", () => {
 	write("projects/demo/rules.json", RULES);
 	const card = { to: "alice", q: "Ship the new parser?", resolvedAt: null, options: [] };
-	write("projects/demo/judgment.json", { items: { "o/r#7": { owner: "alice", decision: card } } });
+	const proposal = {
+		id: "rule:1",
+		items: ["o/r#7", "o/r#8"],
+		q: "Make it a rule?",
+		resolvedAt: null,
+	};
+	write("projects/demo/judgment.json", {
+		items: { "o/r#7": { owner: "alice", decision: card } },
+		proposals: { "rule:1": proposal },
+	});
 	const p = assemblePrompt({ kind: "judge", project: "demo", config, run: "judge-1" });
 	const at = (s) => {
 		const i = p.indexOf(s);
@@ -152,6 +161,7 @@ test("a prompt is the product prompt, the frame, the rules with their source, th
 		"default branch `main`",
 		'"mergeMethod":"squash"',
 		"- o/r#7, to @alice: Ship the new parser?",
+		"- Rule proposal `rule:1`, for o/r#7, o/r#8: Make it a rule?",
 	].map(at);
 	assert.deepEqual(
 		order,
@@ -177,6 +187,16 @@ test("a prompt is the product prompt, the frame, the rules with their source, th
 				q: "Ship?",
 				chosen: { label: "Merge it", effect: "The server merges it.", merge: true },
 			},
+			{
+				item: "rule:1",
+				card: "rule:1",
+				q: "Make it a rule?",
+				chosen: { label: "Open the rule PR", effect: "I open a PR adding this rule." },
+				rule: "Bug fixes merge alone.",
+				file: ".rusuban/rules/01-merge.md",
+				repo: "o/r",
+				items: ["o/r#7", "o/r#8"],
+			},
 		],
 		asks: [{ at: "2026-11-07T10:00:00Z", text: "Close the stale issues." }],
 		reports: [{ worker: "fix-12", item: "o/r#12", state: "done", text: "PR #13 opened." }],
@@ -184,6 +204,8 @@ test("a prompt is the product prompt, the frame, the rules with their source, th
 	const act = assemblePrompt({ kind: "act", project: "demo", config, run: "act-1", pending });
 	for (const s of [
 		"a merge order the server carries out",
+		'Rule proposal `rule:1` ("Make it a rule?") for o/r#7, o/r#8',
+		'its rule for o/r\'s .rusuban/rules/01-merge.md: "Bug fixes merge alone."',
 		"Close the stale issues.",
 		"PR #13 opened.",
 	])

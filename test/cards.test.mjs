@@ -8,7 +8,15 @@ import os from "node:os";
 import path from "node:path";
 import { after, before, beforeEach, test } from "node:test";
 import { append, read, readJsonl, saveConfig, write } from "../src/home.mjs";
-import { applyJudgment, cardState, checkAnswer, closeCard, inboxOf } from "../src/model.mjs";
+import {
+	applyJudgment,
+	applyProposal,
+	cardState,
+	checkAnswer,
+	closeCard,
+	inboxOf,
+	pendingAnswers,
+} from "../src/model.mjs";
 import { startServer } from "../src/server.mjs";
 
 const NOW = "2026-11-07T12:00:00.000Z";
@@ -147,6 +155,127 @@ test("an issue follows the PR that addresses it: no card of its own while the PR
 	// The PR's card closed, the issue may get its own.
 	closeCard(judgment, "o/r#1", "Merged.", [], NOW);
 	assert.equal(issueCard(live).decision.state, "open");
+});
+
+// Etienne's Rules & settings queue (FR-099): what asks how the agents follow the project.
+const toAlicePr = (judgment, auto, options2, over = {}) =>
+	applyJudgment(
+		{
+			item: "#1",
+			label: "Add median()",
+			kind: "feature",
+			owner: "alice",
+			next: "Alice decides.",
+			pr: { head: "abc", auto },
+			decision: card({ options: options2, rec: options2[0].id, ...over }),
+		},
+		live,
+		judgment,
+		{ repos: ["o/r"], now: NOW },
+	);
+const merge = [
+	{ id: "merge", label: "Merge it", effect: "The server merges it.", merge: true },
+	{ id: "wait", label: "Keep the lock", effect: "I leave it open." },
+];
+
+test("a card waits in Rules & settings when it asks how the agents follow the project", () => {
+	const about = (judgment) => inboxOf([{ id: "demo", live, judgment }]).map((c) => c.about);
+	const issue = { items: {} };
+	toAlice(issue);
+	assert.deepEqual(about(issue), [null], "an item's own question: Decisions");
+	toAlice(issue, { about: "rule" });
+	assert.deepEqual(about(issue), ["rule"], "the judge says it is how the agents work");
+	// A PR the rules let merge alone needs a person only to lift what holds it, or for how the
+	// agents work: the cards of OpenScreen's #1515 and #1484, then #1472, join the queue by this.
+	const lock = { items: {} };
+	toAlicePr(lock, true, merge);
+	assert.deepEqual(about(lock), ["lock"]);
+	const rule = { items: {} };
+	toAlicePr(rule, true, options);
+	assert.deepEqual(about(rule), ["rule"]);
+	const product = { items: {} };
+	toAlicePr(product, false, merge);
+	assert.deepEqual(about(product), [null]);
+	assert.throws(() => toAlice({ items: {} }, { about: "settings" }), /decision.about is "rule"/);
+});
+
+test("a rule proposal answers the open cards of several items, in a card of its own", () => {
+	const judgment = { items: {} };
+	toAlice(judgment);
+	toAlicePr(judgment, false, options);
+	const input = (over = {}) => ({
+		items: ["#10", "#1"],
+		file: ".rusuban/rules/01-autonomy.md",
+		rule: "A feature request nobody works on stays open as help wanted.",
+		q: "Make it a rule: requests nobody works on stay open?",
+		ctx: "Two cards ask it.",
+		done: "Read both cards.",
+		urgency: "digest",
+		...over,
+	});
+	const propose = (over) =>
+		applyProposal(input(over), judgment, { repos: ["o/r"], now: NOW, by: "agent:judge-1" });
+	assert.throws(() => propose({ items: ["#10"] }), /two items at least/);
+	assert.throws(() => propose({ items: ["#10", "#2"] }), /o\/r#2 has no open card/);
+	assert.throws(() => propose({ file: "rules.md" }), /\.rusuban\/rules\/<name>\.md/);
+	assert.throws(() => propose({ rule: " " }), /rule is required/);
+	assert.throws(() => propose({ urgency: "soon" }), /urgency/);
+	const r = propose();
+	assert.match(r.id, /^rule:/);
+	assert.deepEqual(
+		[r.repo, r.items, r.to, r.rec, r.options.map((o) => o.id)],
+		["o/r", ["o/r#10", "o/r#1"], "alice", "open", ["open", "no"]],
+	);
+	assert.throws(() => propose(), /o\/r#10 is already in the open rule proposal rule:/);
+
+	const [entry] = inboxOf([{ id: "demo", live, judgment }]).filter((c) => c.type === "rule");
+	assert.deepEqual(
+		[entry.card.id, entry.item, entry.about, entry.judgedBy],
+		[r.id, null, "proposal", "agent:judge-1"],
+	);
+	// It is answered like any card, keyed by its own id, and goes to the coordinator with its rule.
+	assert.equal(checkAnswer({ judgment, item: r.id, card: r.id, option: "maybe" }).status, 400);
+	const answers = [{ item: r.id, card: r.id, option: "open", at: NOW }];
+	assert.equal(
+		checkAnswer({ judgment, answers, item: r.id, card: r.id, option: "no" }).status,
+		409,
+	);
+	const [pending] = pendingAnswers(judgment, answers);
+	assert.deepEqual(
+		[pending.item, pending.chosen.id, pending.file, pending.rule, pending.items],
+		[r.id, "open", r.file, r.rule, r.items],
+	);
+	assert.equal(closeCard(judgment, r.id, "Rule PR #5 opened.", answers).state, "resolved");
+	assert.equal(
+		inboxOf([{ id: "demo", live, judgment }]).filter((c) => c.type === "rule").length,
+		0,
+	);
+	assert.match(propose().id, /^rule:/, "a closed proposal frees its items");
+});
+
+test("the agents never judge a PR that changes .rusuban/: a person merges it on GitHub", () => {
+	const rulesLive = {
+		...live,
+		prs: [{ ...live.prs[0], files: [{ path: ".rusuban/rules/01.md", change: "ADDED" }] }],
+	};
+	assert.throws(
+		() =>
+			applyJudgment(
+				{
+					item: "#1",
+					label: "A rule",
+					kind: "docs",
+					owner: "agent",
+					next: "Merge.",
+					revisitAt: LATER,
+					pr: { head: "abc", auto: true },
+				},
+				rulesLive,
+				{ items: {} },
+				{ repos: ["o/r"], now: NOW },
+			),
+		/o\/r#1 changes \.rusuban\/: a person merges it on GitHub/,
+	);
 });
 
 test("an answer is checked against its card: a replaced card and a second answer are refused", () => {
@@ -328,6 +457,54 @@ test("a request is recorded and starts the coordinator; an empty one is refused"
 	assert.deepEqual([ask.text, ask.item, ask.by], ["Close the stale issues.", "o/r#10", "alice"]);
 	assert.deepEqual(started, [["demo", "ask"]]);
 	assert.equal((await call("POST", "/api/ask", { project: "demo", text: "  " })).status, 400);
+});
+
+test("Rules & settings: the PRs that change .rusuban/, and a rule proposal answered like a card", async () => {
+	const rulesPr = {
+		...live.prs[0],
+		n: 2,
+		title: "A rule for stale requests",
+		url: "u2",
+		files: [{ path: ".rusuban/rules/01-autonomy.md", change: "MODIFIED" }],
+	};
+	write("projects/demo/live.json", {
+		repos: { "o/r": { defaultBranch: "main", prs: [...live.prs, rulesPr], issues: live.issues } },
+	});
+	const judgment = read("projects/demo/judgment.json");
+	toAlicePr(judgment, false, options);
+	const r = applyProposal(
+		{
+			items: ["#10", "#1"],
+			file: ".rusuban/rules/01-autonomy.md",
+			rule: "Requests nobody works on stay open as help wanted.",
+			q: "Make it a rule?",
+			ctx: "Two cards ask it.",
+			done: "Read both.",
+			urgency: "digest",
+		},
+		judgment,
+		{ repos: ["o/r"], now: NOW },
+	);
+	write("projects/demo/judgment.json", judgment);
+	const inbox = (await call("GET", "/api/inbox")).body;
+	assert.deepEqual(
+		inbox.rulesPrs.map((x) => [x.project, x.item, x.title, x.ci]),
+		[["demo", "o/r#2", "A rule for stale requests", "success"]],
+	);
+	assert.deepEqual(
+		inbox.cards.map((c) => [c.card.id.split("@")[0], c.about]),
+		[
+			["o/r#10", null],
+			["o/r#1", null],
+			[r.id, "proposal"],
+		],
+	);
+	const ok = await call("POST", "/api/answer", { project: "demo", card: r.id, option: "open" });
+	assert.deepEqual([ok.status, ok.body.coordinator], [200, "started"]);
+	const [a] = readJsonl("projects/demo/answers.jsonl");
+	assert.deepEqual([a.item, a.card, a.option], [r.id, r.id, "open"]);
+	assert.equal(readJsonl("projects/demo/journal.jsonl")[0].item, null);
+	assert.deepEqual(started, [["demo", "answer"]]);
 });
 
 test("the inbox serves the waiting cards and the owner's flags, also on the live stream", async () => {

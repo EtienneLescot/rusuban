@@ -204,9 +204,28 @@ const T = {
 	pickConversation: "Pick a conversation to read it here.",
 	noConversations: "No conversation found in the project's folders yet.",
 	menu: "Menu",
-	forYouAll: "for you · all projects",
 	forYouTitle: "For you",
+	allProjects: "all projects",
 	nothingForYou: "Nothing waits for you.",
+	// The inbox's two queues (FR-099): the items' decisions, and how the agents follow the projects.
+	decisions: "Decisions",
+	rulesQueue: "Rules & settings",
+	nothingInRules: "No question on the rules or the settings.",
+	about: { proposal: "Rule proposal", rule: "Silent rule", lock: "Lock", setting: "Setting" },
+	cardsCount: (n) => plural(n, "card"),
+	ruleAddedTo: "Added to",
+	seenOn: "Seen on",
+	ownWordsRule: "Or change the rule in your own words",
+	rulesPrs: "Rules PRs",
+	rulesPr: "Rules PR",
+	rulesPrCi: {
+		success: "CI green",
+		failure: "CI red",
+		pending: "CI running",
+		action_required: "CI waits for approval",
+		none: "no CI",
+	},
+	mergedByAPerson: "A person merges it on GitHub",
 	digest: "digest",
 	forYouUrgency: (urgency) => `for you · ${urgency}`,
 	byAuthor: (login) => `by @${login}`,
@@ -305,6 +324,7 @@ const ui = {
 	origin: "all",
 	// A phone opens on its inbox: the decisions waiting are what one checks from it.
 	tab: "inbox",
+	queue: "decisions", // the inbox's queue shown: "decisions", or "rules" for Rules & settings
 	project: null,
 	...saved,
 	exp: new Set(saved?.exp ?? []),
@@ -312,6 +332,7 @@ const ui = {
 	card: null, // the card open in place of the inbox, from the address (#card/<id>)
 };
 if (!["graph", "kanban", "conversations", "agents"].includes(ui.view)) ui.view = "graph";
+if (!["decisions", "rules"].includes(ui.queue)) ui.queue = "decisions";
 const PHONE = matchMedia("(max-width: 720px)");
 const phone = () => PHONE.matches;
 if (!(ui.z >= 0.1 && ui.z <= 1.6)) Object.assign(ui, { z: 0.6, fitted: false });
@@ -323,7 +344,7 @@ const save = () => {
 };
 
 let S = null; // the last state the server pushed
-let INBOX = { cards: [], flags: [] }; // the inbox the server pushed, every project's
+let INBOX = { cards: [], flags: [], rulesPrs: [] }; // the inbox the server pushed, every project's
 let AGENTS = { dry: false, runs: [], tasks: [] }; // the project's runs and tasks, and the machines
 let HUB = { indexedAt: null, conversations: [], items: {} }; // the project's Claude conversations
 let READER = null; // the conversation open in the reader, a page of it
@@ -862,35 +883,67 @@ const answerLabel = (c) =>
 const waiting = () => INBOX.cards.filter((c) => !c.answer);
 let draft = { card: null, text: "" }; // a free answer being typed survives a re-render
 
+// The inbox's two queues (FR-099): a card asking how the agents follow a project (`about`) waits
+// in Rules & settings, the items' own questions in Decisions.
+const queueOf = (c) => (c.about ? "rules" : "decisions");
+const ABOUT_COLOR = { proposal: "#a78bfa", rule: "#fbbf24", lock: "#f87171", setting: "#38bdf8" };
+const aboutTag = (c) =>
+	c.about
+		? `<span class="tag" style="--tag:${ABOUT_COLOR[c.about]}">${esc(T.about[c.about])}</span>`
+		: "";
+// A setting's tag names it already; a rule proposal counts the cards it answers.
+const queueRef = (c) =>
+	c.type === "setting" ? "" : c.type === "rule" ? T.cardsCount(c.card.items.length) : refOf(c);
+
 function inboxItemHtml(c) {
 	const d = c.card;
 	const now = d.urgency === "now";
 	const current = d.id === ui.card;
 	return `<button type="button" class="ibx-item${current ? " current" : ""}${c.answer ? " answered" : ""}" data-card="${esc(d.id)}"${current ? ' aria-current="true"' : ""}>
-		<span class="ibx-meta"><i class="dot" style="background:var(${now ? "--amber" : "--grey"})"></i><span class="ibx-project">${esc(c.projectTitle)}</span><span class="mono">${esc(refOf(c))}</span><span class="grow"></span><span class="mono">${esc(now ? span(Date.now() - Date.parse(d.createdAt)) : T.digest)}</span></span>
+		<span class="ibx-meta"><i class="dot" style="background:var(${now ? "--amber" : "--grey"})"></i><span class="ibx-project">${esc(c.projectTitle)}</span>${aboutTag(c)}<span class="mono">${esc(queueRef(c))}</span><span class="grow"></span><span class="mono">${esc(now ? span(Date.now() - Date.parse(d.createdAt)) : T.digest)}</span></span>
 		<span class="ibx-q">${esc(d.q)}</span>
 		${c.answer ? `<span class="ibx-answered">${CHECK}${esc(T.answeredCard(answerLabel(c)))}</span>` : ""}
 	</button>`;
 }
 
+// A PR that changes .rusuban/: a person merges it on GitHub, so it links there.
+const CI_COLOR = { success: "--green", failure: "--red", action_required: "--amber" };
+function rulesPrHtml(r) {
+	return `<a class="ibx-item" href="${esc(safeUrl(r.url) ?? "#")}" target="_blank" rel="noopener">
+		<span class="ibx-meta"><i class="dot" style="background:var(${CI_COLOR[r.ci] ?? "--grey"})"></i><span class="ibx-project">${esc(r.projectTitle)}</span><span class="tag" style="--tag:#34d399">${T.rulesPr}</span><span class="mono">${esc(T.prRef(r.item.split("#")[1]))}</span><span class="grow"></span><span class="mono">${esc(T.rulesPrCi[r.ci] ?? r.ci)}</span></span>
+		<span class="ibx-q">${esc(r.title)}</span>
+		<span class="ibx-sub">${T.mergedByAPerson} ↗</span>
+	</a>`;
+}
+
 function inboxListHtml() {
-	const count = waiting().length;
+	const rules = ui.queue === "rules";
 	const head = phone()
-		? `<div class="ibx-head"><h1>${T.forYouTitle}</h1><b class="mono amber">${count}</b></div>`
-		: `<div class="ibx-head"><h1>${T.inbox}</h1><span><b class="mono amber">${count}</b> ${T.forYouAll}</span></div>`;
-	const list = INBOX.cards.length
-		? INBOX.cards.map(inboxItemHtml).join("")
-		: `<p class="ibx-empty">${T.nothingForYou}</p>`;
-	const flags = INBOX.flags.length
-		? `<section class="ibx-flags"><h2>${T.flagged}</h2><ul>${INBOX.flags
-				.slice(0, 12)
-				.map(
-					(f) =>
-						`<li><span class="mono">${esc(clock(f.at))}</span><span>${esc(f.text)}${safeUrl(f.href) ? ` <a href="${esc(f.href)}" target="_blank" rel="noopener">↗</a>` : ""}</span></li>`,
-				)
-				.join("")}</ul></section>`
-		: "";
-	return `${head}<div class="ibx-list">${list}</div>${flags}`;
+		? `<div class="ibx-head"><h1>${T.forYouTitle}</h1><b class="mono amber">${waiting().length}</b></div>`
+		: `<div class="ibx-head"><h1>${T.inbox}</h1><span>${T.allProjects}</span></div>`;
+	const count = (q) => waiting().filter((c) => queueOf(c) === q).length;
+	const tab = (q, label) =>
+		`<button type="button" role="tab" data-queue="${q}" aria-selected="${ui.queue === q}">${label} <b class="mono${q === "rules" && count(q) ? " amber" : ""}">${count(q)}</b></button>`;
+	const seg = `<div class="ibx-seg" role="tablist">${tab("decisions", T.decisions)}${tab("rules", T.rulesQueue)}</div>`;
+	const shown = INBOX.cards.filter((c) => queueOf(c) === ui.queue);
+	const list = shown.length
+		? shown.map(inboxItemHtml).join("")
+		: `<p class="ibx-empty">${rules ? T.nothingInRules : T.nothingForYou}</p>`;
+	const prs =
+		rules && INBOX.rulesPrs?.length
+			? `<section class="ibx-flags"><h2>${T.rulesPrs}</h2></section><div class="ibx-list">${INBOX.rulesPrs.map(rulesPrHtml).join("")}</div>`
+			: "";
+	const flags =
+		!rules && INBOX.flags.length
+			? `<section class="ibx-flags"><h2>${T.flagged}</h2><ul>${INBOX.flags
+					.slice(0, 12)
+					.map(
+						(f) =>
+							`<li><span class="mono">${esc(clock(f.at))}</span><span>${esc(f.text)}${safeUrl(f.href) ? ` <a href="${esc(f.href)}" target="_blank" rel="noopener">↗</a>` : ""}</span></li>`,
+					)
+					.join("")}</ul></section>`
+			: "";
+	return `${head}${seg}<div class="ibx-list">${list}</div>${prs}${flags}`;
 }
 
 // "What I did": the agents' steps, each with the link that shows it, then the judging run's
@@ -924,9 +977,24 @@ function cardViewHtml(c) {
 	const kind = c.kind
 		? `<span class="tag" style="--tag:${KIND_COLOR[c.kind] ?? UNJUDGED_COLOR}">${esc(T.kinds[c.kind] ?? c.kind)}</span>`
 		: "";
-	const top = `<div class="cv-top"><button type="button" class="cv-back" data-back>${BACK}${T.inbox}</button><span class="grow"></span>${safeUrl(c.url) ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${T.gitHubLink} ↗</a>` : ""}${!ph && runsOn.length ? `<button type="button" class="linkish" data-runs="${esc(c.item)}">${esc(T.conversationCount(runsOn.length))}</button>` : ""}</div>`;
-	const chips = `<div class="cv-chips"><span class="cv-project">${esc(c.projectTitle)}</span><span class="mono">${esc(refOf(c))}</span>${kind}<span class="tag you">${esc(T.forYouUrgency(d.urgency))}</span>${c.author && !ph ? `<span class="cv-by">${esc(T.byAuthor(c.author))}</span>` : ""}</div>`;
+	const back = queueOf(c) === "rules" ? T.rulesQueue : T.inbox;
+	const top = `<div class="cv-top"><button type="button" class="cv-back" data-back>${BACK}${back}</button><span class="grow"></span>${safeUrl(c.url) ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${T.gitHubLink} ↗</a>` : ""}${!ph && runsOn.length ? `<button type="button" class="linkish" data-runs="${esc(c.item)}">${esc(T.conversationCount(runsOn.length))}</button>` : ""}</div>`;
+	// A setting's tag names it, and a rule proposal is about no one item.
+	const ref = c.type === "setting" || c.type === "rule" ? "" : refOf(c);
+	const chips = `<div class="cv-chips"><span class="cv-project">${esc(c.projectTitle)}</span>${ref ? `<span class="mono">${esc(ref)}</span>` : ""}${aboutTag(c)}${kind}<span class="tag you">${esc(T.forYouUrgency(d.urgency))}</span>${c.author && !ph ? `<span class="cv-by">${esc(T.byAuthor(c.author))}</span>` : ""}</div>`;
 	const ctx = esc(d.ctx).replace(/(Missing:[\s\S]*)$/, '<span class="missing">$1</span>');
+	// A rule proposal: the rule as it will read, its file, and the cards it answers.
+	const seen = (k) => {
+		const o = INBOX.cards.find((x) => x.item === k);
+		const n = `#${k.split("#")[1]}`;
+		return o
+			? `<button type="button" class="linkish mono" data-card="${esc(o.card.id)}">${esc(n)}</button>`
+			: `<span class="mono">${esc(n)}</span>`;
+	};
+	const rule =
+		c.type === "rule"
+			? `<blockquote class="rule-text">${esc(d.rule)}</blockquote><span class="rule-file">${T.ruleAddedTo} <span class="mono">${esc(d.file)}</span></span><div class="seen">${T.seenOn} ${d.items.map(seen).join("")}</div>`
+			: "";
 	const steps = stepsOf(c);
 	const list = `<ul>${steps.map(stepHtml).join("")}</ul>`;
 	const did = !steps.length
@@ -955,21 +1023,24 @@ function cardViewHtml(c) {
 				// A setting is allowed or not, never answered in words (the validated mockup).
 				yesOrNo(c)
 					? ""
-					: `<label for="cv-free" class="cv-free-label">${ph ? T.ownWordsShort : T.ownWords}</label>
+					: `<label for="cv-free" class="cv-free-label">${ph ? T.ownWordsShort : c.type === "rule" ? T.ownWordsRule : T.ownWords}</label>
 			<div class="cv-free"><textarea id="cv-free" rows="2"></textarea><button type="button" class="send" data-send-free${ph ? ` aria-label="${T.send}"` : ""}>${ph ? ARROW : T.send}</button></div>`
 			}`;
 	}
-	return `<article class="cv${yesOrNo(c) ? " setting" : ""}" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${did}${body}</article>`;
+	return `<article class="cv${yesOrNo(c) ? " setting" : ""}" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${rule}${did}${body}</article>`;
 }
 
 let inboxKey = "";
 function renderInbox() {
 	const c = openCard();
+	// Back from a card is its queue's list.
+	if (c) ui.queue = queueOf(c);
 	// Ages move once a minute in the list; an open card is rebuilt only when it changes, so typing
 	// in it is never cut.
 	const key = JSON.stringify([
 		INBOX,
 		ui.card,
+		ui.queue,
 		chosen,
 		phone(),
 		c ? (S?.runs ?? []).filter((r) => r.items?.includes(c.item)).map((r) => r.id) : null,
@@ -1781,7 +1852,11 @@ function cardClick(t) {
 	const d = t.dataset;
 	if (d.card) location.hash = `card/${encodeURIComponent(d.card)}`;
 	else if (d.back !== undefined) location.hash = "inbox";
-	else if (d.option) {
+	else if (d.queue) {
+		ui.queue = d.queue;
+		save();
+		renderInbox();
+	} else if (d.option) {
 		chosen = chosen === d.option ? null : d.option;
 		renderInbox();
 	} else if (d.send !== undefined && c && chosen) sendAnswer(c, chosen);
@@ -1860,7 +1935,7 @@ document.addEventListener("click", (e) => {
 	if (e.target.closest("a[href]")) return;
 	// The tab bar's own buttons only: <body> carries the current tab too, and every click reaches it.
 	const card = e.target.closest(
-		"[data-card],[data-back],[data-option],[data-send],[data-send-free],[data-stop],[data-release],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],[data-conv],[data-conv-back],[data-origin],[data-earlier],[data-reply],[data-terminal],#tabbar [data-tab]",
+		"[data-card],[data-back],[data-queue],[data-option],[data-send],[data-send-free],[data-stop],[data-release],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],[data-conv],[data-conv-back],[data-origin],[data-earlier],[data-reply],[data-terminal],#tabbar [data-tab]",
 	);
 	// A Stop pressed once is forgotten at the next click elsewhere.
 	if (stopArmed && !card?.dataset.stop) {
