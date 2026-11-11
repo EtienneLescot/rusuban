@@ -1273,77 +1273,6 @@ a.num:hover .ext {
 	gap: 6px;
 	font-size: 12.5px;
 }
-.decision h3 {
-	margin: 0;
-	font-size: 14px;
-	line-height: 1.35;
-	font-weight: 600;
-	color: var(--text-hi);
-}
-.decision .ctx {
-	color: var(--text-2);
-}
-.decision .rec {
-	display: flex;
-	flex-direction: column;
-	gap: 3px;
-	padding: 9px 11px;
-	border-radius: 9px;
-	background: rgba(5, 6, 6, 0.55);
-	border: 1px solid var(--line);
-}
-.decision .rec small {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	color: var(--text-3);
-	font-size: 11px;
-}
-.decision .rec b {
-	color: var(--text-hi);
-	font-size: 12.5px;
-}
-.decision .pick {
-	margin: 0;
-	color: var(--text-2);
-	font-size: 11.5px;
-}
-.decision .opts {
-	list-style: none;
-	margin: 0;
-	padding: 0;
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-.decision .opt {
-	display: flex;
-	flex-direction: column;
-	gap: 2px;
-	padding: 7px 11px;
-	border-radius: 9px;
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	background: var(--fill);
-	font-size: 12.5px;
-}
-.decision .opt b {
-	font-weight: 600;
-	color: var(--text-1);
-}
-.decision .opt span {
-	color: var(--text-3);
-	font-size: 12px;
-}
-.decision .opt.rec-opt {
-	border-color: rgba(52, 178, 123, 0.7);
-}
-.decision .opt .msg {
-	color: var(--text-3);
-	font-size: 11.5px;
-}
-.decision.answered {
-	border-color: var(--green);
-}
 .decision.settled {
 	border-color: rgba(52, 178, 123, 0.45);
 	background: rgba(52, 178, 123, 0.06);
@@ -1425,45 +1354,6 @@ a.num:hover .ext {
 .secondary.small {
 	height: 20px;
 	padding: 0 6px;
-}
-
-/* Who speaks in a card: the agent (clay, with its crab) or you (green). */
-.said {
-	display: flex;
-	flex-direction: column;
-	gap: 6px;
-}
-.said .who {
-	display: inline-flex;
-	align-items: center;
-	gap: 6px;
-	font-family: var(--mono);
-	font-size: 10px;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-}
-.said.agent {
-	padding: 10px 12px;
-	border-radius: 10px;
-	background: rgba(217, 119, 87, 0.08);
-	border: 1px solid rgba(217, 119, 87, 0.35);
-}
-.said.agent .who {
-	color: #e8a088;
-}
-.said.agent p {
-	margin: 0;
-	font-size: 12.5px;
-	line-height: 1.5;
-	color: var(--text-2);
-}
-.said.you .who {
-	color: var(--green);
-}
-.said .crab-svg,
-.rec .crab-svg {
-	width: 13px;
-	height: 10px;
 }
 
 /* A recorded answer or an applied decision */
