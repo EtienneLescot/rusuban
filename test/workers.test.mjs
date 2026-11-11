@@ -226,6 +226,18 @@ test("a worktree of the clone outside every run's folders goes once no worker li
 	assert.doesNotMatch(git(["worktree", "list"], cloneOf("o/r")), /tmp-legacy/);
 });
 
+test("the sweep never takes the clone for a stray worktree, the home reached through a link", async () => {
+	// macOS's tmpdir is such a link: git names the clone by its real path, /private/var/…
+	const real = process.env.RUSUBAN_HOME;
+	const linked = `${real}-link`;
+	fs.symlinkSync(real, linked, "junction");
+	process.env.RUSUBAN_HOME = linked;
+	await sweep(config);
+	assert.ok(fs.existsSync(path.join(cloneOf("o/r"), ".git")), "the clone stays");
+	fs.rmSync(linked, { recursive: true, force: true });
+	assert.ok(fs.existsSync(path.join(real, "repos", "o", "r", ".git")), "a link goes alone");
+});
+
 test("short of room, a worker waits with the reason in its status, and starts once there is", () => {
 	disk.free = () => 4.2e9;
 	const { id, state } = start("fix-13", "o/r#13");
