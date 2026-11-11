@@ -16,6 +16,8 @@ import { applyJudgment, applyProposal } from "../../src/model.mjs";
 import { startServer } from "../../src/server.mjs";
 
 const RUN = fileURLToPath(new URL("./run.mjs", import.meta.url));
+// The conversations "Open in terminal" was asked for: no window opens during a test.
+export const terminals = [];
 const conversationsDir = (cwd) => path.join(process.env.CLAUDE_CONFIG_DIR, "projects", slugOf(cwd));
 const NOW = new Date().toISOString();
 const LATER = new Date(Date.now() + 7 * 86400e3).toISOString();
@@ -409,6 +411,10 @@ export const test = base.extend({
 					tendLeases: async () => [],
 					probeMachines: async () => read("leases/probes.json").probes,
 					releaseLease: async () => true,
+					openTerminal: (_index, id) => {
+						terminals.push(id);
+						return { ok: true };
+					},
 				},
 			});
 			await page.goto(`http://127.0.0.1:${srv.port}/`);

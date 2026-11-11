@@ -1282,11 +1282,13 @@ const runRef = (r) =>
 	r.items?.length
 		? `${itemRef(r.project, r.items[0])}${r.items.length > 1 ? ` +${r.items.length - 1}` : ""}`
 		: "";
-// A run's conversation, as its log tells it until the hub shows transcripts.
-const logUrl = (r) => `/api/runs/${encodeURIComponent(r.id)}/log`;
+// A run's conversation opens where one reads it: on this PC in a terminal, as "Open in terminal"
+// does; from a phone or another machine of the tailnet, where no terminal opens, in the reader.
+const onThisPc = () => !phone() && ["127.0.0.1", "localhost", "[::1]"].includes(location.hostname);
+const openRunAttr = () => (onThisPc() ? "data-terminal" : "data-conv");
 const conversationLink = (r) =>
 	r.conversation
-		? `<a href="${logUrl(r)}" target="_blank" rel="noopener">${T.conversation}</a>`
+		? `<button type="button" class="linkish" ${openRunAttr()}="${esc(r.conversation)}">${T.conversation}</button>`
 		: "";
 // The model a run's session said it runs on (FR-098), marked when it is not the one asked for (an
 // alias asked, such as opus, is part of the full id announced).
@@ -1375,7 +1377,7 @@ function recentHtml(r, ph) {
 		return `<div ${attrs}>${who}${sum}${modelHtml(r)}<span class="mono">${esc(at)}</span>${conversationLink(r)}</div>`;
 	const inner = `<span class="ag-line-head">${who}<span class="grow"></span>${modelHtml(r)}<span class="mono">${esc(at)}</span></span>${sum}`;
 	return r.conversation
-		? `<a ${attrs} href="${logUrl(r)}" target="_blank" rel="noopener">${inner}</a>`
+		? `<button type="button" ${attrs} ${openRunAttr()}="${esc(r.conversation)}">${inner}</button>`
 		: `<div ${attrs}>${inner}</div>`;
 }
 

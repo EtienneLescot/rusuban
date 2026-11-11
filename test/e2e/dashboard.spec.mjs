@@ -4,7 +4,7 @@ import { expect } from "@playwright/test";
 import { loadConfig, read, readJsonl, saveConfig } from "../../src/home.mjs";
 import { answerOf, askDesktop } from "../../src/machines.mjs";
 import { changeSetting } from "../../src/settings.mjs";
-import { test } from "./app.mjs";
+import { terminals, test } from "./app.mjs";
 
 const VIEWS = {
 	graph: "#vp",
@@ -332,6 +332,28 @@ test("Conversations: by item, filtered by origin; the reader shows one and answe
 	await expect
 		.poll(() => readJsonl("projects/acme/journal.jsonl").map((e) => e.text))
 		.toContain("Answered the conversation “Fix the crash on save” in a fork");
+});
+
+test("a run's Conversation opens it: in a terminal on this PC, in the reader on a phone", async ({
+	page,
+	isMobile,
+}) => {
+	if (isMobile) await press(page.locator("#menu"), true);
+	await page.selectOption("#project", "publications");
+	if (isMobile) await press(page.locator("#menu"), true);
+	await goTo(page, "agents", isMobile);
+	const session = "cccccccc-0000-4000-8000-000000000033";
+	// Never the raw log any more.
+	await expect(page.locator('#agents-view a[href*="/log"]')).toHaveCount(0);
+	if (!isMobile) {
+		await press(page.locator(`#agents-view [data-terminal="${session}"]`).first(), false);
+		await expect(page.locator("#toast")).toHaveText("Opened in a terminal");
+		expect(terminals).toContain(session);
+		return;
+	}
+	await press(page.locator(`#agents-view .ag-line[data-conv="${session}"]`), true);
+	await expect(page.locator("#conv-reader h1")).toHaveText("Daily post");
+	await expect(page.locator("#conv-reader")).toContainText("Write today's post.");
 });
 
 test("a project without a repo shows its tasks and runs, never an empty board, and reads no GitHub", async ({

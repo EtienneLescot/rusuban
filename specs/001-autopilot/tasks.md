@@ -147,6 +147,9 @@ starts the coordinator, which applies the answer.
 - [x] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
   - `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The runs view is the Agents drawer: runs at work first with a two-tap Stop, the last 30 with their conversation, the one a card points at lit.
 
+- [x] T138 [US4] A run's Conversation opens the conversation (FR-054), Etienne's request of 2026-11-11: the link of the Agents view opened `/api/runs/<id>/log`, raw JSON
+  - On the host it resumes the session in a terminal, as "Open in terminal" does; from a phone, or another machine of the tailnet where no terminal opens, it opens the reader. On a phone the whole line of a recent run does it.
+  - Click tests at both widths; the terminal is a stub there, so no window opens during the tests.
 - [x] T137 [US4] A project's Conversations are its own (FR-102), Etienne's decision of 2026-11-11: 692 of OpenScreen's 1,141 conversations were about no item, sessions opened in its checkout about other things
   - The list keeps the conversations about one of the project's items and Rusuban's own runs on it; a fork goes with the conversation it came from. One linked later, by a PR link or a branch, shows from the hub pass that links it. Answering and opening in a terminal go by the conversation's id, listed or not.
   - On the instance's copy, OpenScreen's list goes from 1,141 to 473. The open items' groups come first, then those of items since closed, named by their number alone, not as an issue.

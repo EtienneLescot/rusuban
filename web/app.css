@@ -2894,8 +2894,11 @@ body[data-showing="conversations"] .filters > :not(.views) {
 		padding: 10px 12px;
 		border-radius: 12px;
 	}
-	a.ag-line:hover {
-		text-decoration: none;
+	/* A whole line that opens its run's conversation, in the reader. */
+	button.ag-line {
+		width: 100%;
+		text-align: left;
+		font: inherit;
 	}
 	.ag-line-head {
 		display: flex;

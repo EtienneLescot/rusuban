@@ -402,7 +402,9 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
 - **FR-053**: The user MUST be able to answer a session from the dashboard. A session Rusuban started
   resumes in place unless its run is alive; any other session (Desktop, terminal) is answered through a
   fork listed under the original.
-- **FR-054**: An "open in terminal" action MUST resume any session on the host.
+- **FR-054**: An "open in terminal" action MUST resume any session on the host. A run's
+  "Conversation", in the Agents view, opens the same way on the host, and in the dashboard's reader
+  from a phone or another machine of the tailnet, never as its raw log (decided on 2026-11-11).
 - **FR-055**: The hub MUST rescan every 30 seconds and show the age of its index.
 - **FR-102**: A project's Conversations MUST list only the conversations about one of its items, and
   Rusuban's own runs on it, as Etienne decided on 2026-11-11: a session opened in the project's folder
