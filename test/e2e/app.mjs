@@ -307,6 +307,15 @@ export function seed(busyPid, checkout) {
 			message: { role: "assistant", content: [{ type: "text", text: "Reproduced." }] },
 		},
 	]);
+	// Opened in acme's checkout about something else: indexed, but not acme's conversation (FR-102).
+	said("dddddddd-0000-4000-8000-000000000044", "claude-desktop", [
+		{
+			type: "user",
+			gitBranch: "main",
+			timestamp: NOW,
+			message: { role: "user", content: "Write yesterday's PostHog report." },
+		},
+	]);
 	fs.utimesSync(
 		path.join(conversationsDir(checkout), "bbbbbbbb-0000-4000-8000-000000000022.jsonl"),
 		new Date("2026-11-01T10:05:00Z"),

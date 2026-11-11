@@ -305,7 +305,11 @@ test("Conversations: by item, filtered by origin; the reader shows one and answe
 }) => {
 	await goTo(page, "conversations", isMobile);
 	const list = page.locator("#conv-list");
+	// The two about acme's items; the session about a PostHog report, opened in its checkout, is not
+	// acme's, and the count says so.
 	await expect(list.locator(".cl-row")).toHaveCount(2);
+	await expect(list).not.toContainText("PostHog");
+	await expect(list.locator(".cl-head")).toContainText("2 · indexed");
 	await expect(list.locator(".cl-ghead").first()).toContainText("PR #11");
 	await press(list.locator('[data-origin="terminal"]'), isMobile);
 	await expect(list.locator(".cl-row")).toHaveCount(1);

@@ -442,6 +442,51 @@ test("a Rusuban run's conversation is named after the run, never after its promp
 	assert.equal(runTitle({ kind: "task", title: "Daily post", startedAt: at }), "Daily post");
 });
 
+test("a project's conversations: those about its items and Rusuban's runs, one linked later from then on", async () => {
+	placeFixtures();
+	const checkout = path.join(work, "widgets");
+	// Opened in the checkout about something else: indexed, but not the project's conversation.
+	const report = place("report", checkout, said("report", checkout, "Write the PostHog report"));
+	// A coordinator run about no item, and a fork of the unrelated session answered from the page.
+	const scratch = path.join(home, "scratch", "widgets");
+	const run = (id, over) =>
+		write(`runs/${id}/status.json`, {
+			id,
+			project: "widgets",
+			items: [],
+			cwd: scratch,
+			state: "done",
+			createdAt: "2026-11-05T11:00:00.000Z",
+			...over,
+		});
+	run("act-20261105-1100-aa01", { kind: "act", session: "act" });
+	run("reply-20261105-1110-aa02", { kind: "reply", session: "fork-of-report", forkOf: "report" });
+	place("act", scratch, said("act", scratch, "# You are the coordinator"));
+	place("fork-of-report", scratch, said("fork-of-report", scratch, "Add the funnel"));
+	let index = await scanHub({ config, root });
+	const listed = () => hubState(index, config, { project: "widgets" }).conversations;
+	const ids = () => listed().map((c) => c.id);
+	assert.ok(index.sessions.report && index.sessions["fork-of-report"], "both indexed");
+	assert.deepEqual(ids().sort(), ["act", "cli", "desktop", "sdk-cli"]);
+	// Its id still opens it: an answer and a terminal go by the index, not by the list.
+	assert.equal(replyTo(index, "report", "Go on", () => ({ id: "reply-1" })).forked, true);
+	const start = () => ({ on: () => ({ unref: () => {} }) });
+	assert.deepEqual(openTerminal(index, "report", "claude-test", start), { ok: true });
+	// Linked later, by a PR link: listed from the pass that reads it, its fork with it.
+	const link = {
+		type: "pr-link",
+		prNumber: 1480,
+		prRepository: "acme/widgets",
+		prUrl: "https://github.com/acme/widgets/pull/1480",
+		timestamp: "2026-11-05T10:05:00.000Z",
+		sessionId: "report",
+	};
+	fs.appendFileSync(report, `${JSON.stringify(link)}\n`);
+	index = await scanHub({ config, root });
+	assert.deepEqual(listed().find((c) => c.id === "report").items, ["acme/widgets#1480"]);
+	assert.ok(ids().includes("fork-of-report"), "a fork goes with the conversation it came from");
+});
+
 test("an answer resumes in place a session whose Rusuban run has ended, and forks any other", async () => {
 	placeFixtures();
 	const index = await scanHub({ config, root });
