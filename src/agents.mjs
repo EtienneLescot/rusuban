@@ -479,11 +479,38 @@ export function holder(lock) {
 }
 export const queued = (lock) => read(queueName(lock), []);
 
-export function readRun(id) {
-	const s = read(statusName(id), null);
-	if (s?.state === "running" && !alive(s.pid)) s.state = "interrupted";
-	return s;
+// A run's status, read again only when its file changed: the page lists every run at each update,
+// and on Windows opening a file costs far more than looking at its time and size. A run settled
+// (ended, or its retry asked for) is never written again, so listing the runs does not even look
+// at it: a run is a directory of runs/, which the listing reads.
+const statuses = new Map(); // status file → { key, status }
+const settled = (s) =>
+	!!s.retriedBy || (!!s.endedAt && !["queued", "running", "limited"].includes(s.state));
+function statusOf(id, listed) {
+	const file = homePath(statusName(id));
+	const hit = statuses.get(file);
+	if (listed && hit?.status && settled(hit.status)) return hit.status;
+	let st;
+	try {
+		st = fs.statSync(file);
+	} catch {
+		statuses.delete(file);
+		return null;
+	}
+	const key = `${st.mtimeMs}:${st.size}`;
+	if (hit?.key === key) return hit.status;
+	const status = read(statusName(id), null);
+	statuses.set(file, { key, status });
+	return status;
 }
+// A copy, so a caller's change stays its own; a running run whose process died is interrupted.
+const runOf = (status) => {
+	if (!status) return null;
+	const s = { ...status };
+	if (s.state === "running" && !alive(s.pid)) s.state = "interrupted";
+	return s;
+};
+export const readRun = (id) => runOf(statusOf(id, false));
 
 export function listRuns(project = null) {
 	let ids = [];
@@ -491,7 +518,7 @@ export function listRuns(project = null) {
 		ids = fs.readdirSync(homePath("runs")).filter((d) => d !== "locks" && !d.endsWith(".json"));
 	} catch {}
 	return ids
-		.map(readRun)
+		.map((id) => runOf(statusOf(id, true)))
 		.filter((r) => r && (!project || r.project === project))
 		.sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""));
 }

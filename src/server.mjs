@@ -7,6 +7,7 @@ import { execFile } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
+import { performance } from "node:perf_hooks";
 import {
 	busy,
 	CARD_RULES,
@@ -338,6 +339,14 @@ export function stateOf(ctx, projectId) {
 		journal: journalAll.slice(-40).reverse(),
 	};
 }
+
+// A step that held the daemon long enough for a page to wait on it is said in its log, with its
+// time: a slow dashboard names its cause. Everything the daemon does runs on one loop.
+const SLOW_MS = 300;
+const slow = (ctx, what, since) => {
+	const ms = performance.now() - since;
+	if (ms > SLOW_MS) ctx.say(`slow: ${what} held the daemon ${Math.round(ms)} ms`);
+};
 
 // ── One cycle, after each read of a project ───────────────────────────────────────────────────
 // What reads GitHub, merges and starts agents; tests replace any of them through startServer.
@@ -1240,8 +1249,12 @@ async function handle(ctx, req, res) {
 			const [file, type] = STATIC[url.pathname];
 			return send(res, 200, type, fs.readFileSync(new URL(file, WEB)));
 		}
-		if (req.method === "GET" && url.pathname === "/api/state")
-			return json(res, 200, stateOf(ctx, url.searchParams.get("project")));
+		if (req.method === "GET" && url.pathname === "/api/state") {
+			const t = performance.now();
+			const state = stateOf(ctx, url.searchParams.get("project"));
+			slow(ctx, "a project's state", t);
+			return json(res, 200, state);
+		}
 		if (req.method === "GET" && url.pathname === "/api/inbox")
 			return json(res, 200, inboxState(ctx));
 		if (req.method === "GET" && url.pathname === "/api/conversations")
@@ -1325,34 +1338,53 @@ export async function startServer({
 			quiet || console.log(new Date().toLocaleTimeString("en-GB", { hour12: false }), ...a),
 	};
 	// Each client gets its project's state, runs, tasks and conversations, the one its state names,
-	// and the inbox of all projects, each when it changes.
-	ctx.push = (client, force = false) => {
-		const send = (event, value, key) => {
-			const body = JSON.stringify(value);
-			const h = hash(body);
+	// and the inbox of all projects, each when it changes. A broadcast computes each of them once for
+	// every page that shows it (`memo`): the pages of one project share them.
+	ctx.push = (client, force = false, memo = new Map()) => {
+		const once = (key, compute) => {
+			if (!memo.has(key)) {
+				const value = compute();
+				const body = JSON.stringify(value);
+				memo.set(key, { value, body, h: hash(body) });
+			}
+			return memo.get(key);
+		};
+		const send = (event, { body, h }, key) => {
 			if (h === client[key] && !force) return;
 			client[key] = h;
 			client.res.write(`event: ${event}\ndata: ${body}\n\n`);
 		};
-		const state = stateOf(ctx, client.project);
-		const shown = state.project?.id ?? "";
+		const state = once(`state ${client.project}`, () => stateOf(ctx, client.project));
+		const shown = state.value.project?.id ?? "";
 		send("state", state, "sent");
-		send("inbox", inboxState(ctx), "sentInbox");
-		send("agents", agentsState(ctx, shown), "sentAgents");
-		send("hub", conversationsOf(ctx, new URLSearchParams({ project: shown })), "sentHub");
+		send(
+			"inbox",
+			once("inbox", () => inboxState(ctx)),
+			"sentInbox",
+		);
+		send(
+			"agents",
+			once(`agents ${shown}`, () => agentsState(ctx, shown)),
+			"sentAgents",
+		);
+		const hub = () => conversationsOf(ctx, new URLSearchParams({ project: shown }));
+		send("hub", once(`hub ${shown}`, hub), "sentHub");
 	};
 	// A state file the model cannot read (cut short, from an older version) costs the page one update,
 	// never the daemon nor a write that already happened: said once per distinct error.
 	let lastError = null;
 	ctx.broadcast = (force = false) => {
+		const memo = new Map();
+		const t = performance.now();
 		for (const c of ctx.clients)
 			try {
-				ctx.push(c, force);
+				ctx.push(c, force, memo);
 			} catch (e) {
 				if (firstLine(e) === lastError) continue;
 				lastError = firstLine(e);
 				ctx.say(`page update failed: ${lastError}`);
 			}
+		slow(ctx, `the update of ${ctx.clients.size} page(s)`, t);
 	};
 	const server = http.createServer((req, res) => handle(ctx, req, res));
 	await new Promise((resolve, reject) => {

@@ -747,12 +747,26 @@ const commands = {
 	async status() {
 		const config = loadConfig();
 		const url = dashboardUrl({ owner: config.owner, port: config.port });
-		const state = await fetch(`${url}/api/state`, { signal: AbortSignal.timeout(3000) })
-			.then((r) => (r.ok ? r.json() : null))
-			.catch(() => null);
 		const log = homePath("daemon.log");
+		// A daemon that answers late is slow, not stopped: nothing listening is the only "not
+		// running". It gets 30 s, and an answer after 3 s says how long it took.
+		const asked = Date.now();
+		let failure = null;
+		const state = await fetch(`${url}/api/state`, { signal: AbortSignal.timeout(30_000) })
+			.then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+			.catch((e) => {
+				failure = e;
+				return null;
+			});
+		const took = Date.now() - asked;
 		if (!state) {
-			console.log(`rusuban is not answering on ${url}/: see ${log}`);
+			const why =
+				failure?.cause?.code === "ECONNREFUSED"
+					? `is not running on ${url}/`
+					: failure?.name === "TimeoutError"
+						? `is running on ${url}/ but gave no answer in 30 s`
+						: `answers ${url}/ with an error (${failure?.message})`;
+			console.log(`rusuban ${why}: see ${log}`);
 			process.exitCode = 1;
 			return;
 		}
@@ -772,6 +786,9 @@ const commands = {
 		console.log(
 			[
 				`rusuban ${state.version}${state.dry ? " (dry)" : ""}, up ${ago(state.startedAt)}, on ${url}/`,
+				...(took > 3000
+					? [`slow: it took ${(took / 1000).toFixed(1)} s to answer; its log says why: ${log}`]
+					: []),
 				...(tailnet ? [`from your tailnet: https://${tailnet}/`] : []),
 				...(latest && newer(latest, version)
 					? [`rusuban ${latest} is out: npm i -g rusuban, then rusuban service install to restart`]
