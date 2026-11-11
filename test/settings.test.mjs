@@ -1,6 +1,7 @@
 // The owner's settings (US9, T118, T119): one module for the owner's commands and the MCP. What widens
 // agents' rights waits for the owner's card unless a person confirmed it in a terminal; what narrows
 // applies at once; every change is journaled with its origin; nothing runs inside an agent run.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import http from "node:http";

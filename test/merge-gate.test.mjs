@@ -1,5 +1,6 @@
 // One breaking test per hard lock (FR-021, FR-022): from a PR that would merge, each case breaks one
 // lock, and the PR must lose its eligibility to exactly the gate that guards that lock.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { test } from "node:test";

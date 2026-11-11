@@ -1,6 +1,7 @@
 // Channels (T065) and the pings wired into the daemon: a channel added waits for the owner (data
 // leaves to its target, FR-092), its secret never shows, `channel test` really sends, and the daemon
 // pings each card once.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import fs from "node:fs";

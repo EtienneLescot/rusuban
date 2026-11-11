@@ -1,5 +1,6 @@
 // Every example under examples/rules/ goes through the real rules loader, served as a repo's
 // .rusuban/ folder on its default branch: an example that would not load in a repo fails here.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";

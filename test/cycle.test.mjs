@@ -1,5 +1,6 @@
 // The daemon's cycle after each GitHub read, with GitHub and the agents replaced by recorders: what
 // it merges, what it flags, which agents it starts.
+import "./tmp-root.mjs";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
