@@ -494,9 +494,16 @@ export const lastIndex = () => {
 // ── The Conversations view (T061) ─────────────────────────────────────────────────────────────
 const ORIGIN = { "claude-desktop": "desktop", cli: "terminal" };
 
+// A run's name for its session, whose first message is the assembled prompt: the run's own title
+// (a task's, a worker's, a reply's), else its kind and the time it started, "Judge 21:40".
+const KIND_NAME = { judge: "Judge", act: "Coordinator" };
+export const runTitle = (r) =>
+	r.title ??
+	`${KIND_NAME[r.kind] ?? r.kind} ${new Date(r.startedAt ?? r.createdAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`;
+
 // `listConversations`, with each session's origin as the page names it, its run, and the type and
 // title of each item the projects know, for the list's headings. A run's session shows the run's
-// title: its first message is the assembled prompt. A fork is listed under the session it came from.
+// name, never its prompt. A fork is listed under the session it came from.
 export function hubState(index, config, { origin = null, ...filters } = {}) {
 	const runs = new Map(listRuns().map((r) => [r.id, r]));
 	const items = {};
@@ -510,7 +517,7 @@ export function hubState(index, config, { origin = null, ...filters } = {}) {
 			const run = c.run ? runs.get(c.run) : null;
 			return {
 				...c,
-				title: run?.title ?? c.title ?? "Untitled",
+				title: run ? runTitle(run) : (c.title ?? "Untitled"),
 				origin: ORIGIN[c.origin] ?? c.origin ?? "unknown",
 				runKind: run?.kind ?? null,
 				runState: run?.state ?? null,
@@ -536,7 +543,7 @@ export function replyTo(index, id, text, request = requestRun) {
 		throw Object.assign(new Error("the answer is empty"), { status: 400 });
 	const run = s.run ? readRun(s.run) : null;
 	const fork = !run || ["queued", "running"].includes(run.state);
-	const title = run?.title ?? s.title ?? "Untitled";
+	const title = run ? runTitle(run) : (s.title ?? "Untitled");
 	const r = request({
 		kind: "reply",
 		project: s.project,

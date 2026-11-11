@@ -76,14 +76,6 @@ const T = {
 	followed: "followed by the agents",
 	repoObserved: "This repo has no rules yet: agents only read it.",
 	decision: "Decision",
-	agentDid: "The agent did",
-	yourDecision: "Your decision",
-	decisionFor: (login) => `Decision for @${login}`,
-	agentRecommends: "The agent recommends",
-	options: "Options",
-	githubMessage: "Posted on GitHub:",
-	answerRecorded: (label) => `Your answer is recorded: “${label}”`,
-	agentApplies: "An agent applies it.",
 	settledTitle: (state, choice) =>
 		`${state === "replaced" ? "Card replaced" : "Decision applied"}${choice ? `: “${choice}”` : ""}`,
 	next: "Next",
@@ -216,6 +208,10 @@ const T = {
 	ruleAddedTo: "Added to",
 	seenOn: "Seen on",
 	ownWordsRule: "Or change the rule in your own words",
+	// A request about an item, from its card: it goes to the coordinator.
+	askAbout: "Ask Claude about this item",
+	askSent: "Sent to the coordinator",
+	askFailed: (error) => `Not sent: ${error}`,
 	rulesPrs: "Rules PRs",
 	rulesPr: "Rules PR",
 	rulesPrCi: {
@@ -348,7 +344,7 @@ let INBOX = { cards: [], flags: [], rulesPrs: [] }; // the inbox the server push
 let AGENTS = { dry: false, runs: [], tasks: [] }; // the project's runs and tasks, and the machines
 let HUB = { indexedAt: null, conversations: [], items: {} }; // the project's Claude conversations
 let READER = null; // the conversation open in the reader, a page of it
-let chosen = null; // the option picked on the open card, waiting for Send
+const picked = new Map(); // card id → the option picked on it, waiting for its Send
 let stopArmed = null; // the run whose Stop was pressed once
 let releaseArmed = null; // the machine whose Release was pressed once
 let runFocus = null; // the runs the Agents view highlights: a run id, or an item's runs
@@ -515,26 +511,33 @@ async function post(url, body) {
 const gatesHtml = (gates) =>
 	`<span class="gates">${gates.map((g) => `<i style="background:${GATE[g.state]}" title="${esc(`${g.name}: ${g.detail}`)}"></i>`).join("")}</span>`;
 
-// Read-only for now: answering a card comes with the inbox. Who speaks stays clear: what the agent
-// did, then the question to its person, then the options, each with what the agent will do.
-function decisionHtml(n) {
-	const d = n.decision;
-	const rec = d.options.find((o) => o.id === d.rec);
-	const answer = answerOf(n);
-	const opts = d.options
-		.map(
-			(o) =>
-				`<li class="opt${o.id === d.rec ? " rec-opt" : ""}"><b>“${esc(o.label)}”</b><span>→ ${esc(o.effect)}</span>${o.message ? `<small class="msg">${T.githubMessage} ${esc(o.message)}</small>` : ""}</li>`,
-		)
-		.join("");
-	return `<section class="decision${answer ? " answered" : ""}" aria-label="${T.decision}">
-		${d.done ? `<div class="said agent"><span class="who">${CRAB}${T.agentDid}</span><p>${esc(d.done)}</p></div>` : ""}
-		<div class="said you"><span class="who">${d.to === S.me ? T.yourDecision : esc(T.decisionFor(d.to))}</span><h3>${esc(d.q)}</h3><p class="ctx">${esc(d.ctx)}</p></div>
-		${rec ? `<div class="rec"><small>${CRAB}${T.agentRecommends}</small><b>“${esc(rec.label)}”</b><span>${esc(d.why ?? "")}</span></div>` : ""}
-		${answer ? `<div class="done-box" role="status">${CHECK}<div><b>${esc(T.answerRecorded(answer))}</b><span><span class="dot pulse"></span>${T.agentApplies}</span></div></div>` : ""}
-		<h4 class="pick">${T.options}</h4>
-		<ul class="opts">${opts}</ul>
-	</section>`;
+// An item's open card as the inbox holds it, or as its node says when the inbox is not in yet.
+const entryOf = (id) => {
+	const c = INBOX.cards.find((x) => x.card.id === id);
+	if (c) return c;
+	const n = S?.model.nodes.find((x) => x.decision?.id === id);
+	return n
+		? {
+				project: S.project.id,
+				item: n.id,
+				type: n.type,
+				card: n.decision,
+				answer: n.decision.answer,
+			}
+		: null;
+};
+
+// On an item's card, its open card answers as in the inbox (one block, answerHtml); without one,
+// or once it is answered, a request to Claude about the item goes to the coordinator (FR-100).
+function itemCardHtml(n) {
+	const c = n.decision && entryOf(n.decision.id);
+	const answer = c
+		? `<section class="decision" aria-label="${T.decision}" data-answer="${esc(c.card.id)}">${answerHtml(c, true, `free:${n.id}`)}</section>`
+		: "";
+	if (c && !c.answer) return answer;
+	const key = `ask:${n.id}`;
+	return `${answer}<div class="ask" data-ask="${esc(n.id)}"><label for="${esc(key)}" class="cv-free-label">${T.askAbout}</label>
+		<div class="cv-free"><textarea id="${esc(key)}" data-free="${esc(key)}" rows="2"></textarea><button type="button" class="send" data-send-ask="${esc(n.id)}" aria-label="${T.send}">${ARROW}</button></div></div>`;
 }
 
 const settledHtml = (s) => `<section class="decision settled" aria-label="${T.decision}">
@@ -551,8 +554,8 @@ function detailHtml(n, linked) {
 		parts.push(
 			`<div class="busy"><span class="dot pulse"></span><span>${esc(T.agentAtWork(n.activity))}</span></div>`,
 		);
-	if (n.decision) parts.push(decisionHtml(n));
-	else if (n.settled) parts.push(settledHtml(n.settled));
+	if (!n.decision && n.settled) parts.push(settledHtml(n.settled));
+	parts.push(itemCardHtml(n));
 	if (n.next) parts.push(`<div><h4>${T.next}</h4><p>${esc(n.next)}</p></div>`);
 	if (n.block) parts.push(`<div><h4>${T.blockedBy}</h4><p>${esc(n.block)}</p></div>`);
 	if (n.revisitAt && (n.owner === "agent" || n.owner === "third"))
@@ -565,11 +568,11 @@ function detailHtml(n, linked) {
 		parts.push(`<div><div class="gatehead"><b>${T.mergeGates}</b><span style="color:${sub.c}">${esc(status)}</span></div>
 			<ol class="gatelist">${n.gates.map((g) => `<li><i style="background:${GATE[g.state]}"></i><b>${esc(g.name)}</b><span>${esc(g.detail)}</span></li>`).join("")}</ol></div>`);
 	}
-	// The item's Claude conversations: a click opens one in the Conversations view.
+	// The item's Claude conversations, by name then origin: a click opens one in Conversations.
 	const convs = HUB.conversations.filter((c) => c.items.includes(n.id) && !c.forkOf);
 	if (convs.length)
 		parts.push(
-			`<div><h4>${T.conversations}</h4><div class="links">${convs.map((c) => `<button type="button" data-conv="${esc(c.id)}">${esc(convOrigin(c))} · ${esc(c.title)}</button>`).join("")}</div></div>`,
+			`<div><h4>${T.conversations}</h4><div class="links">${convs.map((c) => `<button type="button" data-conv="${esc(c.id)}">${esc(c.title)} · ${esc(T.origins[c.origin] ?? c.origin)}</button>`).join("")}</div></div>`,
 		);
 	if (linked.length)
 		parts.push(
@@ -647,6 +650,13 @@ function renderGraph() {
 		[...ui.exp],
 		focusId,
 		cardItem(),
+		// An open item card shows its card as the inbox holds it, the option picked on it, and its
+		// conversations, which come with their own event.
+		INBOX.cards.filter((c) => ui.exp.has(c.item)),
+		[...picked],
+		HUB.conversations
+			.filter((c) => c.items.some((i) => ui.exp.has(i)))
+			.map((c) => [c.id, c.title, c.origin]),
 	]);
 	if (key === graphKey) return;
 	graphKey = key;
@@ -661,9 +671,11 @@ function renderGraph() {
 		)
 		.join("");
 	const toMain = new Set(M.edges.filter((e) => e.to === "main").map((e) => e.from));
-	$("nodes").innerHTML = M.nodes
-		.map((n) => nodeHtml(n, neighbours.has(n.id) || toMain.has(n.id), neighbours.get(n.id) ?? []))
-		.join("");
+	keepTyping($("nodes"), () => {
+		$("nodes").innerHTML = M.nodes
+			.map((n) => nodeHtml(n, neighbours.has(n.id) || toMain.has(n.id), neighbours.get(n.id) ?? []))
+			.join("");
+	});
 
 	const paths = [];
 	const labels = [];
@@ -881,7 +893,21 @@ const refOf = (c) => {
 const answerLabel = (c) =>
 	c.answer ? (c.card.options.find((o) => o.id === c.answer.option)?.label ?? c.answer.note) : null;
 const waiting = () => INBOX.cards.filter((c) => !c.answer);
-let draft = { card: null, text: "" }; // a free answer being typed survives a re-render
+// What is being typed survives a re-render: a free answer per card id, a request per `ask:<item>`;
+// the field typed in gets the focus and the caret back.
+const drafts = new Map();
+function keepTyping(el, rebuild) {
+	const a = document.activeElement;
+	const typing = a?.dataset?.free && el.contains(a) ? a : null;
+	const at = typing && [typing.dataset.free, typing.selectionStart, typing.selectionEnd];
+	rebuild();
+	for (const t of el.querySelectorAll("textarea[data-free]"))
+		t.value = drafts.get(t.dataset.free) ?? "";
+	if (!at) return;
+	const t = [...el.querySelectorAll("textarea[data-free]")].find((x) => x.dataset.free === at[0]);
+	t?.focus();
+	t?.setSelectionRange(at[1], at[2]);
+}
 
 // The inbox's two queues (FR-099): a card asking how the agents follow a project (`about`) waits
 // in Rules & settings, the items' own questions in Decisions.
@@ -968,20 +994,13 @@ function stepHtml(s) {
 	return `<li>${esc(s.text)}${link ? ` ${link}` : ""}</li>`;
 }
 
-// The open card, in place of the inbox: what it is about, the question, what the agent did, then
-// the options, the recommended one first. An option is sent with a second tap, on its Send.
-function cardViewHtml(c) {
+// A card's question and its answer, one block for the inbox and for its item's card in the graph,
+// so the two never differ: the question, what the agent did, then the options, the recommended one
+// first. An option is sent with a second tap, on its Send; a free answer has its own Send.
+// `compact` is a phone's layout, or a node's width; `field` names the free answer's text area.
+function answerHtml(c, compact, field) {
 	const d = c.card;
-	const ph = phone();
 	const runsOn = (S?.runs ?? []).filter((r) => r.session && r.items?.includes(c.item));
-	const kind = c.kind
-		? `<span class="tag" style="--tag:${KIND_COLOR[c.kind] ?? UNJUDGED_COLOR}">${esc(T.kinds[c.kind] ?? c.kind)}</span>`
-		: "";
-	const back = queueOf(c) === "rules" ? T.rulesQueue : T.inbox;
-	const top = `<div class="cv-top"><button type="button" class="cv-back" data-back>${BACK}${back}</button><span class="grow"></span>${safeUrl(c.url) ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${T.gitHubLink} ↗</a>` : ""}${!ph && runsOn.length ? `<button type="button" class="linkish" data-runs="${esc(c.item)}">${esc(T.conversationCount(runsOn.length))}</button>` : ""}</div>`;
-	// A setting's tag names it, and a rule proposal is about no one item.
-	const ref = c.type === "setting" || c.type === "rule" ? "" : refOf(c);
-	const chips = `<div class="cv-chips"><span class="cv-project">${esc(c.projectTitle)}</span>${ref ? `<span class="mono">${esc(ref)}</span>` : ""}${aboutTag(c)}${kind}<span class="tag you">${esc(T.forYouUrgency(d.urgency))}</span>${c.author && !ph ? `<span class="cv-by">${esc(T.byAuthor(c.author))}</span>` : ""}</div>`;
 	const ctx = esc(d.ctx).replace(/(Missing:[\s\S]*)$/, '<span class="missing">$1</span>');
 	// A rule proposal: the rule as it will read, its file, and the cards it answers.
 	const seen = (k) => {
@@ -999,7 +1018,7 @@ function cardViewHtml(c) {
 	const list = `<ul>${steps.map(stepHtml).join("")}</ul>`;
 	const did = !steps.length
 		? ""
-		: ph
+		: compact
 			? `<details class="cv-did"><summary>${esc(runsOn.length ? T.whatIDidCount(runsOn.length) : T.whatIDid)}</summary>${list}</details>`
 			: `<section class="cv-did"><h3>${T.whatIDid}</h3>${list}</section>`;
 	let body;
@@ -1008,8 +1027,9 @@ function cardViewHtml(c) {
 	else {
 		const rec = d.options.find((o) => o.id === d.rec);
 		const ordered = [...(rec ? [rec] : []), ...d.options.filter((o) => o !== rec)];
+		const chosen = picked.get(d.id);
 		const opt = (o, small) =>
-			`<button type="button" class="cv-opt${small ? " small" : ""}${o === rec ? " rec" : ""}" data-option="${esc(o.id)}" aria-pressed="${chosen === o.id}"><span class="cv-opt-label"><b>${esc(o.label)}</b>${o === rec ? `<span class="badge">${T.recommended}</span>` : ""}</span>${small && ph ? "" : `<span class="cv-opt-effect">${esc(o.effect)}</span>`}</button>`;
+			`<button type="button" class="cv-opt${small ? " small" : ""}${o === rec ? " rec" : ""}" data-option="${esc(o.id)}" aria-pressed="${chosen === o.id}"><span class="cv-opt-label"><b>${esc(o.label)}</b>${o === rec ? `<span class="badge">${T.recommended}</span>` : ""}</span>${small && compact ? "" : `<span class="cv-opt-effect">${esc(o.effect)}</span>`}</button>`;
 		const rest = ordered.slice(2);
 		const pick = d.options.find((o) => o.id === chosen);
 		body = `<div class="cv-opts">${ordered
@@ -1023,11 +1043,27 @@ function cardViewHtml(c) {
 				// A setting is allowed or not, never answered in words (the validated mockup).
 				yesOrNo(c)
 					? ""
-					: `<label for="cv-free" class="cv-free-label">${ph ? T.ownWordsShort : c.type === "rule" ? T.ownWordsRule : T.ownWords}</label>
-			<div class="cv-free"><textarea id="cv-free" rows="2"></textarea><button type="button" class="send" data-send-free${ph ? ` aria-label="${T.send}"` : ""}>${ph ? ARROW : T.send}</button></div>`
+					: `<label for="${esc(field)}" class="cv-free-label">${compact ? T.ownWordsShort : c.type === "rule" ? T.ownWordsRule : T.ownWords}</label>
+			<div class="cv-free"><textarea id="${esc(field)}" data-free="${esc(d.id)}" rows="2"></textarea><button type="button" class="send" data-send-free${compact ? ` aria-label="${T.send}"` : ""}>${compact ? ARROW : T.send}</button></div>`
 			}`;
 	}
-	return `<article class="cv${yesOrNo(c) ? " setting" : ""}" aria-label="${T.decision}">${top}${chips}<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${rule}${did}${body}</article>`;
+	return `<h2 class="cv-q">${esc(d.q)}</h2><p class="cv-ctx">${ctx}</p>${rule}${did}${body}`;
+}
+
+// The open card, in place of the inbox: what it is about, then its answer block.
+function cardViewHtml(c) {
+	const d = c.card;
+	const ph = phone();
+	const runsOn = (S?.runs ?? []).filter((r) => r.session && r.items?.includes(c.item));
+	const kind = c.kind
+		? `<span class="tag" style="--tag:${KIND_COLOR[c.kind] ?? UNJUDGED_COLOR}">${esc(T.kinds[c.kind] ?? c.kind)}</span>`
+		: "";
+	const back = queueOf(c) === "rules" ? T.rulesQueue : T.inbox;
+	const top = `<div class="cv-top"><button type="button" class="cv-back" data-back>${BACK}${back}</button><span class="grow"></span>${safeUrl(c.url) ? `<a href="${esc(c.url)}" target="_blank" rel="noopener">${T.gitHubLink} ↗</a>` : ""}${!ph && runsOn.length ? `<button type="button" class="linkish" data-runs="${esc(c.item)}">${esc(T.conversationCount(runsOn.length))}</button>` : ""}</div>`;
+	// A setting's tag names it, and a rule proposal is about no one item.
+	const ref = c.type === "setting" || c.type === "rule" ? "" : refOf(c);
+	const chips = `<div class="cv-chips"><span class="cv-project">${esc(c.projectTitle)}</span>${ref ? `<span class="mono">${esc(ref)}</span>` : ""}${aboutTag(c)}${kind}<span class="tag you">${esc(T.forYouUrgency(d.urgency))}</span>${c.author && !ph ? `<span class="cv-by">${esc(T.byAuthor(c.author))}</span>` : ""}</div>`;
+	return `<article class="cv${yesOrNo(c) ? " setting" : ""}" aria-label="${T.decision}" data-answer="${esc(d.id)}">${top}${chips}${answerHtml(c, ph, "cv-free")}</article>`;
 }
 
 let inboxKey = "";
@@ -1041,7 +1077,7 @@ function renderInbox() {
 		INBOX,
 		ui.card,
 		ui.queue,
-		chosen,
+		c ? (picked.get(c.card.id) ?? null) : null,
 		phone(),
 		c ? (S?.runs ?? []).filter((r) => r.items?.includes(c.item)).map((r) => r.id) : null,
 		ui.card ? 0 : Math.floor(Date.now() / 60000),
@@ -1050,13 +1086,13 @@ function renderInbox() {
 	inboxKey = key;
 	const el = $("inbox");
 	el.classList.toggle("card-mode", !!ui.card);
-	el.innerHTML = !ui.card
-		? inboxListHtml()
-		: c
-			? cardViewHtml(c)
-			: `<article class="cv"><div class="cv-top"><button type="button" class="cv-back" data-back>${BACK}${T.inbox}</button></div><p class="cv-gone">${T.cardGone}</p></article>`;
-	const area = $("cv-free");
-	if (area && draft.card === ui.card) area.value = draft.text;
+	keepTyping(el, () => {
+		el.innerHTML = !ui.card
+			? inboxListHtml()
+			: c
+				? cardViewHtml(c)
+				: `<article class="cv"><div class="cv-top"><button type="button" class="cv-back" data-back>${BACK}${T.inbox}</button></div><p class="cv-gone">${T.cardGone}</p></article>`;
+	});
 }
 
 async function sendAnswer(c, option, note = "") {
@@ -1068,8 +1104,8 @@ async function sendAnswer(c, option, note = "") {
 			option,
 			note,
 		});
-		chosen = null;
-		draft = { card: null, text: "" };
+		picked.delete(c.card.id);
+		drafts.delete(c.card.id);
 		toast(T.answerSent);
 		// A setting allowed or declined is done with: back to the inbox.
 		if (yesOrNo(c)) location.hash = "inbox";
@@ -1112,7 +1148,6 @@ function readHash() {
 	const id = m ? decodeURIComponent(m[1]) : null;
 	if (id === ui.card) return;
 	ui.card = id;
-	chosen = null;
 	followed = null;
 }
 
@@ -1848,7 +1883,9 @@ $("project").addEventListener("change", (e) => {
 
 // The inbox, its cards and the runs: what a click there does.
 function cardClick(t) {
-	const c = openCard();
+	// The card a control belongs to: the inbox's open card, or the one on an item's card.
+	const host = t.closest("[data-answer]");
+	const c = host ? entryOf(host.dataset.answer) : openCard();
 	const d = t.dataset;
 	if (d.card) location.hash = `card/${encodeURIComponent(d.card)}`;
 	else if (d.back !== undefined) location.hash = "inbox";
@@ -1856,14 +1893,30 @@ function cardClick(t) {
 		ui.queue = d.queue;
 		save();
 		renderInbox();
-	} else if (d.option) {
-		chosen = chosen === d.option ? null : d.option;
-		renderInbox();
-	} else if (d.send !== undefined && c && chosen) sendAnswer(c, chosen);
+	} else if (d.option && c) {
+		picked.set(c.card.id, picked.get(c.card.id) === d.option ? null : d.option);
+		render();
+	} else if (d.send !== undefined && c && picked.get(c.card.id))
+		sendAnswer(c, picked.get(c.card.id));
 	else if (d.sendFree !== undefined && c) {
-		const note = $("cv-free")?.value.trim();
+		const area = host.querySelector("textarea[data-free]");
+		const note = area?.value.trim();
 		if (note) sendAnswer(c, "other", note);
-		else $("cv-free")?.focus();
+		else area?.focus();
+	} else if (d.sendAsk) {
+		const area = t.closest("[data-ask]").querySelector("textarea");
+		const text = area.value.trim();
+		if (!text) area.focus();
+		else
+			post("/api/ask", { project: S.project.id, item: d.sendAsk, text })
+				.then(() => {
+					// The node may have been drawn again meanwhile: clear the field as it is now.
+					drafts.delete(area.dataset.free);
+					for (const x of document.querySelectorAll("textarea[data-free]"))
+						if (x.dataset.free === area.dataset.free) x.value = "";
+					toast(T.askSent);
+				})
+				.catch((err) => toast(T.askFailed(err.message), true));
 	} else if (d.stop) {
 		if (stopArmed !== d.stop) {
 			stopArmed = d.stop;
@@ -1927,7 +1980,7 @@ function cardClick(t) {
 }
 
 document.addEventListener("input", (e) => {
-	if (e.target.id === "cv-free") draft = { card: ui.card, text: e.target.value };
+	if (e.target.dataset?.free) drafts.set(e.target.dataset.free, e.target.value);
 	if (e.target.id === "cr-text") convDraft = { id: ui.conv, text: e.target.value };
 });
 
@@ -1935,7 +1988,7 @@ document.addEventListener("click", (e) => {
 	if (e.target.closest("a[href]")) return;
 	// The tab bar's own buttons only: <body> carries the current tab too, and every click reaches it.
 	const card = e.target.closest(
-		"[data-card],[data-back],[data-queue],[data-option],[data-send],[data-send-free],[data-stop],[data-release],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],[data-conv],[data-conv-back],[data-origin],[data-earlier],[data-reply],[data-terminal],#tabbar [data-tab]",
+		"[data-card],[data-back],[data-queue],[data-option],[data-send],[data-send-free],[data-send-ask],[data-stop],[data-release],[data-run-task],[data-task],[data-journal],[data-run],[data-runs],[data-conv],[data-conv-back],[data-origin],[data-earlier],[data-reply],[data-terminal],#tabbar [data-tab]",
 	);
 	// A Stop pressed once is forgotten at the next click elsewhere.
 	if (stopArmed && !card?.dataset.stop) {
