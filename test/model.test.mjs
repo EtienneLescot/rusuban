@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
 	buildModel,
+	clockChangesAt,
 	edgesOf,
 	gatesOf,
 	globToRegExp,
@@ -473,6 +474,24 @@ test("a closed card stays visible for 48 h with the chosen option", () => {
 	);
 	assert.deepEqual([s.choice, s.outcome], ["Ship it", "Merged."]);
 	assert.equal(settledOf("o/r#1", { decision: d }, [], now + 3 * 86400e3), null);
+});
+
+test("the model changes by the clock only when a revisit falls due or a settled card goes", () => {
+	const now = Date.parse("2026-11-11T12:00:00Z");
+	const judgment = {
+		items: {
+			"o/r#1": { owner: "agent", revisitAt: "2026-11-11T15:00:00Z" },
+			"o/r#2": { owner: "agent", revisitAt: "2026-11-10T00:00:00Z" }, // overdue already
+			"o/r#3": { owner: "alice", revisitAt: "2026-11-11T13:00:00Z" }, // a person's: no flag
+			"o/r#4": { owner: "alice", decision: { resolvedAt: "2026-11-09T13:30:00Z" } }, // 48 h on
+		},
+	};
+	assert.equal(clockChangesAt(judgment, now), Date.parse("2026-11-11T13:30:00Z")); // #4 goes
+	assert.equal(
+		clockChangesAt(judgment, Date.parse("2026-11-11T14:00:00Z")),
+		Date.parse("2026-11-11T15:00:00Z"),
+	);
+	assert.equal(clockChangesAt({ items: {} }, now), Number.POSITIVE_INFINITY);
 });
 
 test("agents at work light the items they touch: a run's items, then the items it cites", () => {

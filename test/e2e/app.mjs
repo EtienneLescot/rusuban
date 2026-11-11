@@ -377,6 +377,17 @@ export function seed(busyPid, checkout) {
 		state: "queued",
 		step: "Waits for room: 4.2 GB free on G:\\, 10 GB needed",
 	});
+	// And a worker at work on #31, held by a process of its own: the item shows an agent on it.
+	run("worker-20261111110000-o003", {
+		kind: "worker",
+		title: "logo-31",
+		items: ["orbit/site#31"],
+		lock: "orbit.worker.logo-31",
+		state: "running",
+		pid: busyPid,
+		startedAt: NOW,
+		step: "Drawing the logo",
+	});
 	run("judge-20261111090000-o002", {
 		kind: "judge",
 		session: "dddddddd-0000-4000-8000-000000000044",

@@ -290,6 +290,22 @@ test("each pass reads only the bytes a transcript gained, and leaves a half-writ
 	assert.deepEqual(index.sessions.cli.prs, []);
 });
 
+test("a pass starts from the index the daemon keeps, without reading the file again", async () => {
+	live([pr(1490, "feat/export-presets")], [issue(1502)]);
+	const file = place("cli", path.join(work, "widgets"), fixture("cli"));
+	const first = await scanHub({ config, root });
+	fs.rmSync(path.join(process.env.RUSUBAN_HOME, "hub", "index.json"));
+	// Read from its start, the spoiled first line would count; from the index kept, it is not read.
+	const bytes = fs.readFileSync(file);
+	bytes.fill("x", 0, bytes.indexOf("\n"));
+	fs.writeFileSync(file, bytes);
+	const title = { type: "custom-title", customTitle: "Kept", sessionId: "cli" };
+	fs.appendFileSync(file, `${JSON.stringify(title)}\n`);
+	const next = await scanHub({ config, root, last: first });
+	assert.equal(next.sessions.cli.title, "Kept");
+	assert.equal(next.sessions.cli.parseError, null);
+});
+
 test("a page holds a person's text, Claude's text, tool calls and their results cut to 2 KB", async () => {
 	placeFixtures();
 	const index = await scanHub({ config, root });

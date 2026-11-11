@@ -404,7 +404,7 @@ export async function probeMachines(config, { tailscale = tailscaleStatus, ...de
 }
 
 // ── Leases (T068) ─────────────────────────────────────────────────────────────────────────────
-const QUEUE = "leases/queue.json"; // { "<machine>": [{ run, pid, since }] }, first come first served
+export const QUEUE = "leases/queue.json"; // { "<machine>": [{ run, pid, since }] }, first come first served
 // A lease names its host: only there does its pid mean anything. ponytail: the host name, enough
 // while one instance uses a machine; an id of each instance's own once two share one (L2).
 const INSTANCE = os.hostname();

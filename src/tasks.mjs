@@ -85,10 +85,21 @@ export function parseTask(id, text, config, since = 0) {
 	};
 }
 
+// A task file parsed again only when it or the config changed: the page lists the tasks at each
+// update. One with a mistake is checked again each time, its folder may have come since.
+const parsed = new Map(); // file → { stamp, config, task }
 function load(id, config) {
 	const file = homePath(`tasks/${id}.md`);
 	try {
-		return parseTask(id, fs.readFileSync(file, "utf8"), config, fs.statSync(file).mtimeMs);
+		const st = fs.statSync(file);
+		const stamp = `${st.mtimeMs} ${st.size}`;
+		const hit = parsed.get(file);
+		if (hit?.stamp === stamp && hit.config === config && Date.now() - st.mtimeMs > 2000)
+			return hit.task;
+		const task = parseTask(id, fs.readFileSync(file, "utf8"), config, st.mtimeMs);
+		if (task.error) parsed.delete(file);
+		else parsed.set(file, { stamp, config, task });
+		return task;
 	} catch {
 		return null;
 	}

@@ -10,9 +10,12 @@ import {
 	homePath,
 	journal,
 	loadConfig,
+	memo,
 	read,
 	readJournal,
 	readJsonl,
+	readJsonlShared,
+	readShared,
 	saveConfig,
 	validateConfig,
 	write,
@@ -29,6 +32,45 @@ const config = (over = {}) => ({
 	limits: { maxWorkers: 3, maxRunMinutes: 150 },
 	projects: [{ id: "demo", repos: [{ slug: "alice/demo" }] }],
 	...over,
+});
+
+test("a file the page reads is parsed once per change, shared and frozen; a young one is read again", () => {
+	write("projects/demo/judgment.json", { items: { a: 1 } });
+	const first = readShared("projects/demo/judgment.json", null);
+	assert.deepEqual(first, { items: { a: 1 } });
+	assert.ok(Object.isFrozen(first.items), "no reader changes it for the others");
+	assert.equal(readShared("projects/demo/judgment.json", null), first, "unchanged: the same value");
+	// Rewritten at once with the same size: its time may not move, its text does.
+	write("projects/demo/judgment.json", { items: { a: 2 } });
+	assert.deepEqual(readShared("projects/demo/judgment.json", null), { items: { a: 2 } });
+	// Once two seconds old, its time and size alone say it did not change.
+	const file = homePath("projects/demo/judgment.json");
+	const old = new Date(Date.now() - 10_000);
+	fs.utimesSync(file, old, old);
+	const settled = readShared("projects/demo/judgment.json", null);
+	assert.equal(readShared("projects/demo/judgment.json", null), settled);
+	// A missing file is the same empty list each time, so what is built from it stays built.
+	assert.equal(
+		readJsonlShared("projects/demo/none.jsonl"),
+		readJsonlShared("projects/demo/x.jsonl"),
+	);
+});
+
+test("memo computes again only when an input changes, compared by identity", () => {
+	let n = 0;
+	const a = {};
+	const twice = () => memo("k", [a, 1], () => ++n);
+	assert.deepEqual([twice(), twice()], [1, 1]);
+	assert.equal(
+		memo("k", [{}, 1], () => ++n),
+		2,
+	);
+	// Another instance home has its own.
+	process.env.RUSUBAN_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-home-"));
+	assert.equal(
+		memo("k", [a, 1], () => ++n),
+		3,
+	);
 });
 
 test("a project has no mode: one still named in shadow mode is refused, never made to act unasked", () => {

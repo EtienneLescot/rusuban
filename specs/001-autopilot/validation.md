@@ -13,7 +13,7 @@ the reason.
 | SC-005 no merge with a lock broken | Pass | 35 gate tests and the cycle's switch tests. |
 | SC-006 never two agents on a machine | Pass on tests; live proof after 0.1.0 | 18 machine tests. The live proof on the Mac (T112) comes after the release. |
 | SC-007 enrolling under 5 min | To do, after 0.1.0 | Needs a fresh SSH machine and Etienne's go (T112). |
-| SC-008 the dashboard answers within 200 ms | Pass | Live after #46: `/api/state` in 15 to 39 ms, against peaks of 2.2 to 6.8 s before. |
+| SC-008 the dashboard answers within 200 ms | At rest: pass. Under builds: partial | Live after #46: `/api/state` in 15 to 39 ms. Under a build's load after T141: p95 72 to 349 ms on the bench, against 1.1 to 5.5 s before; 15 ms with the build below normal priority, Etienne's decision. |
 
 ## SC-001: install under 10 minutes
 
@@ -122,7 +122,8 @@ pass.
 
 ## SC-008: the dashboard answers within 200 ms
 
-**Pass.** Etienne's request of 2026-11-11 (T136): the live daemon took 2 to 7 s to answer.
+**At rest: pass. Under builds: partial.** Etienne's requests of 2026-11-11 (T136, T141): the live
+daemon took 2 to 7 s to answer, then up to 8.2 s again while workers built.
 - **On the live instance, after #46** (the coordinator's reading of 2026-11-11):
   - `/api/state` answers in 15 to 39 ms;
   - with 8 more pages open, in 13 to 30 ms;
@@ -134,6 +135,18 @@ pass.
   - with 8 pages: from 1.5 s down to 32 ms.
 - **A step that holds the daemon over 300 ms is said in its log**, so a slow dashboard names its
   cause.
+- **Under a build's load, after T141** (Etienne's request of 2026-11-11: with workers building, the
+  live log had page updates of up to 8.2 s). Bench on a copy of the instance: a busy process per core,
+  two processes writing files, a worker writing its status, `/api/state` every 250 ms, one page:
+  - `main` at `d5112df`, 3 runs: p95 1.1, 5.2 and 5.5 s, p50 0.2 to 0.7 s; page updates p50 0.4
+    to 1.4 s;
+  - T141, 8 runs: p95 from 72 to 349 ms, p50 from 3 to 53 ms; page updates p50 from 2 to 128 ms.
+    Under 200 ms in 3 runs, over in the other 5, while the machine's own workers built too;
+  - what remains is the CPU the daemon shares with builds of the same priority: with the build below
+    normal priority, p95 15 ms and page updates at 15 ms. Lowering the agents' runs is Etienne's
+    decision, since it slows the measures and the captures a worker makes;
+  - at rest, p95 from 32 ms down to 5 to 16 ms; a page update while a run steps takes 1.5 ms, the
+    model built again 0 times in 30.
 
 ## The suite at this check
 

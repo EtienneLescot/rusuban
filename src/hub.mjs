@@ -10,7 +10,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { listRuns, NO_MODEL, readRun, requestRun } from "./agents.mjs";
-import { MODEL, read, write } from "./home.mjs";
+import { MODEL, read, readShared, write } from "./home.mjs";
 import { flatten, keyOf } from "./model.mjs";
 
 const INDEX = "hub/index.json";
@@ -291,15 +291,16 @@ function linksOf(s, runs, live, repo) {
 // ── One pass ──────────────────────────────────────────────────────────────────────────────────
 // Finds the transcripts in the folders named after the projects' folders and Rusuban's own runs,
 // reads what each file gained since the last pass, then places and links every session. Writes and
-// returns the index (`hub/index.json`, written by the daemon only). `root` and `runs` are injectable.
+// returns the index (`hub/index.json`, written by the daemon only). `root` and `runs` are injectable;
+// `last` is the index of the last pass, which the daemon keeps: read from its file otherwise.
 export async function scanHub({
 	config,
 	root = claudeProjects(),
 	runs = listRuns(),
 	now = Date.now(),
+	last = read(INDEX, null),
 }) {
-	const old = read(INDEX, null);
-	const prev = old?.version === VERSION ? old : { sessions: {}, files: {} };
+	const prev = last?.version === VERSION ? last : { sessions: {}, files: {} };
 	const folders = foldersOf(config);
 	const runsOf = new Map(); // session → the runs that worked in it, newest first
 	for (const r of runs) if (r.session) runsOf.set(r.session, [...(runsOf.get(r.session) ?? []), r]);
@@ -313,11 +314,13 @@ export async function scanHub({
 	// session stays while its file does. Every transcript's size and time are read off the daemon's
 	// loop, all at once: a pass looks at a thousand of them, and the page waits for none.
 	const candidates = new Set();
-	for (const d of dirents(root))
-		if (d.isDirectory() && wanted(d.name))
-			for (const f of dirents(path.join(root, d.name)))
-				if (f.isFile() && f.name.endsWith(".jsonl"))
-					candidates.add(path.join(root, d.name, f.name));
+	const listing = (dir) => fs.promises.readdir(dir, { withFileTypes: true }).catch(() => []);
+	const dirs = (await listing(root)).filter((d) => d.isDirectory() && wanted(d.name));
+	const lists = await Promise.all(dirs.map((d) => listing(path.join(root, d.name))));
+	dirs.forEach((d, i) => {
+		for (const f of lists[i])
+			if (f.isFile() && f.name.endsWith(".jsonl")) candidates.add(path.join(root, d.name, f.name));
+	});
 	for (const file of Object.keys(prev.files)) candidates.add(file);
 	const stats = await Promise.all(
 		[...candidates].map((file) =>
@@ -514,7 +517,7 @@ export function hubState(index, config, { origin = null, ...filters } = {}) {
 	const runs = new Map(listRuns().map((r) => [r.id, r]));
 	const items = {};
 	for (const p of config.projects) {
-		const { prs, issues } = flatten(read(`projects/${p.id}/live.json`, {}));
+		const { prs, issues } = flatten(readShared(`projects/${p.id}/live.json`, {}));
 		for (const i of prs) items[keyOf(i)] = { type: "pr", title: i.title };
 		for (const i of issues) items[keyOf(i)] = { type: "issue", title: i.title };
 	}
