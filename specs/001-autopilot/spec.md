@@ -404,6 +404,11 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   fork listed under the original.
 - **FR-054**: An "open in terminal" action MUST resume any session on the host.
 - **FR-055**: The hub MUST rescan every 30 seconds and show the age of its index.
+- **FR-102**: A project's Conversations MUST list only the conversations about one of its items, and
+  Rusuban's own runs on it, as Etienne decided on 2026-11-11: a session opened in the project's folder
+  about something else is not the project's. One linked later, by a PR link or a branch, shows from
+  the pass that links it; a fork goes with the conversation it came from. Answering a conversation
+  and opening it in a terminal go by its id, listed or not.
 
 **Machines**
 

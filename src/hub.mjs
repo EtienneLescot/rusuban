@@ -518,19 +518,25 @@ export function hubState(index, config, { origin = null, ...filters } = {}) {
 		for (const i of prs) items[keyOf(i)] = { type: "pr", title: i.title };
 		for (const i of issues) items[keyOf(i)] = { type: "issue", title: i.title };
 	}
-	const conversations = listConversations(index, filters)
-		.map((c) => {
-			const run = c.run ? runs.get(c.run) : null;
-			return {
-				...c,
-				title: run ? runTitle(run) : (c.title ?? "Untitled"),
-				origin: ORIGIN[c.origin] ?? c.origin ?? "unknown",
-				runKind: run?.kind ?? null,
-				runState: run?.state ?? null,
-				forkOf: run?.forkOf ?? null,
-			};
-		})
-		.filter((c) => !origin || c.origin === origin);
+	const all = listConversations(index, filters).map((c) => {
+		const run = c.run ? runs.get(c.run) : null;
+		return {
+			...c,
+			title: run ? runTitle(run) : (c.title ?? "Untitled"),
+			origin: ORIGIN[c.origin] ?? c.origin ?? "unknown",
+			runKind: run?.kind ?? null,
+			runState: run?.state ?? null,
+			forkOf: run?.forkOf ?? null,
+		};
+	});
+	// A project's conversations are those about one of its items, and Rusuban's own runs on it: a
+	// session opened in its folder about something else is not the project's (FR-102). One linked
+	// later, by a PR link or a branch, shows from the pass that links it. A fork goes with the
+	// conversation it came from.
+	const kept = new Set(all.filter((c) => c.items.length || (c.run && !c.forkOf)).map((c) => c.id));
+	const conversations = all.filter(
+		(c) => (kept.has(c.id) || kept.has(c.forkOf)) && (!origin || c.origin === origin),
+	);
 	return { indexedAt: index?.scannedAt ?? null, items, conversations };
 }
 

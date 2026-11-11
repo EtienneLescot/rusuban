@@ -1466,10 +1466,11 @@ const convOrigin = (c) =>
 		: (T.origins[c.origin] ?? c.origin);
 // A reply forks unless Rusuban started the session and its run has ended (research R6b).
 const convForks = (c) => !c.run || ["queued", "running"].includes(c.runState);
+// An item no longer open is not in the live state: its number alone, not a guess at its type.
 const refOfKey = (key) => {
 	const info = HUB.items?.[key];
 	const n = key.split("#")[1];
-	return info?.type === "pr" ? T.prRef(n) : T.issueRef(n);
+	return !info ? `#${n}` : info.type === "pr" ? T.prRef(n) : T.issueRef(n);
 };
 let convDraft = { id: null, text: "" };
 
@@ -1507,9 +1508,12 @@ function convListHtml() {
 		if (!groups.has(key)) groups.set(key, []);
 		groups.get(key).push(c, ...list.filter((f) => f.forkOf === c.id));
 	}
-	const ordered = [...groups.entries()].sort(
-		([a], [b]) => (a.endsWith("|") ? 1 : 0) - (b.endsWith("|") ? 1 : 0),
-	);
+	// The open items' groups first, then those of items since closed, then the runs about none.
+	const rank = (key) => {
+		const item = key.split("|")[1];
+		return !item ? 2 : HUB.items?.[item] ? 0 : 1;
+	};
+	const ordered = [...groups.entries()].sort(([a], [b]) => rank(a) - rank(b));
 	const groupHtml = ordered
 		.map(([key, cs]) => {
 			const [, item] = key.split("|");

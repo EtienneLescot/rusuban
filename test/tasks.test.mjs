@@ -364,8 +364,14 @@ test("a page gets its project's runs, tasks and conversations; a task of no proj
 		});
 	const srv = await startServer({ port: 0, polling: false, quiet: true, tailnet: null });
 	try {
-		const session = (id, project) => ({ id, project, title: id, items: [], lastAt: iso(0) });
-		srv.ctx.hubIndex = { sessions: { a: session("a", "sandbox"), b: session("b", "posts") } };
+		// A project's conversations: one about its item, one of Rusuban's runs on it (FR-102).
+		const session = (id, project, over) => ({ id, project, title: id, lastAt: iso(0), ...over });
+		srv.ctx.hubIndex = {
+			sessions: {
+				a: session("a", "sandbox", { items: ["o/sandbox#1"] }),
+				b: session("b", "posts", { items: [], run: "r2" }),
+			},
+		};
 		// What the server pushes to a page that asked for this project.
 		const page = (project) => {
 			const got = {};
