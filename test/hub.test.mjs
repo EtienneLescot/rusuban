@@ -10,6 +10,7 @@ import {
 	openTerminal,
 	readPage,
 	replyTo,
+	runTitle,
 	scanHub,
 	slugOf,
 	terminalCommand,
@@ -432,6 +433,15 @@ test("the view: origins as the page names them, a run's title over its prompt, a
 	);
 });
 
+test("a Rusuban run's conversation is named after the run, never after its prompt", () => {
+	const at = "2026-11-10T20:40:00.000Z";
+	const clock = new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+	assert.equal(runTitle({ kind: "judge", startedAt: at }), `Judge ${clock}`);
+	assert.equal(runTitle({ kind: "act", createdAt: at }), `Coordinator ${clock}`);
+	assert.equal(runTitle({ kind: "worker", title: "w1328-proof", startedAt: at }), "w1328-proof");
+	assert.equal(runTitle({ kind: "task", title: "Daily post", startedAt: at }), "Daily post");
+});
+
 test("an answer resumes in place a session whose Rusuban run has ended, and forks any other", async () => {
 	placeFixtures();
 	const index = await scanHub({ config, root });
@@ -441,10 +451,12 @@ test("an answer resumes in place a session whose Rusuban run has ended, and fork
 		return { id: `reply-${asked.length}` };
 	};
 	const s = index.sessions["sdk-cli"];
+	// The reply goes by its run's name, never by the prompt that opens its session.
+	const title = runTitle(read(`runs/${RUN}/status.json`));
 	assert.deepEqual(replyTo(index, "sdk-cli", "Go on", request), {
 		run: "reply-1",
 		forked: false,
-		title: s.title,
+		title,
 		project: "widgets",
 	});
 	assert.deepEqual(asked[0], {
@@ -452,7 +464,7 @@ test("an answer resumes in place a session whose Rusuban run has ended, and fork
 		project: "widgets",
 		mission: "Go on",
 		items: s.items,
-		title: s.title,
+		title,
 		cwd: s.cwd,
 		resume: "sdk-cli",
 		fork: false,

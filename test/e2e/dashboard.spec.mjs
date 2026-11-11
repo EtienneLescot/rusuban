@@ -171,6 +171,51 @@ test("Rules & settings: a tab of the inbox for how the agents follow the project
 	}
 });
 
+test("an item's card answers its card as the inbox does, then takes a request to Claude", async ({
+	app,
+	page,
+	isMobile,
+}) => {
+	// Tall enough for the whole card: the graph pans, it does not scroll.
+	await page.setViewportSize(
+		isMobile ? { width: 375, height: 2400 } : { width: 1440, height: 1600 },
+	);
+	await goTo(page, "kanban", isMobile);
+	await press(page.locator('.card-open[data-focus="acme/widgets#21"]'), isMobile);
+	const node = page.locator('[data-id="acme/widgets#21"]');
+	const card = node.locator(`[data-answer="${app.cards.acme}"]`);
+	await expect(card.locator(".cv-q")).toHaveText("Build dark mode?");
+	await expect(card.locator(".cv-opt b")).toHaveText(["Build it", "Close it"]);
+	await expect(card.locator(".cv-opt.rec .badge")).toHaveText("Recommended");
+	await expect(node.locator(".ask")).toHaveCount(0);
+	const close = card.locator('[data-option="close"]');
+	await press(close, isMobile);
+	await expect(close).toHaveAttribute("aria-pressed", "true");
+	await press(card.locator("[data-send]"), isMobile);
+	await expect(page.locator("#toast")).toHaveText("Answer sent");
+	expect(readJsonl("projects/acme/answers.jsonl")).toMatchObject([
+		{ item: "acme/widgets#21", card: app.cards.acme, option: "close", by: "alice" },
+	]);
+	await expect(card.locator(".done-box")).toContainText("Answered: “Close it”");
+	// Answered, the item takes a request in words, which goes to the coordinator with the item.
+	const ask = node.locator(".ask");
+	await ask.locator("textarea").fill("Thank the reporter when you close it.");
+	await press(ask.locator("[data-send-ask]"), isMobile);
+	await expect(page.locator("#toast")).toHaveText("Sent to the coordinator");
+	expect(readJsonl("projects/acme/asks.jsonl")).toMatchObject([
+		{ item: "acme/widgets#21", text: "Thank the reporter when you close it.", by: "alice" },
+	]);
+	await expect(ask.locator("textarea")).toHaveValue("");
+	// Nothing in the card is wider than it, at a phone's width as on a desktop.
+	const over = await node.evaluate((el) => {
+		const right = el.querySelector(".detail").getBoundingClientRect().right;
+		return [...el.querySelectorAll(".detail *")]
+			.filter((x) => x.getBoundingClientRect().right > right + 0.5)
+			.map((x) => `${x.tagName} ${x.className}`);
+	});
+	expect(over).toEqual([]);
+});
+
 test("a filter changes the list", async ({ page, isMobile }) => {
 	await goTo(page, "kanban", isMobile);
 	// Yours, the agents' (newest first), then those waiting on others.

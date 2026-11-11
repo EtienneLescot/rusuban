@@ -1169,7 +1169,7 @@ a.num:hover .ext {
 	opacity: 1;
 }
 
-/* An open node */
+/* An open node: its item's card. A long path or link breaks rather than overflow. */
 .detail {
 	display: flex;
 	flex-direction: column;
@@ -1177,6 +1177,7 @@ a.num:hover .ext {
 	padding: 4px 14px 14px;
 	border-top: 1px solid var(--line);
 	cursor: auto;
+	overflow-wrap: anywhere;
 }
 .detail .gh {
 	margin: 10px 0 0;
@@ -1222,6 +1223,55 @@ a.num:hover .ext {
 	border-radius: 12px;
 	border: 1px solid rgba(52, 178, 123, 0.45);
 	background: linear-gradient(145deg, rgba(52, 178, 123, 0.13), rgba(255, 255, 255, 0.045));
+}
+/* The answer block of the inbox's card (answerHtml), at a node's width. */
+.node .decision {
+	gap: 12px;
+}
+.node .cv-q {
+	font-size: 15px;
+}
+.node .cv-ctx {
+	font-size: 12.5px;
+	line-height: 1.5;
+	color: var(--text-2);
+}
+.node .cv-opts,
+.node .cv-grid {
+	gap: 8px;
+}
+.node .cv-grid {
+	grid-template-columns: minmax(0, 1fr);
+}
+.node .cv-opt {
+	padding: 9px 11px;
+}
+.node .cv-opt-label {
+	flex-wrap: wrap;
+}
+.node .cv-opt-label b {
+	font-size: 13.5px;
+}
+.node .cv-opt-effect {
+	font-size: 12px;
+}
+.node .send-option {
+	height: 38px;
+}
+.node .cv-free textarea {
+	min-width: 0;
+	min-height: 40px;
+	font-size: 13px;
+}
+.node .cv-free .send {
+	height: 40px;
+	padding: 0 12px;
+}
+.ask {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-size: 12.5px;
 }
 .decision h3 {
 	margin: 0;
@@ -1352,13 +1402,17 @@ a.num:hover .ext {
 	flex-wrap: wrap;
 	gap: 6px;
 }
+/* A row as tall as its text: a long title wraps inside it. */
 .links button {
-	height: 24px;
-	padding: 0 10px;
-	border-radius: 9999px;
+	min-height: 24px;
+	max-width: 100%;
+	padding: 3px 10px;
+	border-radius: 12px;
 	background: var(--fill);
 	border: 1px solid rgba(255, 255, 255, 0.1);
 	font-size: 12px;
+	line-height: 1.35;
+	text-align: left;
 }
 .secondary {
 	height: 32px;

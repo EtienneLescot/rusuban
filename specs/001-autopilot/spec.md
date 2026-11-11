@@ -377,6 +377,11 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
     they leave the graph and the kanban.
 
   The desktops a run asks for stay in Decisions. A card's item stays where it is in the graph.
+- **FR-100**: Everything MUST be doable from an item's card, as Etienne asked on 2026-11-11: its open
+  card is answered there as in the inbox, through one block in both places, on a desktop and a phone;
+  and, without a card waiting, a request to Claude about the item is written there. The request goes
+  to the coordinator with the item, like the owner's other requests. Nothing in the card is wider
+  than it, at a phone's width too.
 
 **Conversations hub**
 
@@ -384,7 +389,9 @@ journaled with its origin. From inside a Rusuban run, the same asks are refused.
   checkouts and their worktrees), whatever started it, within one minute.
 - **FR-051**: It MUST link sessions to items by Rusuban's run metadata, the PR links Claude Code records,
   branch names (a PR's head ref, a number in the name) and cited numbers.
-- **FR-052**: The user MUST be able to read a full transcript in the dashboard, on a phone too.
+- **FR-052**: The user MUST be able to read a full transcript in the dashboard, on a phone too. A
+  session Rusuban started goes by its run's name, never by its prompt's first line: the run's title (a
+  task's, a worker's), else its kind and the time it started, "Judge 21:40" (decided on 2026-11-11).
 - **FR-053**: The user MUST be able to answer a session from the dashboard. A session Rusuban started
   resumes in place unless its run is alive; any other session (Desktop, terminal) is answered through a
   fork listed under the original.
