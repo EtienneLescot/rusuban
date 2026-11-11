@@ -10,7 +10,7 @@ import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { assemblePrompt } from "../src/agents.mjs";
+import { assemblePrompt, CARD_RULES } from "../src/agents.mjs";
 import { homePath, read, readJsonl, saveConfig, validateConfig, write } from "../src/home.mjs";
 import { applyJudgment } from "../src/model.mjs";
 import { reloadConfig, startServer } from "../src/server.mjs";
@@ -149,11 +149,12 @@ const card = {
 		{ id: "close", label: "Close it", effect: "I close it, kindly." },
 	],
 };
-// A project's judgment: its PR judged to merge alone on its head, and a card to alice on its issue.
+// A project's judgment: its PR judged to merge alone on its head, and a card to alice on its
+// issue, written under the product's card rules as they are, as the agent CLI writes it.
 function judge(project, slug, prN, issueN) {
 	const live = { prs: GITHUB[slug].prs, issues: GITHUB[slug].issues };
 	const judgment = { items: {} };
-	const at = { repos: [slug], now: NOW };
+	const at = { repos: [slug], now: NOW, stamp: CARD_RULES };
 	applyJudgment(
 		{
 			n: prN,

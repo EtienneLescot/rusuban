@@ -26,6 +26,15 @@ live state and its judgment. An item is `owner/repo#n`, or `#n` when the project
   repos/<owner/repo>/actions/runs/<runId>/approve`) and log why. Otherwise, a card (`"about":
   "lock"`).
 - **`missing-card`**: an item held by a person has no open card. Write the card.
+- **`stale-card`**: an open card written before Rusuban was updated, under other rules for what
+  deserves a card. Take it up once, against this prompt as it is now; its text is usually enough,
+  without reading the item again.
+  - When the product now does it alone (a busy worker slot, an issue that follows its PR), judge the
+    item again for its new owner: the card closes.
+  - When it asks how the agents work rather than about the item, give it `about`.
+  - Drop the options that no longer exist, such as "Make it a rule".
+  - Otherwise judge it again with the same question: it keeps its id, so nothing waiting on it is
+    lost. A card already answered is never listed: the coordinator carries out its answer.
 - **`revisit-due`**: its `revisitAt` has passed. Read the thread again: integrate any answer and judge
   again. If nobody answered, move on as the rules say (finish the work yourself, close it, or hand it to
   a person with a card); never set the same silent wait again.

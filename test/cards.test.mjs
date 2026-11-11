@@ -16,6 +16,7 @@ import {
 	closeCard,
 	inboxOf,
 	pendingAnswers,
+	todoOf,
 } from "../src/model.mjs";
 import { startServer } from "../src/server.mjs";
 
@@ -276,6 +277,31 @@ test("the agents never judge a PR that changes .rusuban/: a person merges it on 
 			),
 		/o\/r#1 changes \.rusuban\/: a person merges it on GitHub/,
 	);
+});
+
+test("a card from before an update of the card rules is judged again once: kept with its id, or closed", () => {
+	const judgment = { items: {} };
+	const before = toAlice(judgment); // written before cards carried their rules' stamp
+	const stale = (stamp) =>
+		todoOf({ live, judgment, rules: { "o/r": { observeOnly: false } }, stamp })
+			.filter((t) => t.reason === "stale-card")
+			.map((t) => t.item);
+	assert.deepEqual(stale("v2"), ["o/r#10"]);
+	// Kept: judged again with the same question, it keeps its id, and the rules it is under now.
+	const issue = (over) => ({ item: "#10", label: "Dark mode", kind: "feature", ...over });
+	const keep = issue({ owner: "alice", next: "Alice decides.", decision: card() });
+	const kept = applyJudgment(keep, live, judgment, { repos: ["o/r"], now: LATER, stamp: "v2" });
+	assert.deepEqual(
+		[kept.decision.id, kept.decision.createdAt, kept.decision.writtenUnder],
+		[before.id, NOW, "v2"],
+	);
+	assert.deepEqual(stale("v2"), []);
+	// Closed: after the next update the product does it alone, so the item goes back to the agents.
+	assert.deepEqual(stale("v3"), ["o/r#10"]);
+	const alone = issue({ owner: "agent", next: "A worker builds it.", revisitAt: "2099-01-01" });
+	applyJudgment(alone, live, judgment, { repos: ["o/r"], now: LATER, stamp: "v3" });
+	assert.equal(judgment.items["o/r#10"].decision.state, "replaced");
+	assert.deepEqual(stale("v3"), []);
 });
 
 test("an answer is checked against its card: a replaced card and a second answer are refused", () => {

@@ -5,6 +5,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { beforeEach, test } from "node:test";
+import { CARD_RULES } from "../src/agents.mjs";
 import { append, read, readJsonl, write } from "../src/home.mjs";
 import { journalRules, runCycle } from "../src/server.mjs";
 
@@ -242,6 +243,47 @@ test("agents start on change: a judge when the todo changes, a coordinator when 
 	});
 	await runCycle(ctxOf(), project(), liveOf([pr(1), pr(2), pr(3)]), RULES, deps);
 	assert.deepEqual(coordinators, ["change"]);
+});
+
+test("a card from before an update of the card rules starts a judge for it, unless answered", async () => {
+	const live = liveOf([pr(1)]);
+	const options = [
+		{ id: "a", label: "Merge it", effect: "The server merges it.", merge: true },
+		{ id: "b", label: "Wait", effect: "I wait." },
+	];
+	const card = (writtenUnder) => ({
+		id: "o/r#1@1",
+		q: "Lift the lock?",
+		options,
+		to: "alice",
+		createdAt: "2026-11-07T00:00:00Z",
+		resolvedAt: null,
+		writtenUnder,
+	});
+	const held = (writtenUnder) =>
+		write("projects/demo/judgment.json", {
+			items: { "o/r#1": auto(1, { owner: "alice", decision: card(writtenUnder) }) },
+		});
+	held(CARD_RULES);
+	await runCycle(ctxOf(), project(), live, RULES, deps);
+	assert.deepEqual(runs, [], "a card written under the rules as they are");
+	held("an-older-rusuban");
+	await runCycle(ctxOf(), project(), live, RULES, deps);
+	assert.deepEqual(
+		runs.map((r) => [r.kind, r.items]),
+		[["judge", ["o/r#1"]]],
+	);
+	// Answered meanwhile: the coordinator carries the answer out, the judge leaves the card alone.
+	runs.length = 0;
+	write("projects/demo/triggers.json", {});
+	append("projects/demo/answers.jsonl", {
+		at: "2026-11-08T00:00:00Z",
+		item: "o/r#1",
+		card: "o/r#1@1",
+		option: "b",
+	});
+	await runCycle(ctxOf(), project(), live, RULES, deps);
+	assert.deepEqual([runs, coordinators], [[], ["change"]]);
 });
 
 test("a fork's CI waiting for an approval starts one judge per head, not one per change", async () => {

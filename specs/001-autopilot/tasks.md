@@ -147,6 +147,10 @@ starts the coordinator, which applies the answer.
 - [x] T101 [US2] Runs view, `GET /api/runs`, `POST /api/runs/<id>/stop`, `POST /api/refresh` and `GET /api/inbox` in `src/server.mjs` and `web/app.js`
   - `GET /api/runs` (at work first), `POST /api/runs/<id>/stop`, `GET /api/inbox` (cards, plus the owner's flags of the last 7 days), the `inbox` event on `/api/events`. The runs view is the Agents drawer: runs at work first with a two-tap Stop, the last 30 with their conversation, the one a card points at lit.
 
+- [x] T135 [US2] Open cards judged again after an update of what deserves a card (FR-101), Etienne's request of 2026-11-11 after the card on #1522 outlived #40
+  - Every card the agent CLI writes carries `writtenUnder`: the fingerprint of the judge's prompt, the card formats and the safety frame (`CARD_RULES`), line endings aside.
+  - An open card under another one, not answered, is `stale-card` in the todo: the daemon starts a judge for it, which closes what the product now does alone, gives `about` to what belongs in Rules & settings, and drops the options that no longer exist. A card judged again with its question keeps its id and takes the new stamp, so it comes back once.
+  - On deploy every open card, written before the stamps, comes back once: OpenScreen's first judge after the update takes up some fifty cards.
 - [x] T134 [US2] Everything from an item's card (FR-100, FR-052), Etienne's request of 2026-11-11 after a phone capture of #1515's card
   - The item's card in the graph answers its open card with the inbox's own block (`answerHtml`): clickable options, the recommended one first, Send, and a free answer. The option picked and the text typed are kept per card, and survive the graph being drawn again. Its "What I did" was printing `[object Object]` for a list of steps: the block shows the steps with their links.
   - Without a card waiting, or once it is answered, the card takes a request to Claude about the item, sent to the coordinator with the item (`POST /api/ask`).

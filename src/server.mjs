@@ -9,6 +9,7 @@ import fs from "node:fs";
 import http from "node:http";
 import {
 	busy,
+	CARD_RULES,
 	coordinatorLock,
 	kickQueues,
 	listRuns,
@@ -538,7 +539,7 @@ function flagOutsiders(p, liveFile) {
 // coordinator when answers, requests or worker reports wait. A project without rules has no todo, so
 // no judge ever starts there. The same todo starts nothing twice, unless its run failed 15 minutes
 // ago or more.
-function triggerRuns(p, { live, judgment, rules }, deps) {
+function triggerRuns(p, { live, judgment, rules, answers }, deps) {
 	const dir = `projects/${p.id}`;
 	const t = read(`${dir}/triggers.json`, {});
 	const fire = (kind, sig, request) => {
@@ -562,7 +563,15 @@ function triggerRuns(p, { live, judgment, rules }, deps) {
 		delete t.judge.approvals;
 	}
 	const refused = refusedOf(readJsonl(`${dir}/journal.jsonl`));
-	const todo = todoOf({ live, judgment, rules, refused, examined: t.examined });
+	const todo = todoOf({
+		live,
+		judgment,
+		rules,
+		refused,
+		examined: t.examined,
+		answers,
+		stamp: CARD_RULES,
+	});
 	const judge =
 		todo.length > 0 &&
 		!busy(p.id, "judge") &&
@@ -607,7 +616,7 @@ export async function runCycle(ctx, p, liveFile, rules, deps = DEPS) {
 	if (!ctx.dry) await mergeOne(ctx, p, { live, judgment, answers, rules }, deps);
 	flagOutsiders(p, liveFile);
 	// Without a model no run starts (FR-098): the page says why, nothing piles up failed runs.
-	if (!ctx.dry && ctx.config.model) triggerRuns(p, { live, judgment, rules }, deps);
+	if (!ctx.dry && ctx.config.model) triggerRuns(p, { live, judgment, rules, answers }, deps);
 }
 
 // ── Recurring tasks (T041, T043) ──────────────────────────────────────────────────────────────
