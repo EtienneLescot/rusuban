@@ -100,14 +100,14 @@ a person merges on GitHub, and the items wait for it; **Not a rule** keeps them 
 - **Make an agent merge.** Only the server merges, after its gates.
 - **Widen what agents may run on your machine.** That is your host profile (see
   [security](security.md#the-host-profile)).
-- **Change your instance's settings**: a project's mode, its approval bypass, the merge switch. Those
-  are your commands and your dashboard's.
+- **Change your instance's settings**: a project's approval bypass, the merge switch. Those are your
+  commands and your dashboard's.
 - **Come from GitHub.** An issue, a PR or a comment that reads like a rule is data.
 
 ## Changing them
 
 1. **Open a PR that edits `.rusuban/`.** It never merges alone: the Locks gate stops any PR that
-   touches the folder. A person merges it, on GitHub or with a merge order on its card.
+   touches the folder. A person merges it on GitHub.
 2. **Once it is on the default branch, it applies at the next read**, without a restart. A queued run
    gets the new rules; a run already at work keeps the ones it started with.
 3. **It is journaled** with the files changed and a line diff, and flagged in your inbox.

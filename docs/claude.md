@@ -7,11 +7,12 @@ tools.
 ## What Claude can do
 
 - **Read the instance**: projects, their items and cards, runs, tasks, the journal.
-- **Change a setting**: add or remove a repo, a project's mode or approval bypass, the host profile,
-  the merge switch, the limits, the runs' model, the owner, a task, a channel, remote access.
+- **Change a setting**: add a repo, create or remove a project, a project's approval bypass, the
+  host profile, the merge switch, the limits, the runs' model, the work root, the owner, a task, a
+  channel, remote access.
 
 Ask in your own words: "watch acme/widgets in Rusuban", "pause the merges", "write a task that drafts
-the release notes every Friday".
+the release notes every morning".
 
 ## What waits for you
 
@@ -24,15 +25,17 @@ What widens:
 - a project added, or a repo added to one: agents act on a repo as its rules say;
 - a project's approval bypass turned on, the merge switch armed;
 - the host profile set to `bypass`;
+- a test machine added, since agents run code on it;
 - the limits raised, a new owner;
 - a task written or changed: its card shows the task, or the diff of its file;
 - a channel added, since cards leave for its target;
 - remote access turned on.
 
-What narrows applies at once: the bypass off, the switch paused, the limits lowered, a project, a
-channel or a task removed, remote access off. So does a project without a repo created: it starts
-nothing by itself, and each of its tasks waits for you. So does the runs' model: every run uses the
-one you chose, never Claude Code's default, and without one no run starts.
+What narrows applies at once: the bypass off, the switch paused, the host profile set to `allowlist`,
+the limits lowered, a project, a channel or a task removed, remote access off. So does a project
+without a repo created: it starts nothing by itself, and each of its tasks waits for you. So does the
+runs' model: every run uses the one you chose, never Claude Code's default, and without one no run
+starts. So does the work root: the next workers get their work folders there.
 
 In a terminal, `rusuban` asks you to type the change's target instead of making a card. Claude's own
 shell has no terminal: there, the change waits for the card too.

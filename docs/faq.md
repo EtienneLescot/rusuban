@@ -24,7 +24,8 @@ rules they started with. The change is journaled with its diff and flagged in yo
 
 ### What do the agents do where my rules say nothing?
 
-They ask you on a card, with an option to turn your answer into a rule.
+They ask you on a card. When several cards ask the same, they propose the rule that would answer
+them, under **Rules & settings**. See [Writing rules](writing-rules.md#where-the-rules-are-silent).
 
 ### How do I try rules without risk?
 
@@ -40,8 +41,8 @@ No. Only the server merges, after its [gates](locks.md), on the exact head it ch
 
 ### Why did a PR not merge?
 
-Its node shows the first gate that stops it, and its drawer lists them all. Common reasons: merges are
-paused, it was judged not to merge alone, a lock, CI not green yet, or GitHub refused the merge.
+Its node shows the first gate that stops it, and lists them all once unfolded. Common reasons: merges
+are paused, it was judged not to merge alone, a lock, CI not green yet, or GitHub refused the merge.
 
 ### How do I merge a PR the locks stop?
 
@@ -60,15 +61,18 @@ after it checks the branch's other rules.
 - **The switch** in the dashboard's header pauses the server's merges in every project, the merge
   orders you give on cards included: they wait until it is armed again.
 - **The Agents view** stops a run.
-- **`rusuban project remove <id>`** stops a project once its runs end; its files stay.
+- **`rusuban project remove <id>`** stops a project; its files stay. While one of its runs waits or
+  works, the command is refused.
 
 ## Your machine and accounts
 
 ### What runs on my machine, and where?
 
-Headless `claude -p` sessions, under the [host profile](security.md#the-host-profile) you chose. The
-judge, the coordinator and tasks work in `~/.rusuban/scratch/<project>/`, unless a task names its own
-folder. Each worker gets a worktree of Rusuban's own clone of the repo, never your checkout.
+Headless `claude -p` sessions, on the model and under the [host profile](security.md#the-host-profile)
+you chose. The judge, the coordinator and tasks work in `~/.rusuban/scratch/<project>/`, unless a
+task names its own folder. Each worker gets a worktree of Rusuban's own clone of the repo, never your
+checkout. Anything else it makes goes in a work folder of its own, in `~/.rusuban/work/` unless
+`rusuban work-root` names another. Both are removed when it ends or stops.
 
 ### Whose Claude plan do the agents use?
 
