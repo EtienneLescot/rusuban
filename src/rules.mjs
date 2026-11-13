@@ -112,7 +112,13 @@ export async function loadRules(slug, ref, cached = null, get = getJson) {
 			loadedAt: checkedAt,
 			checkedAt,
 		};
-	if (cached?.treeSha === dir.sha && cached.ref === ref) return { ...cached, checkedAt };
+	if (cached?.treeSha === dir.sha && cached.ref === ref) {
+		// The same rules, read: what a failed read left on them (the daemon's `error`) goes.
+		const same = { ...cached, checkedAt };
+		delete same.error;
+		delete same.errorAt;
+		return same;
+	}
 	const entries = await get(at(".rusuban"));
 	const rulesDir = entries.find((e) => e.name === "rules" && e.type === "dir");
 	const listed = rulesDir ? await get(at(".rusuban/rules")) : [];
