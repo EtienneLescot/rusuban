@@ -194,7 +194,52 @@ const setup = ({
 	home = os.homedir(),
 	env = process.env,
 	uid = process.getuid?.(),
-} = {}) => ({ platform, exec, env, uid, ...places(platform, home, env) });
+} = {}) => ({ platform, exec, env, uid, home, ...places(platform, home, env) });
+
+// One service per machine, under one name: an instance never replaces nor removes another's, and a
+// second instance (another RUSUBAN_HOME) runs with `rusuban start` (T078). launchd and systemd carry
+// the home they run; Windows' task carries none, so it runs the default home.
+// ponytail: a Windows home moved by a persistent RUSUBAN_HOME is refused too; the task would have to
+// record its home for that.
+const instanceHome = (env, home) => path.resolve(env.RUSUBAN_HOME || path.join(home, ".rusuban"));
+const UNXML = Object.fromEntries(Object.entries(ENTITIES).map(([c, e]) => [e, c]));
+function installedHome({ platform, service, home }) {
+	if (!fs.existsSync(service)) return null;
+	const text = fs.readFileSync(service, "utf8");
+	let set;
+	if (platform === "darwin")
+		set = /<key>RUSUBAN_HOME<\/key>\s*<string>([^<]*)<\/string>/
+			.exec(text)?.[1]
+			.replace(/&(amp|lt|gt|quot);/g, (e) => UNXML[e]);
+	else
+		for (const [, quoted] of text.matchAll(/^Environment=(".*")$/gm)) {
+			const pair = JSON.parse(quoted.replaceAll("%%", "%"));
+			if (pair.startsWith("RUSUBAN_HOME=")) set = pair.slice("RUSUBAN_HOME=".length);
+		}
+	return instanceHome({ RUSUBAN_HOME: set }, home);
+}
+
+// Why this instance may not install nor remove the service, or null when it may.
+export function serviceConflict(options) {
+	const s = setup(options);
+	// Windows' and macOS' folders ignore case.
+	const same = (a, b) => (s.platform === "linux" ? a === b : a.toLowerCase() === b.toLowerCase());
+	const mine = instanceHome(s.env, s.home);
+	if (s.platform === "win32") {
+		const fixed = instanceHome({}, s.home);
+		return same(mine, fixed)
+			? null
+			: `on Windows the service runs ${fixed} only: start this instance with rusuban start`;
+	}
+	const theirs = installedHome(s);
+	return !theirs || same(theirs, mine)
+		? null
+		: `the service runs the instance in ${theirs}: uninstall it from there, or start this one with rusuban start`;
+}
+const free = (options) => {
+	const conflict = serviceConflict(options);
+	if (conflict) throw new Error(conflict);
+};
 
 // Installs the service and the shortcut, or replaces an earlier install, and starts the daemon. The
 // daemon writes what it says to daemon.log in the instance home: a service has no console to read.
@@ -209,6 +254,7 @@ export function installService({
 		throw new Error(
 			"rusuban runs from npx's cache, which npm empties: npm i -g rusuban, then again",
 		);
+	free(options);
 	const { platform, exec, env, uid, service, shortcut } = setup(options);
 	const url = dashboardUrl(port);
 	// launchd and systemd start the daemon with a short PATH of their own: it gets this one, to find
@@ -257,6 +303,7 @@ export function installService({
 
 // Stops the daemon and removes the service and the shortcut. Nothing installed is not an error.
 export function uninstallService(options) {
+	free(options);
 	const { platform, exec, uid, service, shortcut } = setup(options);
 	if (platform === "win32") {
 		if (tried(() => exec("schtasks", ["/Query", "/TN", NAME]))) {
