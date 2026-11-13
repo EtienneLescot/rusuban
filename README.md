@@ -23,6 +23,8 @@ Rusuban (留守番) is the Japanese word for whoever minds the house while you a
   dashboard, on your desktop or your phone.
 - **Runs recurring tasks** written as text, in a project of their own when they concern no repo.
 - **Reserves your test machines** over SSH, one agent at a time. Your own desktop only after your yes.
+- **Cleans up after its agents**: each worker builds in folders of its own, removed when it ends, and
+  waits while the disk is short of room.
 - **Is set up from Claude**: its MCP server changes any setting, and whatever widens what agents may do
   waits for your yes in the dashboard.
 
@@ -43,7 +45,8 @@ Then write your rules in your repo, under `.rusuban/rules/`: see [Writing rules]
 and the [examples](examples/rules/). Without rules, Rusuban only observes.
 
 To reach the dashboard from your phone, `rusuban remote enable` serves it on your tailnet through
-Tailscale.
+Tailscale. Workers build under Rusuban's home; `rusuban work-root <path>` puts their work folders on
+a bigger disk.
 
 Read the [security model](docs/security.md) before you let agents run any command on your machine.
 
