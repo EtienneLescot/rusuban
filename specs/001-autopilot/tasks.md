@@ -382,13 +382,13 @@ frees the Mac at expiry.
 - [x] T072 [US5] Live machine state in the prompt context of T028, in `src/agents.mjs` (one copy, not a second one)
   - Each machine with how to reach it, its workspace, its tags, its desktop owner and its last probe, from `leases/probes.json`.
 - [x] T109 [US5] `machine list|probe|doctor` in `bin/rusuban.mjs`; setup scripts per OS (OpenSSH server, `rusuban` account, the host's key) in `docs/machines/`
-  - `docs/machines/README.md`, with `setup-linux.sh`, `setup-macos.sh` and `setup-windows.ps1`. Each makes the `rusuban` account (no administrator, no password, the host's key), the SSH server, git and `~/rusuban`, and can run again. They are syntax-checked, but not yet run on a real machine: T078 and T112 do it.
+  - `docs/machines/README.md`, with `setup-linux.sh`, `setup-macos.sh` and `setup-windows.ps1`. Each makes the `rusuban` account (no administrator, no password, the host's key), the SSH server, git and `~/rusuban`, and can run again. They are syntax-checked; `setup-macos.sh` ran on the real Mac in T112, the others wait for T078.
 - [x] T110 [US5] Desktop guard: a person's desktop alias is denied to every run that does not hold its lease (FR-063)
   - A PreToolUse hook rather than deny rules, which are fixed when a run starts (research R3). `rusuban guard` refuses a Bash command naming the alias, as a host, a user@host or a tailnet name, unless the run holds the lease. A lease it cannot read refuses too, and so does a guard that cannot judge. A desktop added during a run guards the runs started after it.
 - [x] T111 [US5] Mockup of the machines view, validated by Etienne before T071
   - Validated on 2026-11-08: https://claude.ai/artifact/8ydfGCoLorF8neBcU9zoHc, page "Machines, settings, no rules", source in `mockups/machines/`. Machines are a section of the Agents view; the button is "Release".
-- [ ] T112 [US5] Live proof of M4: two runs need macOS on the real Mac; the second waits; killing the first frees the Mac at expiry
-  - After 0.1.0, by the same decision.
+- [x] T112 [US5] Live proof of M4: two runs need macOS on the real Mac; the second waits; killing the first frees the Mac at expiry
+  - Done on 2026-11-13, on a disposable instance: Rusuban is not used to develop itself. The Mac's `rusuban` account by `setup-macos.sh`; the second run had the Mac 6 s after the first was stopped. Results in `validation.md` (SC-006, SC-007).
 
 ---
 
