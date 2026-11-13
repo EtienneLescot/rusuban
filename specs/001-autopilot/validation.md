@@ -9,7 +9,7 @@ the reason.
 | SC-001 install under 10 min | To do, after 0.1.0 | Needs clean Windows, macOS and Linux machines (T078). Etienne put it after the release. |
 | SC-002 no OpenScreen-specific code | Pass | The grep finds nothing, and OpenScreen runs live on the generic product since 2026-11-09. |
 | SC-003 a session in the hub within 1 min, 90 % linked | Time: pass, live too. Links: on fixtures | Real data: within 30 s; live on 2026-11-13, a Desktop session under its item in 49 s (T106). The 90 % holds on fixtures; on real data it needs a labelled sample. |
-| SC-004 3 taps from a ping | Half: T106 passed live, T108 to do | On Etienne's phone over Tailscale, 2026-11-13: a Desktop session answered in a fork from the phone (T106). The three taps from a real card's ping remain (T108), before 0.1.0. |
+| SC-004 3 taps from a ping | Pass | On Etienne's phone over Tailscale, 2026-11-13: a real card's ntfy ping answered in three taps (T108), and a Desktop session answered in a fork (T106). |
 | SC-005 no merge with a lock broken | Pass | 35 gate tests and the cycle's switch tests. |
 | SC-006 never two agents on a machine | Pass on tests; live proof after 0.1.0 | 18 machine tests. The live proof on the Mac (T112) comes after the release. |
 | SC-007 enrolling under 5 min | To do, after 0.1.0 | Needs a fresh SSH machine and Etienne's go (T112). |
@@ -65,7 +65,7 @@ and the two phone proofs, not the clean installs.
 
 ## SC-004: three taps from a ping
 
-**Half done: T106 passed live, T108 to do before 0.1.0.** On Etienne's phone on his tailnet, with
+**Pass: T106 and T108 passed live on 2026-11-13.** On Etienne's phone on his tailnet, with
 `remote enable` and the ntfy channel.
 - **T106, passed on 2026-11-13** (the coordinator's reading of the instance):
   - the Desktop session `a390cb70-15e3-414d-8c95-f38f79d062ec`, "Résumé issue 1528", showed under
@@ -75,8 +75,12 @@ and the two phone proofs, not the clean installs.
     `f6c7effe-dc54-41d8-9972-7f9f4a9b7d0e`, names the original in `forkOf` and is listed under the
     item;
   - the original session did not move: its last message, at 08:29:04 UTC, came before the answer.
-- **T108, ready**: the ntfy test ping (`channel test ntfy`) reached the phone, and the dashboard opens
-  there by its tailnet address. The three taps from a real card's `now` ping remain to count.
+- **T108, passed on 2026-11-13**:
+  - a real card, `getopenscreen/openscreen#1288@1794549953103-mesd`, urgency `now`, made at 06:05:53
+    UTC;
+  - its ping went out on the ntfy channel at 06:06:51 (`pings.json`, the channel's `done`);
+  - Etienne answered it from the notification in three taps, in his words "Oui, 3 touchers": "Take it
+    over" (option `finish`), in `answers.jsonl` and the journal under his name at 08:55:45.
 - The page's part is covered at phone width:
   - a ping links to its card;
   - the click tests answer a card in two taps, its option then Send;
