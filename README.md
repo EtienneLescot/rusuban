@@ -56,6 +56,9 @@ rusuban init
 `init` asks which Claude model the runs use, what agents may run on this machine, and whether to arm
 automatic merges. It adds your first repo, installs the service and opens the dashboard.
 
+On Linux without a desktop session, run `loginctl enable-linger` once: otherwise systemd stops the
+service when you log out.
+
 Then write your rules in `.rusuban/rules/` in your repo, or start from an
 [example](examples/rules/). Until then, Rusuban only watches.
 

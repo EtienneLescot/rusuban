@@ -382,7 +382,7 @@ frees the Mac at expiry.
 - [x] T072 [US5] Live machine state in the prompt context of T028, in `src/agents.mjs` (one copy, not a second one)
   - Each machine with how to reach it, its workspace, its tags, its desktop owner and its last probe, from `leases/probes.json`.
 - [x] T109 [US5] `machine list|probe|doctor` in `bin/rusuban.mjs`; setup scripts per OS (OpenSSH server, `rusuban` account, the host's key) in `docs/machines/`
-  - `docs/machines/README.md`, with `setup-linux.sh`, `setup-macos.sh` and `setup-windows.ps1`. Each makes the `rusuban` account (no administrator, no password, the host's key), the SSH server, git and `~/rusuban`, and can run again. They are syntax-checked; `setup-macos.sh` ran on the real Mac in T112, the others wait for T078.
+  - `docs/machines/README.md`, with `setup-linux.sh`, `setup-macos.sh` and `setup-windows.ps1`. Each makes the `rusuban` account (no administrator, no password, the host's key), the SSH server, git and `~/rusuban`, and can run again. They are syntax-checked; `setup-macos.sh` ran on the real Mac in T112, the Linux and Windows ones not yet.
 - [x] T110 [US5] Desktop guard: a person's desktop alias is denied to every run that does not hold its lease (FR-063)
   - A PreToolUse hook rather than deny rules, which are fixed when a run starts (research R3). `rusuban guard` refuses a Bash command naming the alias, as a host, a user@host or a tailnet name, unless the run holds the lease. A lease it cannot read refuses too, and so does a guard that cannot judge. A desktop added during a run guards the runs started after it.
 - [x] T111 [US5] Mockup of the machines view, validated by Etienne before T071
@@ -412,6 +412,7 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
   - Built as validated: the banner under the view tabs names the repos' default branch, and the main node says "people merge". Screenshots in `mockups/observe-only/built/`; a click test checks it.
 - [ ] T078 [US1] Timed clean-machine install on the three OSes (SC-001)
   - After 0.1.0, by the owner's decision of 2026-11-08: the release follows his own trials and the two phone proofs (T106, T108).
+  - 2026-11-13: Linux in 7.3 s and macOS in 4.9 s; Windows waits for its machine. Results in `validation.md` (SC-001).
 - [x] T113 [US1] Updates: `status` compares the installed version with npm; config and state files carry a version, migrated on load (FR-074)
   - `status` reads `registry.npmjs.org/rusuban/latest` (or `RUSUBAN_REGISTRY`) and says when a newer release is out, with `npm i -g rusuban` then `service install` to restart; it installs nothing. config.json's `version` is the whole home's format: a newer one is refused on load, and the first format change brings its migration.
 
