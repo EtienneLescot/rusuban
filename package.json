@@ -29,7 +29,8 @@
 		"bin",
 		"src",
 		"web",
-		"examples"
+		"examples",
+		"CHANGELOG.md"
 	],
 	"engines": {
 		"node": ">=22"
