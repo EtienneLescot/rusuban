@@ -105,7 +105,7 @@ code { font-family: var(--font-mono); }
 .hero { min-height: calc(100vh - 69px); padding-block: 64px; display: flex; flex-wrap: wrap; gap: 64px; align-items: center; }
 .hero-text { flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
 .hero h1 { font-size: clamp(40px, 5.6vw, 72px); line-height: 1.04; letter-spacing: -0.03em; }
-.hero h1 span { color: var(--ink-faint); }
+.away { color: var(--ink-faint); }
 .lead { max-width: 36rem; font-size: 20px; line-height: 30px; color: var(--ink-muted); }
 .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 8px; }
 .install { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 4px 0 16px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--line-strong); }
@@ -221,7 +221,7 @@ code { font-family: var(--font-mono); }
 <main id="top">
 <section class="wrap hero">
 <div class="hero-text">
-<h1>Minds your GitHub projects <span>while you're away</span></h1>
+<h1>Minds your GitHub projects <span class="away">while you're away</span></h1>
 <p class="lead">For maintainers who use Claude Code. Agents judge every issue and PR against the rules you write in your repo, do what those rules allow, and bring you the rest as a card.</p>
 <div class="cta">
 <a class="btn btn-primary btn-lg" href="https://github.com/EtienneLescot/rusuban/blob/main/docs/writing-rules.md">Write your first rules</a>
