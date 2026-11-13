@@ -353,8 +353,8 @@ an answer from the phone appears in its transcript.
   - The daemon calls the dispatcher every minute (never two at once), its state in `pings.json`; a dry daemon pings no one. A setting waiting for the owner pings like any `now` card. A protected ntfy topic takes `--token`, sent as a bearer and masked like the target.
 - [x] T107 [US2] Ping links straight to the card (`/#card/<id>`), on the tailnet address when remote access is on; in v1 every card goes to the owner (FR-045)
   - Remote access counts as on when `owner.tailscaleLogin` is stored and Tailscale names the machine, so `remote disable` (T076) must remove that login. A digest links each card on its own line and opens the inbox.
-- [ ] T108 [US2] Live proof of M3: a real card pings a phone and is answered in three taps (SC-004)
-  - Ready since 2026-11-13: the ntfy test ping reaches Etienne's phone, and the dashboard opens there by its tailnet address. What remains is a real card's `now` ping, answered.
+- [x] T108 [US2] Live proof of M3: a real card pings a phone and is answered in three taps (SC-004)
+  - Passed live on 2026-11-13: a real `now` card on getopenscreen/openscreen#1288 pinged Etienne's phone through ntfy, and he answered it from the notification in three taps ("Take it over"). Details in SC-004 of `validation.md`.
 
 ---
 
@@ -428,7 +428,7 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
 - [x] T082 Run every check of quickstart.md (SC-001 to SC-007) and record the results in `specs/001-autopilot/validation.md`
   - Recorded on 2026-11-08. Passed: SC-002's code, SC-003's time, SC-005, and SC-006 on the tests. To do with Etienne, each with its reason: SC-001, SC-004, SC-007, SC-003's links on real data, SC-006's live proof, and SC-002 from OpenScreen's rules once getopenscreen/openscreen#1507 merges.
   - Recorded again on 2026-11-11, on main at `a473351`, with SC-008. Passed: SC-002 (OpenScreen live on the product since 2026-11-09), SC-003's time on real data, SC-005, SC-006 on the tests, SC-008. To do with Etienne: SC-004 before 0.1.0 (T106, T108), SC-003's links on a labelled sample; after 0.1.0, by his decision: SC-001 (T078), SC-006's live proof and SC-007 (T112).
-  - 2026-11-13: T106 passed live on Etienne's phone (SC-003's time live too, 49 s). SC-004 is half done: T108 remains before 0.1.0.
+  - 2026-11-13: T106 and T108 passed live on Etienne's phone (SC-003's time live too, 49 s): SC-004 passes.
 - [ ] T083 Remove `"private": true` from `package.json`, publish v0.1.0 on npm and write the release notes (the repo is public since M0)
 
 **After v1**: first the machine runner for graphical tests, screenshots and recordings (reflection P4);
