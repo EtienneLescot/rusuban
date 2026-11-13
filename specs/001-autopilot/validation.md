@@ -6,7 +6,7 @@ the reason.
 
 | Criterion | Result | Where it stands |
 |---|---|---|
-| SC-001 install under 10 min | To do, after 0.1.0 | Needs clean Windows, macOS and Linux machines (T078). Etienne put it after the release. |
+| SC-001 install under 10 min | Linux, macOS: pass. Windows: to do | On 2026-11-13 (T078): Linux in 7.3 s, macOS in 4.9 s, from `npm install -g rusuban` to the dashboard showing a public repo. Windows waits for its machine. |
 | SC-002 no OpenScreen-specific code | Pass | The grep finds nothing, and OpenScreen runs live on the generic product since 2026-11-09. |
 | SC-003 a session in the hub within 1 min, 90 % linked | Time: pass, live too. Links: on fixtures | Real data: within 30 s; live on 2026-11-13, a Desktop session under its item in 49 s (T106). The 90 % holds on fixtures; on real data it needs a labelled sample. |
 | SC-004 3 taps from a ping | Pass | On Etienne's phone over Tailscale, 2026-11-13: a real card's ntfy ping answered in three taps (T108), and a Desktop session answered in a fork (T106). |
@@ -17,14 +17,19 @@ the reason.
 
 ## SC-001: install under 10 minutes
 
-**To do (T078), after 0.1.0.** Etienne decided on 2026-11-08 that the release follows his own trials
-and the two phone proofs, not the clean installs.
-- It is timed on clean Windows, macOS and Linux machines, with `gh` and `claude` logged in, from `npm
-  i -g rusuban` to the dashboard showing a public repo.
-- Those machines are Etienne's (`ssh mac`, `vivobook`, `sarae`). `init` installs a service there, so
-  nothing runs on them without his word.
-- Ahead of it, the coordinator's smoke test of the package passed: `npm pack`, then a global install
-  in a temporary folder; the page is served, `status` answers, GitHub is read.
+**Linux and macOS: pass (T078, 2026-11-13). Windows: to do, its machine (`sarae`) is off.** Timed
+from `npm install -g rusuban`, with npm's cache empty, to the dashboard showing a public repo
+(`EtienneLescot/rusuban`, read without error), with `gh` and `claude` logged in.
+- **Linux:** 7.3 s on the Vivobook (Ubuntu 24.04, a systemd user service).
+- **macOS:** 4.9 s on the Mac mini (launchd, and `~/Applications/Rusuban.app`).
+- A script answered init's five questions as soon as they showed. A person adds their reading time,
+  still far under 10 minutes.
+- Both machines were reset after and checked: service, shortcut, MCP server, global package,
+  `~/.rusuban`, port. `rusuban service uninstall` removes the service and the shortcut.
+- **Windows:** this PC cannot stand in. It runs the live instance, and there is one service per
+  machine.
+- **Found on the way:** with Claude Code installed but logged out, `init` said to install it. Fixed
+  in #63.
 
 ## SC-002: OpenScreen on the generic product
 
