@@ -195,7 +195,7 @@ code { font-family: var(--font-mono); }
 	.pair { grid-template-columns: 1fr; }
 	.done { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) { .btn, .icon-btn, .top .links a:not(.btn) { transition: none; } }
 </style>
 </head>
 <body>
