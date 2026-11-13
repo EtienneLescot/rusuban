@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- **Fixed**: `rusuban init` with Claude Code installed but logged out says to log in
+  (`claude auth login`), instead of asking to install Claude Code.
+
 ## 0.1.0
 
 The first release.

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
 	assemblePrompt,
 	builtInDeny,
+	claudeLoggedIn,
 	editRule,
 	executeRun,
 	holder,
@@ -680,4 +681,23 @@ test("with a person's desktop registered, every Bash command of a run passes the
 			},
 		});
 	}
+});
+
+test("init reads Claude Code's login from `claude auth status`, which exits 1 when logged out", () => {
+	// What `claude auth status` does: its JSON on stdout, and exit 1 when it says logged out (T078).
+	const said =
+		(stdout, status = 0) =>
+		() => {
+			if (!status) return stdout;
+			throw Object.assign(new Error(`exit ${status}`), { status, stdout });
+		};
+	assert.equal(claudeLoggedIn({ exec: said('{"loggedIn": true}') }), true);
+	assert.equal(claudeLoggedIn({ exec: said('{"loggedIn": false}', 1) }), false);
+	// Not installed, failing otherwise, or saying something else: it does not answer.
+	const missing = () => {
+		throw Object.assign(new Error("spawn claude ENOENT"), { code: "ENOENT" });
+	};
+	assert.equal(claudeLoggedIn({ exec: missing }), null);
+	assert.equal(claudeLoggedIn({ exec: said("", 2) }), null);
+	assert.equal(claudeLoggedIn({ exec: said("error: unknown command 'auth'", 1) }), null);
 });

@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
 	CARD_RULES,
+	claudeLoggedIn,
 	executeRun,
 	listRuns,
 	NO_MODEL,
@@ -836,9 +837,11 @@ const commands = {
 			["api", "user", "--jq", ".login"],
 			"gh is not logged in: gh auth login",
 		);
-		const auth = asked("claude", ["auth", "status"], "Claude Code does not answer: install it");
-		if (!JSON.parse(auth).loggedIn)
-			throw new Error("Claude Code is not logged in: claude auth login");
+		const login = claudeLoggedIn();
+		if (login === null)
+			throw new Error("Claude Code does not answer: install it, then rusuban init again");
+		if (!login)
+			throw new Error("Claude Code is not logged in: claude auth login, then rusuban init again");
 		console.log(`Owner: @${owner}, from gh.`);
 		const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 		const ask = async (q, ok) => {
