@@ -431,7 +431,8 @@ dashboard shows a public repo in under 10 minutes and comes back after a reboot.
   - Recorded on 2026-11-08. Passed: SC-002's code, SC-003's time, SC-005, and SC-006 on the tests. To do with Etienne, each with its reason: SC-001, SC-004, SC-007, SC-003's links on real data, SC-006's live proof, and SC-002 from OpenScreen's rules once getopenscreen/openscreen#1507 merges.
   - Recorded again on 2026-11-11, on main at `a473351`, with SC-008. Passed: SC-002 (OpenScreen live on the product since 2026-11-09), SC-003's time on real data, SC-005, SC-006 on the tests, SC-008. To do with Etienne: SC-004 before 0.1.0 (T106, T108), SC-003's links on a labelled sample; after 0.1.0, by his decision: SC-001 (T078), SC-006's live proof and SC-007 (T112).
   - 2026-11-13: T106 and T108 passed live on Etienne's phone (SC-003's time live too, 49 s): SC-004 passes.
-- [ ] T083 Remove `"private": true` from `package.json`, publish v0.1.0 on npm and write the release notes (the repo is public since M0)
+- [x] T083 Remove `"private": true` from `package.json`, publish v0.1.0 on npm and write the release notes (the repo is public since M0)
+  - Published on 2026-11-13 from main at `c4a983f`: `rusuban@0.1.0` on npm (`latest`, 40 files), the tag `v0.1.0`, and the release notes from the changelog: https://github.com/EtienneLescot/rusuban/releases/tag/v0.1.0
 
 **After v1**: first the machine runner for graphical tests, screenshots and recordings (reflection P4);
 then team claims (US8, FR-081), machine lending (reflection P6), answers from the channels, an
