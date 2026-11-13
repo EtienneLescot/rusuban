@@ -18,6 +18,7 @@ import {
 	installService,
 	launchdPlist,
 	openUrl,
+	serviceConflict,
 	systemdUnit,
 	taskXml,
 	uninstallService,
@@ -250,6 +251,54 @@ test("Linux: install enables and starts the unit and adds a menu entry; uninstal
 	calls.length = 0;
 	uninstallService({ platform: "linux", exec, home, env }); // nothing installed any more
 	assert.deepEqual(calls, []);
+});
+
+test("one service per machine: an instance never replaces nor removes another's (T078)", () => {
+	const { calls, exec } = fake();
+	// launchd and systemd carry the home they run: the instance that holds the service is known.
+	for (const platform of ["linux", "darwin"]) {
+		const home = tmp();
+		const live = path.join(home, "R&D 50%", ".rusuban"); // escaped in the plist and the unit
+		const other = path.join(home, "test");
+		const o = (RUSUBAN_HOME) => ({
+			platform,
+			exec,
+			home,
+			uid: 501,
+			command: COMMAND,
+			env: { PATH: "/usr/bin", XDG_CONFIG_HOME: path.join(home, "config"), RUSUBAN_HOME },
+		});
+		const { service } = installService({ port: 8788, ...o(live) });
+		const before = fs.readFileSync(service, "utf8");
+		calls.length = 0;
+		const message = `the service runs the instance in ${path.resolve(live)}: uninstall it from there, or start this one with rusuban start`;
+		assert.equal(serviceConflict(o(other)), message, platform);
+		assert.throws(() => installService({ port: 8789, ...o(other) }), { message });
+		assert.throws(() => uninstallService(o(other)), { message });
+		assert.throws(() => uninstallService(o(undefined)), { message }, "the default home is another");
+		assert.deepEqual(calls, [], platform);
+		assert.equal(fs.readFileSync(service, "utf8"), before);
+		// Its own instance may, whatever the case of the path on macOS; and anyone once it is gone.
+		assert.equal(serviceConflict(o(platform === "darwin" ? live.toUpperCase() : live)), null);
+		uninstallService(o(live));
+		assert.equal(serviceConflict(o(other)), null, platform);
+	}
+	// Windows' task carries no home: it runs the default one, the only one that may install it.
+	calls.length = 0;
+	const home = tmp();
+	const o = (RUSUBAN_HOME) => ({
+		platform: "win32",
+		exec,
+		home,
+		command: WIN_COMMAND,
+		env: { USERDOMAIN: "PC", USERNAME: "alice", APPDATA: path.join(home, "Roaming"), RUSUBAN_HOME },
+	});
+	const message = `on Windows the service runs ${path.resolve(home, ".rusuban")} only: start this instance with rusuban start`;
+	assert.throws(() => installService({ port: 8788, ...o(path.join(home, "test")) }), { message });
+	assert.throws(() => uninstallService(o(path.join(home, "test"))), { message });
+	assert.deepEqual(calls, []);
+	assert.equal(serviceConflict(o(undefined)), null);
+	assert.equal(serviceConflict(o(path.join(home, ".rusuban").toUpperCase())), null);
 });
 
 test("install refuses a dashboard without a fixed port, and an OS it does not know", () => {

@@ -60,6 +60,7 @@ import {
 	inNpxCache,
 	installService,
 	openUrl,
+	serviceConflict,
 	dashboardUrl as serviceUrl,
 	uninstallService,
 } from "../src/service.mjs";
@@ -832,6 +833,9 @@ const commands = {
 			throw new Error(
 				`this instance is set up already (${homePath("config.json")}): rusuban status`,
 			);
+		// Before any question: init installs the service, which another instance may hold.
+		const conflict = serviceConflict();
+		if (conflict) throw new Error(conflict);
 		const owner = asked(
 			"gh",
 			["api", "user", "--jq", ".login"],

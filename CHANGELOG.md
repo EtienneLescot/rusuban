@@ -4,6 +4,9 @@
 
 - **Fixed**: `rusuban init` with Claude Code installed but logged out says to log in
   (`claude auth login`), instead of asking to install Claude Code.
+- **Fixed**: one service per machine, and an instance never replaces nor removes another one's:
+  `init`, `service install` and `service uninstall` refuse under another `RUSUBAN_HOME`, and say to
+  start that instance with `rusuban start`. On Windows, only the default home has the service.
 
 ## 0.1.0
 
