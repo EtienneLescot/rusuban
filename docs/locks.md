@@ -7,7 +7,7 @@ and no text lifts them. Some are built in and hold in every project; a repo adds
 ## The gates
 
 For every open PR the server computes eight gates. The PR's node shows the first one that stops it,
-and its drawer lists them all. A PR merges alone only when every gate passes.
+and lists them all once unfolded. A PR merges alone only when every gate passes.
 
 | Gate | Stops a merge when |
 |---|---|
@@ -34,7 +34,8 @@ They hold in every project, and no setting lifts them:
   settings**, out of the graph and the kanban.
 - **No direct push to a default branch**: denied to agents, and a commit that reaches the branch outside
   a PR is flagged.
-- **The merge switch**, in the dashboard's header, for the whole instance. Merges start paused.
+- **The merge switch**, in the dashboard's header, for the whole instance. Merges start paused
+  unless you arm them at `rusuban init`.
 
 The server also refuses on its own a draft, a PR with changes requested on its head, a PR that renames
 a file (a rename could move a file out of a locked path unseen), and a PR whose files it cannot all

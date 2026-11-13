@@ -22,16 +22,17 @@ stays at risk.
 
 ## The built-in deny rules
 
-Every run (judge, coordinator, worker, task) gets them as `--disallowedTools`, under either host
-profile. Your own `permissions.deny` adds to them; nothing removes them.
+Every run (judge, coordinator, worker, task, reply) gets them as `--disallowedTools`, under either
+host profile. Your own `permissions.deny` adds to them; nothing removes them.
 
 | What | Denied |
 |---|---|
 | Merging | `gh pr merge`; any `gh api` call whose text holds `merge` or `Merge` (the REST merge endpoints, GraphQL merges, auto-merge). |
 | Pushing to a default branch | `git push` naming a repo's default branch (`main`, `:main`, `+main`, `refs/heads/main`); `git push --all` and `--mirror`; `gh api` on `git/refs/heads/<default branch>`. |
 | The owner's commands | `rusuban project`, `task`, `start`, `permissions`, `machine`, `channel`, `remote`, `service`, `init`, `mcp`, and Rusuban's MCP server (`mcp__rusuban`). The CLI and the MCP server also refuse to run inside a run. |
-| The instance's state | Edits to `config.json`, `automerge.json`, `projects/`, `runs/`, `hub/`, `leases/`, `tasks/` and `bin/` in the instance home. Agents keep their own folders there: `scratch/`, `worktrees/`, `repos/`. |
+| The instance's state | Edits to `config.json`, `config.json.seal`, `automerge.json`, `projects/`, `runs/`, `hub/`, `leases/`, `tasks/` and `bin/` in the instance home. Agents keep their own folders there: `scratch/`, `worktrees/`, `repos/`, and `work/` by default. |
 | The dashboard and your files, from the shell | Any shell command that names the dashboard's port (`:<port>`) or a tailnet address (`.ts.net`), `config.json` next to the home's name, `automerge.json`, `answers.jsonl` or `pending.json`. A speed bump, not a wall: see the residual risks. |
+
 A denied call is refused, and the run's log says so.
 
 ## Only your settings reach a run
@@ -39,7 +40,8 @@ A denied call is refused, and the run's log says so.
 Runs load Claude Code's user settings only (`--setting-sources user`). A repo's `.claude/` settings,
 with their hooks and permissions, never load: a hook or an allow rule merged into a repo does nothing
 on your machine. Your own user settings do load: their allow rules add to an allowlist run, and their
-deny rules and hooks apply.
+deny rules and hooks apply. With a person's desktop registered, Rusuban adds one hook of its own:
+`rusuban guard` refuses that desktop to a run that does not hold its lease.
 
 ## The host profile
 
@@ -106,7 +108,8 @@ These go to the journal and to your inbox's "Flagged for you", for 7 days:
 - a merge the server did not make, and a commit pushed straight to a default branch;
 - a merge GitHub refused, and what stopped the approval bypass;
 - a rules change, with its diff, and a `locks.json` that does not validate;
-- the approval bypass turned on;
+- the approval bypass turned on, and every other setting that widens;
+- a `config.json` changed outside Rusuban's settings;
 - a task that did not end well.
 
 ## Residual risks
@@ -121,11 +124,11 @@ These go to the journal and to your inbox's "Flagged for you", for 7 days:
   Code's file tools; against the shell there are only the cheap rules above, which match text. The
   dashboard takes any request from this machine as yours: its identity check stops other machines and
   web pages, not local processes, which can send any `Origin` and `x-rusuban`. Under `bypass`, a shell
-  command that gets past the rules can write `config.json`, to turn a project live or its approval
+  command that gets past the rules can write `config.json`, to add a repo or turn a project's approval
   bypass on, or call the dashboard, to answer a card (a merge order included), allow a setting's card
-  (one asked through the MCP included) or arm the switch. The daemon journals these as yours; the
-  bypass turned on is flagged. A `config.json` changed outside Rusuban's settings is flagged too,
-  with what changed, after the fact: the daemon applies it all the same.
+  (one asked through the MCP included) or arm the switch. The daemon journals the dashboard's calls as
+  yours; the bypass turned on is flagged. A `config.json` changed outside Rusuban's settings is
+  flagged too, with what changed, after the fact: the daemon applies it all the same.
 - **The real barrier comes after v1**: agents under an OS account of their own, or in Claude Code's
   sandbox where it exists, out of reach of your files and the dashboard; and a GitHub token reserved
   for agents, without admin rights. Until then, a repo you do not trust gets the `allowlist` profile.
