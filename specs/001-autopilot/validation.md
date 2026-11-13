@@ -11,8 +11,8 @@ the reason.
 | SC-003 a session in the hub within 1 min, 90 % linked | Time: pass, live too. Links: on fixtures | Real data: within 30 s; live on 2026-11-13, a Desktop session under its item in 49 s (T106). The 90 % holds on fixtures; on real data it needs a labelled sample. |
 | SC-004 3 taps from a ping | Pass | On Etienne's phone over Tailscale, 2026-11-13: a real card's ntfy ping answered in three taps (T108), and a Desktop session answered in a fork (T106). |
 | SC-005 no merge with a lock broken | Pass | 35 gate tests and the cycle's switch tests. |
-| SC-006 never two agents on a machine | Pass on tests; live proof after 0.1.0 | 18 machine tests. The live proof on the Mac (T112) comes after the release. |
-| SC-007 enrolling under 5 min | To do, after 0.1.0 | Needs a fresh SSH machine and Etienne's go (T112). |
+| SC-006 never two agents on a machine | Pass, live too | 18 machine tests, and live on the real Mac on 2026-11-13 (T112): the second run waited in the queue, then had the Mac 6 s after the first was stopped. |
+| SC-007 enrolling under 5 min | Pass | On the real Mac, 2026-11-13 (T112): the setup script in 2 s, `machine add`'s checks and OpenScreen's mirror in 15 s, then the probe online. The sudo password and the card are not counted. |
 | SC-008 the dashboard answers within 200 ms | At rest: pass. Under builds: partial | Live after #46: `/api/state` in 15 to 39 ms. Under a build's load after T141: p95 72 to 349 ms on the bench, against 1.1 to 5.5 s before; 15 ms with the build below normal priority, Etienne's decision. |
 
 ## SC-001: install under 10 minutes
@@ -115,8 +115,8 @@ and the two phone proofs, not the clean installs.
 
 ## SC-006: one agent per machine
 
-**Pass on the tests; the live proof comes after 0.1.0.** The 18 tests of `test/machines.test.mjs`
-pass.
+**Pass, on the tests and live on the real Mac (T112, 2026-11-13).** The 18 tests of
+`test/machines.test.mjs` pass.
 - **Never two runs on one machine, however many ask at once.**
 - **The queue:** two waiters are served in the order they asked.
 - **Freeing:**
@@ -125,16 +125,29 @@ pass.
   - another instance's lease holds until its expiry.
 - **The real lease scripts:** the sh and PowerShell scripts that hold a lease were run against a real
   folder.
-- **The live proof (T112):** two runs on the real Mac through `ssh mac`. The second waits; killing the
-  first frees the Mac at expiry. Etienne put it after the release, by the same decision as T078:
-  enrolling the Mac creates the `rusuban` account there.
+- **Live (T112):** two task runs asked for macOS through `ssh mac`, on a disposable instance: Rusuban
+  is not used to develop itself.
+  - The first took the Mac and held it. The second queued behind it: for a minute, 12 checks out of
+    12 found the first holding the Mac and the second waiting.
+  - The first was stopped from the dashboard. 5.6 s later the second's poll found its holder gone
+    ("mac is free again: run …, which held it, is gone"), took the Mac, checked it (macOS 27.0.1,
+    user `rusuban`) and released it 7 s later.
+  - The stopped run's lease would have run out 5 min after its last renewal: freed long before.
 
 ## SC-007: enrolling a machine under 5 minutes
 
-**To do (T112), after 0.1.0.** It is timed on a fresh SSH host, from the setup script of
-`docs/machines/` to `rusuban machine probe` saying online.
-- The scripts are syntax-checked (`sh -n`, PowerShell's parser), but not yet run on a real machine.
-- They create an account there, so they run with Etienne.
+**Pass on the real Mac (T112, 2026-11-13): about 20 s of the machine's time.** Timed from the setup
+script of `docs/machines/` to `rusuban machine probe` saying online. The sudo password, typed by
+Etienne, and the card's answer are not counted.
+- `setup-macos.sh`, with sudo over `ssh -t mac`: 2 s. It made `rusuban` (not an administrator, in
+  `com.apple.access_ssh`), its `~/.ssh` with the host's key, and `~/rusuban`. Remote Login was on
+  already.
+- `ssh -l rusuban mac`: the key gets in at once; the Mac's host key was known.
+- `rusuban machine add mac`: ssh, account, git and workspace checked, and OpenScreen's bare mirror
+  made, in 15 s.
+- On the disposable instance, with no repo to mirror: from `machine add` to its card answered and
+  `machine probe` online, 1.6 s.
+- The Linux and Windows scripts are still only syntax-checked.
 
 ## SC-008: the dashboard answers within 200 ms
 
