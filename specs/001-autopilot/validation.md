@@ -8,8 +8,8 @@ the reason.
 |---|---|---|
 | SC-001 install under 10 min | To do, after 0.1.0 | Needs clean Windows, macOS and Linux machines (T078). Etienne put it after the release. |
 | SC-002 no OpenScreen-specific code | Pass | The grep finds nothing, and OpenScreen runs live on the generic product since 2026-11-09. |
-| SC-003 a session in the hub within 1 min, 90 % linked | Time: pass. Links: on fixtures | Real data: within 30 s. The 90 % holds on fixtures; on real data it needs a labelled sample. |
-| SC-004 3 taps from a ping | To do, before 0.1.0 | Needs Etienne's phone over Tailscale (T106, T108). |
+| SC-003 a session in the hub within 1 min, 90 % linked | Time: pass, live too. Links: on fixtures | Real data: within 30 s; live on 2026-11-13, a Desktop session under its item in 49 s (T106). The 90 % holds on fixtures; on real data it needs a labelled sample. |
+| SC-004 3 taps from a ping | Half: T106 passed live, T108 to do | On Etienne's phone over Tailscale, 2026-11-13: a Desktop session answered in a fork from the phone (T106). The three taps from a real card's ping remain (T108), before 0.1.0. |
 | SC-005 no merge with a lock broken | Pass | 35 gate tests and the cycle's switch tests. |
 | SC-006 never two agents on a machine | Pass on tests; live proof after 0.1.0 | 18 machine tests. The live proof on the Mac (T112) comes after the release. |
 | SC-007 enrolling under 5 min | To do, after 0.1.0 | Needs a fresh SSH machine and Etienne's go (T112). |
@@ -50,6 +50,8 @@ and the two phone proofs, not the clean installs.
   - Two sessions were live. The newest line indexed was written 7 s before the pass.
 - **A pass costs the page nothing.** Since #46, the pass reads its thousand transcripts' sizes off the
   daemon's loop (SC-008).
+- **Live on 2026-11-13 (T106)**: a new Desktop session, its first message at 08:28:54 UTC, was
+  indexed at 08:29:43, 49 s later, under the item its first message cites.
 
 **The links: pass on fixtures, to do on real data.**
 - `test/hub.test.mjs` checks that at least 90 % of the fixture sessions about an item are linked to
@@ -63,8 +65,18 @@ and the two phone proofs, not the clean installs.
 
 ## SC-004: three taps from a ping
 
-**To do (T106, T108), before 0.1.0.** It needs Etienne's phone on his tailnet, with `remote enable`
-and a ping channel, to count notification → card → option.
+**Half done: T106 passed live, T108 to do before 0.1.0.** On Etienne's phone on his tailnet, with
+`remote enable` and the ntfy channel.
+- **T106, passed on 2026-11-13** (the coordinator's reading of the instance):
+  - the Desktop session `a390cb70-15e3-414d-8c95-f38f79d062ec`, "Résumé issue 1528", showed under
+    getopenscreen/openscreen#1528, live, in the Desktop filter, 49 s after its first message;
+  - Etienne's answer from the phone, "Answer in a fork", started the run
+    `reply-20261113082951-6da8` on `claude-opus-5-5`; its fork,
+    `f6c7effe-dc54-41d8-9972-7f9f4a9b7d0e`, names the original in `forkOf` and is listed under the
+    item;
+  - the original session did not move: its last message, at 08:29:04 UTC, came before the answer.
+- **T108, ready**: the ntfy test ping (`channel test ntfy`) reached the phone, and the dashboard opens
+  there by its tailnet address. The three taps from a real card's `now` ping remain to count.
 - The page's part is covered at phone width:
   - a ping links to its card;
   - the click tests answer a card in two taps, its option then Send;
