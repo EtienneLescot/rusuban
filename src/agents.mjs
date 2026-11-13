@@ -352,6 +352,27 @@ export function usageLimitOf(text, now = new Date()) {
 export const NO_MODEL =
 	"No model is set for the runs, so none starts: rusuban model <id> sets one.";
 
+// Whether Claude Code is logged in, from `claude auth status`; null when it does not answer. Logged
+// out, it exits 1 with its JSON saying so: an answer, not a failure (T078).
+export function claudeLoggedIn({ exec = execFileSync } = {}) {
+	let out;
+	try {
+		out = exec("claude", ["auth", "status"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "pipe"],
+			windowsHide: true,
+		});
+	} catch (e) {
+		if (e.status !== 1) return null;
+		out = e.stdout;
+	}
+	try {
+		return JSON.parse(out).loggedIn === true;
+	} catch {
+		return null;
+	}
+}
+
 // `claude -p` with the prompt on stdin (no command-line length limit), stream-json so each step
 // is written as it comes, in plain words and timestamped, to the log the dashboard shows live.
 // Every run starts here, always on the model it is given.
