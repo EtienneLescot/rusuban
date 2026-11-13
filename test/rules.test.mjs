@@ -102,6 +102,26 @@ test("an unchanged tree sha reuses the cache", async () => {
 	assert.equal((await loadRules("o/r", "main", first, moved.get)).files[0].text, "y");
 });
 
+test("a read that answers clears a failed one's error, the tree unchanged", async () => {
+	const repo = fakeRepo({ ".rusuban/rules/a.md": "x" });
+	const first = await loadRules("o/r", "main", null, repo.get);
+	// A network failure, kept on the last rules as the daemon keeps it.
+	const failed = {
+		...first,
+		error: "dial tcp 20.250.119.72:443: connectex",
+		errorAt: "2026-11-11T08:23:00Z",
+	};
+	const again = await loadRules("o/r", "main", failed, repo.get);
+	assert.equal(Object.hasOwn(again, "error"), false);
+	assert.equal(Object.hasOwn(again, "errorAt"), false);
+	assert.deepEqual(again.files, first.files);
+	assert.equal(
+		failed.error,
+		"dial tcp 20.250.119.72:443: connectex",
+		"the cache passed in is not changed",
+	);
+});
+
 test("ignoredChecks are a list of names, never also required", () => {
 	assert.deepEqual(validateLocks('{"ignoredChecks":["nix build"]}').locks, {
 		ignoredChecks: ["nix build"],
