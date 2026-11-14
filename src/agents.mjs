@@ -540,11 +540,14 @@ export function runClaude({
 	let result = null;
 	let denials = [];
 	let limit = null;
+	let loggedOut = false;
 	const onEvent = (e) => {
 		// The session id: `claude --resume <id>` in the same folder reopens the conversation.
 		// The model is the one the session says it runs on: a gap with the one asked shows.
 		if (e.type === "system" && e.subtype === "init" && e.session_id)
 			onSession?.(e.session_id, e.model ?? null);
+		// Claude Code's login no longer works (expired, revoked): it says so on the message it makes up.
+		if (e.type === "assistant" && e.error === "authentication_failed") loggedOut = true;
 		if (e.type === "assistant")
 			for (const c of e.message?.content ?? []) {
 				if (c.type === "text" && c.text.trim()) {
@@ -598,7 +601,11 @@ export function runClaude({
 		finished = true;
 		clearTimeout(killer);
 		fs.closeSync(log);
-		onDone?.(code, (result ?? "").trim() || "No final answer: see the log.", { denials, limit });
+		onDone?.(code, (result ?? "").trim() || "No final answer: see the log.", {
+			denials,
+			limit,
+			loggedOut,
+		});
 	};
 	child.on("error", (e) => {
 		line(`could not start ${cmd}: ${e.message}`);
@@ -621,9 +628,13 @@ const SAFE = /^[\w.-]+$/;
 const statusName = (id) => `runs/${id}/status.json`;
 const lockName = (lock) => `runs/locks/${lock}.json`;
 const queueName = (lock) => `runs/locks/${lock}.queue.json`;
-// The account's usage limit: every queue holds until it resets.
+// The account's usage limit: every queue holds until it resets. A logged-out Claude Code holds them
+// until it is logged in again (`login`), which kickQueues finds out.
 const LIMIT = "runs/limit.json";
-const limitedUntil = () => Date.parse(read(LIMIT, {}).until ?? 0) || 0;
+const limitedUntil = () => {
+	const hold = read(LIMIT, {});
+	return hold.login ? Number.POSITIVE_INFINITY : Date.parse(hold.until ?? 0) || 0;
+};
 const BACKOFF_MIN = [5, 15, 60];
 // Thrown past the prompt assembly by a reply, whose prompt is the person's own text.
 const REPLY = Symbol("reply");
@@ -910,14 +921,23 @@ function askAgain(r) {
 	});
 }
 
-// Every cycle of the daemon: once the usage limit resets, a run it stopped is asked again; a run
-// whose runner died (a crash, a reboot) is journaled with why, once, and gives its work back to the
-// queue, twice at most; then every queue whose holder died starts its next run.
-export function kickQueues(now = Date.now()) {
+// Every cycle of the daemon: once the usage limit resets, or Claude Code is logged in again, a run
+// it stopped is asked again; a run whose runner died (a crash, a reboot) is journaled with why, once,
+// and gives its work back to the queue, twice at most; then every queue whose holder died starts its
+// next run.
+export function kickQueues(now = Date.now(), { loggedIn = claudeLoggedIn } = {}) {
+	const hold = read(LIMIT, {});
+	if (hold.login) {
+		// `claude auth status` says when it is logged in again. When it does not answer, or said so
+		// and a run failed all the same (an API key it takes for a login), a run tries at the hold's time.
+		const back = hold.distrust ? null : loggedIn();
+		if (back === false || (back !== true && Date.parse(hold.until) > now)) return;
+		write(LIMIT, { lifted: new Date(now).toISOString() });
+	}
 	if (limitedUntil() > now) return;
 	for (const r of listRuns()) {
 		if (r.retriedBy) continue;
-		const due = r.state === "limited" && Date.parse(r.retryAt) <= now;
+		const due = r.state === "limited" && (r.login || Date.parse(r.retryAt) <= now);
 		const lost = r.state === "interrupted" && !r.endedAt; // its end set when it is journaled
 		if (!due && !lost) continue;
 		if (lost) releaseFiles(r).catch(() => {});
@@ -1131,12 +1151,41 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 				if (!tool || !status.step) status.step = text.slice(0, 200);
 				flushTimer ??= setTimeout(flush, 2000);
 			},
-			onDone: (code, summary, { denials, limit }) => {
+			onDone: (code, summary, { denials, limit, loggedOut }) => {
 				clearTimeout(flushTimer);
 				const dir = `projects/${s.project}`;
+				const wait = BACKOFF_MIN[Math.min(s.attempt ?? 1, BACKOFF_MIN.length) - 1];
+				if (loggedOut) {
+					// No run can work logged out: this one waits for the login, and every queue holds,
+					// rather than each run failing in turn and its report asking for a coordinator that
+					// fails too. The owner is told once a hold, in Claude Code's own words.
+					const prev = read(LIMIT, {});
+					if (!prev.login) {
+						// Failing again right after a login said to be back: that word is not taken again.
+						const distrust = Date.now() - (Date.parse(prev.lifted) || 0) < 10 * 60000;
+						const min = distrust ? BACKOFF_MIN.at(-1) : wait;
+						const until = new Date(Date.now() + min * 60000).toISOString();
+						write(LIMIT, { login: true, until, run: id, ...(distrust && { distrust }) });
+						journal(s.project, {
+							kind: "logged-out",
+							item: null,
+							text: `Claude Code cannot log in on this host, so no run starts. It says: “${firstLine(summary).slice(0, 300)}”. The runs it stopped start again by themselves once it can.`,
+							by: "server",
+							run: id,
+							notify: true,
+						});
+					}
+					return end({
+						state: "limited",
+						login: true,
+						retryAt: null,
+						exitCode: code,
+						summary,
+						denials,
+					});
+				}
 				if (limit) {
 					// The account is limited: this run is asked again at the reset, and every queue holds.
-					const wait = BACKOFF_MIN[Math.min(s.attempt ?? 1, BACKOFF_MIN.length) - 1];
 					const retryAt = limit.resetAt ?? new Date(Date.now() + wait * 60000).toISOString();
 					write(LIMIT, { until: retryAt, run: id });
 					return end({ state: "limited", retryAt, exitCode: code, summary, denials });

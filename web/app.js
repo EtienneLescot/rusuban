@@ -143,6 +143,7 @@ const T = {
 		interrupted: "interrupted",
 		limited: "usage limit",
 	},
+	loggedOut: "logged out",
 	rulesAndLocks: "Rules and locks",
 	rulesNotLoaded: "Rules not read yet.",
 	repoObserveOnly: "Observe only: add .rusuban/rules/*.md on the default branch to let agents act.",
@@ -1307,8 +1308,11 @@ const modelHtml = (r) => {
 	const [, pre, rest] = r.model.match(/^(claude-)?(.*)$/);
 	return `<span class="mono ag-model${off ? " off" : ""}" title="${esc(off ? T.modelAsked(r.modelAsked) : r.model)}">${pre ? `<span class="ag-model-pre">${pre}</span>` : ""}${esc(rest)}</span>`;
 };
+// A run waiting on a logged-out Claude Code reads as such, not as a usage limit.
+const stateLabel = (r) =>
+	r.state === "limited" && r.login ? T.loggedOut : (T.runState[r.state] ?? r.state);
 const stateDot = (r) =>
-	`<i class="sd ${esc(r.state)}" role="img" aria-label="${esc(T.runState[r.state] ?? r.state)}"></i>`;
+	`<i class="sd ${esc(r.state)}" role="img" aria-label="${esc(stateLabel(r))}"></i>`;
 
 function runCardHtml(r) {
 	const queued = r.state === "queued";
@@ -1326,7 +1330,7 @@ function runCardHtml(r) {
 function lastRunOf(t) {
 	const r = t.runs[0];
 	if (!r) return { state: "", html: esc(T.neverRun), short: T.neverRun };
-	const label = T.runState[r.state] ?? r.state;
+	const label = stateLabel(r);
 	if (r.state === "running")
 		return {
 			state: r.state,
@@ -1345,7 +1349,7 @@ function lastRunOf(t) {
 }
 
 const miniRunHtml = (r) =>
-	`<div class="ag-mini">${stateDot(r)}<span class="mono">${esc(shortWhen(r.endedAt ?? r.createdAt))}</span><span class="ag-sum" title="${esc(plain(r.summary))}">${md(r.summary) || esc(T.runState[r.state] ?? r.state)}</span>${conversationLink(r)}</div>`;
+	`<div class="ag-mini">${stateDot(r)}<span class="mono">${esc(shortWhen(r.endedAt ?? r.createdAt))}</span><span class="ag-sum" title="${esc(plain(r.summary))}">${md(r.summary) || esc(stateLabel(r))}</span>${conversationLink(r)}</div>`;
 
 // One row per task; a click unfolds the start of its prompt and its last three runs. "Run now" shows
 // only where it would start something.

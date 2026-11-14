@@ -204,6 +204,7 @@ export function tasksState(config, now = Date.now()) {
 				startedAt: r.startedAt,
 				endedAt: r.endedAt,
 				retryAt: r.retryAt ?? null,
+				login: r.login ?? false,
 				summary: r.summary,
 				conversation: r.session ?? null,
 			})),
