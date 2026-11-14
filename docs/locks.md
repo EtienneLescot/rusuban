@@ -33,7 +33,7 @@ They hold in every project, and no setting lifts them:
   merges it on GitHub; the agents never judge it, and the dashboard lists it under **Rules &
   settings**, out of the graph and the kanban.
 - **No direct push to a default branch**: denied to agents, and a commit that reaches the branch outside
-  a PR is flagged.
+  a PR is flagged. A contributor's PR head on their fork may be named like it: agents may push there.
 - **The merge switch**, in the dashboard's header, for the whole instance. Merges start paused
   unless you arm them at `rusuban init`.
 

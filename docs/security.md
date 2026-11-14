@@ -28,12 +28,26 @@ host profile. Your own `permissions.deny` adds to them; nothing removes them.
 | What | Denied |
 |---|---|
 | Merging | `gh pr merge`; any `gh api` call whose text holds `merge` or `Merge` (the REST merge endpoints, GraphQL merges, auto-merge). |
-| Pushing to a default branch | `git push` naming a repo's default branch (`main`, `:main`, `+main`, `refs/heads/main`); `git push --all` and `--mirror`; `gh api` on `git/refs/heads/<default branch>`. |
+| Pushing to a default branch | `git push --all` and `--mirror`; `gh api` on `git/refs/heads/<default branch>`; what would skip the pre-push hook below: `git push --no-verify`, and any command that names `hooksPath` or `GIT_CONFIG`. Without that hook (git before 2.31), `git push` naming a repo's default branch (`main`, `:main`, `+main`, `refs/heads/main`), on any remote. |
 | The owner's commands | `rusuban project`, `task`, `start`, `permissions`, `machine`, `channel`, `remote`, `service`, `init`, `mcp`, and Rusuban's MCP server (`mcp__rusuban`). The CLI and the MCP server also refuse to run inside a run. |
 | The instance's state | Edits to `config.json`, `config.json.seal`, `automerge.json`, `projects/`, `runs/`, `hub/`, `leases/`, `tasks/` and `bin/` in the instance home. Agents keep their own folders there: `scratch/`, `worktrees/`, `repos/`, and `work/` by default. |
 | The dashboard and your files, from the shell | Any shell command that names the dashboard's port (`:<port>`) or a tailnet address (`.ts.net`), `config.json` next to the home's name, `automerge.json`, `answers.jsonl` or `pending.json`. A speed bump, not a wall: see the residual risks. |
 
 A denied call is refused, and the run's log says so.
+
+## No push to a default branch
+
+Every git a run starts takes Rusuban's hooks (`core.hooksPath`, set through `GIT_CONFIG_COUNT`).
+Before anything leaves, git hands the pre-push hook the URL and the refs it resolved, so a remote's
+name, a URL, a refspec, an alias or a script cannot hide where a push goes.
+
+- **Refused**: a branch named like a project repo's default branch, on every remote. While a repo's
+  default branch is not read yet, `main` and `master` too.
+- **The one exception**: an open PR's head on a contributor's fork, even named `main`. GitHub lets
+  a maintainer push there, and it is the contributor's branch, not the project's.
+- **The repo's own hooks still run**, after Rusuban's, as git would have run them. Only
+  `reference-transaction`, `post-index-change` and `push-to-checkout` do not.
+- A hook that cannot read the instance refuses the push.
 
 ## Only your settings reach a run
 
@@ -117,9 +131,11 @@ These go to the journal and to your inbox's "Flagged for you", for 7 days:
 - **Under `bypass`, an agent has your shell, and it reads text anyone can write.** A prompt injection
   in an issue, a comment or a diff is a path to your shell. The safety frame tells agents that GitHub
   content is data; it is a prompt, not a wall.
-- **Deny rules match command text.** A merge or a push hidden behind a variable, an alias, a script,
-  an interpreter or a raw HTTP call is not matched. The server flags a merge or a push it did not make,
-  after the fact; it does not prevent it.
+- **Deny rules match command text.** A merge, or a write through GitHub's API, hidden behind a
+  variable, an alias, a script, an interpreter or a raw HTTP call is not matched. A `git push` is
+  checked where git resolved it, but an agent can still skip the hook: another spelling of
+  `--no-verify` or of the config, or a git that does not inherit the run's environment. The server
+  flags a merge or a push it did not make, after the fact; it does not prevent it.
 - **An agent's shell reaches what the deny rules do not cover.** The state's deny rules bind Claude
   Code's file tools; against the shell there are only the cheap rules above, which match text. The
   dashboard takes any request from this machine as yours: its identity check stops other machines and
