@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 <url><loc>https://rusuban.dev/</loc></url>
+<url><loc>https://rusuban.dev/alternatives/copilot-cloud-agent/</loc></url>
+<url><loc>https://rusuban.dev/compare/rusuban-vs-claude-code-action/</loc></url>
+<url><loc>https://rusuban.dev/compare/rusuban-vs-mergify/</loc></url>
 <url><loc>https://rusuban.dev/docs/</loc></url>
 <url><loc>https://rusuban.dev/docs/claude/</loc></url>
 <url><loc>https://rusuban.dev/docs/faq/</loc></url>
