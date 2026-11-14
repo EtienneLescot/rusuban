@@ -33,3 +33,9 @@ The docs that live in the repository are also served as Markdown: https://rusuba
 - [Auto-merge behind locks](https://rusuban.dev/features/auto-merge/): which PRs merge without a person, and the gates the server checks first
 - [Issue and PR triage](https://rusuban.dev/features/issue-triage/): what a judgment holds, and what happens next
 - [Scheduled Claude Code tasks](https://rusuban.dev/features/scheduled-tasks/): a task as a text file, run at its times or on a click
+
+## Comparisons
+
+- [Rusuban vs Claude Code GitHub Actions](https://rusuban.dev/compare/rusuban-vs-claude-code-action/)
+- [GitHub Copilot cloud agent alternative](https://rusuban.dev/alternatives/copilot-cloud-agent/)
+- [Rusuban vs Mergify](https://rusuban.dev/compare/rusuban-vs-mergify/)

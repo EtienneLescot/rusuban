@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rusuban vs Claude Code GitHub Actions | Rusuban</title>
+<meta name="description" content="Both run Claude Code on your GitHub issues and PRs. Claude Code GitHub Actions answers @claude in a workflow; Rusuban judges every item from your machine.">
+<link rel="canonical" href="https://rusuban.dev/compare/rusuban-vs-claude-code-action/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Rusuban vs Claude Code GitHub Actions | Rusuban">
+<meta property="og:description" content="Both run Claude Code on your GitHub issues and PRs. Claude Code GitHub Actions answers @claude in a workflow; Rusuban judges every item from your machine.">
+<meta property="og:url" content="https://rusuban.dev/compare/rusuban-vs-claude-code-action/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page"><article class="prose">
+<h1>Rusuban vs Claude Code GitHub Actions</h1>
+<p class="lede">Both put Claude Code to work on your GitHub repos, and both are MIT-licensed. Claude Code GitHub Actions runs it in a workflow on a GitHub Actions runner, when someone mentions <code>@claude</code> or an event you chose fires. Rusuban runs it on your own machine, reads every issue and pull request, judges each one against the rules in your repo, and merges what those rules allow behind its locks. Claude Code GitHub Actions is the better choice when you want Claude on demand in your threads, with no machine of yours to keep on.</p>
+<p class="note">This page is published by the Rusuban project. The details on Claude Code GitHub Actions come from Anthropic's documentation and the <code>anthropics/claude-code-action</code> repository, checked in November 2026. The sources are listed at the end.</p>
+
+<h2 id="at-a-glance">At a glance</h2>
+<div class="table"><table>
+<thead><tr><th></th><th>Rusuban</th><th>Claude Code GitHub Actions</th></tr></thead>
+<tbody>
+<tr><td>Where Claude Code runs</td><td>On your machine, Windows, macOS or Linux</td><td>In a GitHub Actions workflow, on the repo's runner</td></tr>
+<tr><td>How work starts</td><td>Rusuban reads every issue and PR, every 90 seconds by default, and judges what needs it</td><td>A mention of <code>@claude</code> in a comment, a review or a new issue, or any workflow event or schedule given a prompt</td></tr>
+<tr><td>What decides the work</td><td>Plain-text rules in <code>.rusuban/rules/</code>, the same for every item</td><td>The request in the comment, or the prompt in the workflow</td></tr>
+<tr><td>Merging</td><td>Rusuban's server merges what your rules allow, behind eight gates, on the exact head it checked</td><td>Claude cannot approve pull requests, and is instructed not to merge them</td></tr>
+<tr><td>Your decisions</td><td>Cards in one inbox for all your projects, on your desktop or your phone</td><td>Comments and pull requests on GitHub</td></tr>
+<tr><td>What you pay</td><td>Nothing for Rusuban. The agents run on your Claude plan</td><td>GitHub Actions minutes, plus Claude API tokens or a Claude subscription token</td></tr>
+<tr><td>Where prompts go</td><td>Where your Claude Code login sends them. Rusuban has no server of its own</td><td>To the Claude API or the cloud provider you set up</td></tr>
+<tr><td>License</td><td>MIT</td><td>MIT</td></tr>
+<tr><td>Setup</td><td><code>npm install -g rusuban</code>, then <code>rusuban init</code></td><td><code>/install-github-app</code> in Claude Code, or a GitHub App, a secret and a workflow by hand</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="what-both-do">What both do</h2>
+<ul>
+<li><strong>Claude Code on your issues and pull requests.</strong> Both answer, write code and push commits to a branch.</li>
+<li><strong>Your Claude plan.</strong> Both can run on a Claude subscription rather than on API tokens.</li>
+<li><strong>Work on a schedule.</strong> A workflow can run on a cron with a prompt. Rusuban runs <a href="/features/scheduled-tasks/">tasks</a> written as text, at their times.</li>
+<li><strong>Open source.</strong> Both are MIT-licensed.</li>
+</ul>
+
+<h2 id="where-rusuban-differs">Where Rusuban differs</h2>
+<h3 id="it-reads-everything">It reads everything, not only mentions</h3>
+<p>Nobody has to call it. Rusuban reads every issue, PR, review and CI run of your repos, and a judge gives each item a kind, an owner, a next step and a date to look again. A new issue, a stale PR or a failing check gets handled because your rules say how. See <a href="/features/issue-triage/">issue and PR triage</a>.</p>
+<h3 id="your-rules-in-the-repo">Your rules, in the repo</h3>
+<p>One set of rules decides every item: what the agents do alone, what comes to you, how long a third party is waited for. They are read from the default branch only, so a pull request cannot change the rules it is judged by. See <a href="/docs/rules/">Writing rules</a>.</p>
+<h3 id="it-merges-behind-locks">It merges, behind locks</h3>
+<p>Agents never merge, in Rusuban either. Its server does, when your rules let a PR merge without a person and eight gates pass on the exact head it checked: CI green, no open thread, your path and size locks among them. See <a href="/features/auto-merge/">auto-merge behind locks</a>.</p>
+<h3 id="one-inbox">One inbox for what is yours</h3>
+<p>What your rules keep for you comes as a card, with options that each say what happens next. Every project's cards land in one inbox, which you answer in the dashboard or on your phone through your tailnet.</p>
+<h3 id="on-your-machine">On your machine</h3>
+<p>Workers build and test in worktrees of Rusuban's own clone, with the tools of your machine, and can reserve <a href="/docs/test-machines/">test machines</a> over SSH. No Actions minutes are spent. What agents may run there is your <a href="/docs/security/#the-host-profile">host profile</a>, and no repo can change it.</p>
+
+<h2 id="when-claude-code-github-actions-is-the-better-choice">When Claude Code GitHub Actions is the better choice</h2>
+<ul>
+<li><strong>You want Claude on demand in a thread.</strong> Your team asks <code>@claude</code> for a review, an answer or a fix, right where the discussion is.</li>
+<li><strong>You keep no machine on.</strong> It runs on GitHub's runners, or on your self-hosted ones.</li>
+<li><strong>You build your own automation.</strong> Any workflow event, any prompt, alongside the rest of your CI.</li>
+<li><strong>You reach Claude through a cloud provider.</strong> Its documentation covers the Claude API and several cloud platforms.</li>
+</ul>
+
+<h2 id="using-both">Using both</h2>
+<p>They do not get in each other's way. A pull request that comes from Claude Code GitHub Actions is, for Rusuban, a pull request like any other: judged against your rules, and merged only behind the locks.</p>
+
+<h2 id="getting-started">Getting started</h2>
+<ol>
+<li><a href="/docs/install/">Install Rusuban</a>: <code>npm install -g rusuban</code>, then <code>rusuban init</code>.</li>
+<li>Write your first rules, or start from an <a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules">example</a>.</li>
+<li>Keep merges paused while you read the first judgments.</li>
+</ol>
+<p>Comparing other tools as well? See the <a href="/alternatives/copilot-cloud-agent/">GitHub Copilot cloud agent alternative</a> and <a href="/compare/rusuban-vs-mergify/">Rusuban vs Mergify</a>.</p>
+
+<h2 id="sources">Sources</h2>
+<p>Claude Code GitHub Actions facts, checked November 2026:</p>
+<ul>
+<li>Triggers, billing, providers and setup: <a href="https://code.claude.com/docs/en/github-actions">code.claude.com/docs/en/github-actions</a></li>
+<li>Runs on your runner, MIT license: <a href="https://github.com/anthropics/claude-code-action">github.com/anthropics/claude-code-action</a></li>
+<li>Issue assignment and label triggers: <a href="https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md">docs/usage.md</a></li>
+<li>No approvals, instructed not to merge: <a href="https://github.com/anthropics/claude-code-action/blob/main/docs/capabilities-and-limitations.md">docs/capabilities-and-limitations.md</a></li>
+</ul>
+<p>Rusuban facts link to its documentation above.</p>
+<p class="note">Claude and Claude Code are trademarks of Anthropic, and GitHub of GitHub, Inc. Rusuban is an independent project, not affiliated with or endorsed by either.</p>
+</article></div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul><li><a href="/alternatives/copilot-cloud-agent/">GitHub Copilot cloud agent alternative</a></li><li><a href="/compare/rusuban-vs-claude-code-action/">Rusuban vs Claude Code GitHub Actions</a></li><li><a href="/compare/rusuban-vs-mergify/">Rusuban vs Mergify</a></li></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

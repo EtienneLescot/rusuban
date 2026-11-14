@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rusuban vs Mergify for automatic merges | Rusuban</title>
+<meta name="description" content="Mergify merges pull requests when the conditions of .mergify.yml hold, through a merge queue. Rusuban has Claude Code judge each PR against your rules first.">
+<link rel="canonical" href="https://rusuban.dev/compare/rusuban-vs-mergify/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Rusuban vs Mergify for automatic merges | Rusuban">
+<meta property="og:description" content="Mergify merges pull requests when the conditions of .mergify.yml hold, through a merge queue. Rusuban has Claude Code judge each PR against your rules first.">
+<meta property="og:url" content="https://rusuban.dev/compare/rusuban-vs-mergify/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page"><article class="prose">
+<h1>Rusuban vs Mergify</h1>
+<p class="lede">Both merge pull requests without a person, once conditions you set hold. Mergify is a hosted merge queue and workflow automation: you write conditions in <code>.mergify.yml</code>, and it merges when they hold. Its merge queue tests pull requests against the latest base branch first. Rusuban runs on your machine and has Claude Code judge each issue and pull request against plain-text rules, then merges what those rules allow, behind locks its server checks. Mergify is the better choice for teams that merge many pull requests a day and need a merge queue.</p>
+<p class="note">This page is published by the Rusuban project. The details on Mergify come from Mergify's documentation and pricing page, checked in November 2026. The sources are listed at the end.</p>
+
+<h2 id="at-a-glance">At a glance</h2>
+<div class="table"><table>
+<thead><tr><th></th><th>Rusuban</th><th>Mergify</th></tr></thead>
+<tbody>
+<tr><td>What decides a merge</td><td>A Claude Code judgment against your rules, written in plain text, then eight gates the server checks</td><td>Conditions in <code>.mergify.yml</code>, such as passing checks and approving reviews</td></tr>
+<tr><td>Merge queue</td><td>No. At most one merge per read of a project</td><td>Yes. Pull requests are tested against the latest base branch before they merge</td></tr>
+<tr><td>Beyond merges</td><td>Triage of issues and PRs, fixes in worktrees, cards for your decisions</td><td>Actions on pull requests: comment, label, review, rebase, update, squash, backport, close</td></tr>
+<tr><td>Where it runs</td><td>On your machine, Windows, macOS or Linux</td><td>Hosted by Mergify, or self-hosted with Enterprise Server</td></tr>
+<tr><td>What you pay</td><td>Nothing for Rusuban. The agents run on your Claude plan</td><td>Free for open source, and up to 5 contributors. Then billed per active contributor (as of November 2026)</td></tr>
+<tr><td>Source code</td><td>MIT</td><td>Not published</td></tr>
+<tr><td>Setup</td><td><code>npm install -g rusuban</code>, then <code>rusuban init</code></td><td>A GitHub App, and a <code>.mergify.yml</code> file in the repo</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="what-both-do">What both do</h2>
+<ul>
+<li><strong>Merge on their own</strong> when the conditions hold, with checks green on the pull request.</li>
+<li><strong>Keep the conditions in the repo.</strong> Mergify reads <code>.mergify.yml</code>. Rusuban reads <code>.rusuban/rules/</code> and <code>.rusuban/locks.json</code>.</li>
+<li><strong>Rebase</strong> a pull request that falls behind.</li>
+<li><strong>Take orders.</strong> Mergify answers <code>@Mergifyio</code> commands in comments. Rusuban takes your answer on a card, such as a merge order for one head.</li>
+</ul>
+
+<h2 id="where-rusuban-differs">Where Rusuban differs</h2>
+<h3 id="judgment-then-locks">A judgment, then locks</h3>
+<p>Some rules need someone to read the diff: "a bug fix with a test merges alone; a new dependency comes to me". Rusuban has Claude Code judge each pull request against rules like these, for its exact head. Then its server checks what no model is asked about: CI green on that head, no open review thread, your locked paths and size limits. See <a href="/features/auto-merge/">auto-merge behind locks</a>.</p>
+<h3 id="issues-too">Issues too</h3>
+<p>Rusuban judges every issue as well: it closes a duplicate, asks a reporter for what is missing, or has a worker write a fix and its test, as your rules say. See <a href="/features/issue-triage/">issue and PR triage</a>.</p>
+<h3 id="your-decisions-on-cards">Your decisions on cards</h3>
+<p>What your rules keep for you comes as a card, in one inbox for all your projects, answered in the dashboard or on your phone.</p>
+<h3 id="local-and-open">Local and open</h3>
+<p>Rusuban runs on your machine and its code is MIT-licensed. It has no server of its own.</p>
+
+<h2 id="when-mergify-is-the-better-choice">When Mergify is the better choice</h2>
+<ul>
+<li><strong>You merge many pull requests a day.</strong> A merge queue tests them against the latest base branch, so a green PR does not break the branch once merged.</li>
+<li><strong>You want merges decided by conditions alone,</strong> with no model reading the pull request.</li>
+<li><strong>You need its workflow actions,</strong> such as backports to release branches.</li>
+<li><strong>You keep no machine on.</strong> Mergify is a hosted service.</li>
+</ul>
+
+<h2 id="getting-started">Getting started</h2>
+<ol>
+<li><a href="/docs/install/">Install Rusuban</a>: <code>npm install -g rusuban</code>, then <code>rusuban init</code>.</li>
+<li>Write which pull requests may merge alone in your rules, and what the server must check in <code>locks.json</code>. See <a href="/docs/locks/">Locks</a>.</li>
+<li>Keep merges paused while you read the first judgments, then arm the switch.</li>
+</ol>
+<p>Comparing other tools as well? See <a href="/compare/rusuban-vs-claude-code-action/">Rusuban vs Claude Code GitHub Actions</a> and the <a href="/alternatives/copilot-cloud-agent/">GitHub Copilot cloud agent alternative</a>.</p>
+
+<h2 id="sources">Sources</h2>
+<p>Mergify facts, checked November 2026:</p>
+<ul>
+<li>The merge queue: <a href="https://docs.mergify.com/merge-queue/">docs.mergify.com/merge-queue</a></li>
+<li>Queue and merge conditions: <a href="https://docs.mergify.com/merge-queue/rules">docs.mergify.com/merge-queue/rules</a> and <a href="https://docs.mergify.com/configuration/conditions/">conditions</a></li>
+<li>Workflow actions: <a href="https://docs.mergify.com/workflow/actions/">docs.mergify.com/workflow/actions</a></li>
+<li>Commands: <a href="https://docs.mergify.com/commands/">docs.mergify.com/commands</a></li>
+<li>The configuration file: <a href="https://docs.mergify.com/configuration/file-format/">docs.mergify.com/configuration/file-format</a></li>
+<li>Hosted and Enterprise Server: <a href="https://mergify.com/llms.txt">mergify.com/llms.txt</a></li>
+<li>Plans and prices: <a href="https://mergify.com/pricing">mergify.com/pricing</a></li>
+<li>The former engine repository, now an issue tracker: <a href="https://github.com/Mergifyio/mergify-engine">github.com/Mergifyio/mergify-engine</a></li>
+</ul>
+<p>Rusuban facts link to its documentation above.</p>
+<p class="note">Mergify is a trademark of its owner. Rusuban is an independent project, not affiliated with or endorsed by Mergify.</p>
+</article></div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul><li><a href="/alternatives/copilot-cloud-agent/">GitHub Copilot cloud agent alternative</a></li><li><a href="/compare/rusuban-vs-claude-code-action/">Rusuban vs Claude Code GitHub Actions</a></li><li><a href="/compare/rusuban-vs-mergify/">Rusuban vs Mergify</a></li></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

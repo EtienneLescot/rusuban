@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>A local alternative to GitHub Copilot cloud agent | Rusuban</title>
+<meta name="description" content="Rusuban is a free, MIT-licensed alternative to GitHub Copilot cloud agent, formerly coding agent: Claude Code on your machine, your rules, merges behind locks.">
+<link rel="canonical" href="https://rusuban.dev/alternatives/copilot-cloud-agent/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="A local alternative to GitHub Copilot cloud agent | Rusuban">
+<meta property="og:description" content="Rusuban is a free, MIT-licensed alternative to GitHub Copilot cloud agent, formerly coding agent: Claude Code on your machine, your rules, merges behind locks.">
+<meta property="og:url" content="https://rusuban.dev/alternatives/copilot-cloud-agent/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page"><article class="prose">
+<h1>A local alternative to GitHub Copilot cloud agent</h1>
+<p class="lede">Rusuban is a free, MIT-licensed alternative to GitHub Copilot cloud agent, formerly called Copilot coding agent. Both take GitHub work off your hands and open pull requests. Copilot cloud agent works on a task you give it, in a cloud environment, and cannot merge its own pull request. Rusuban runs Claude Code on your own machine, reads every issue and pull request, judges each one against the rules in your repo, and merges what those rules allow behind its locks. Copilot cloud agent is the better choice when your team works in GitHub's interface and wants no machine of its own to run.</p>
+<p class="note">This page is published by the Rusuban project. The details on Copilot cloud agent come from GitHub's documentation, plans page and changelog, checked in November 2026. GitHub renamed and repriced Copilot several times in 2026. The sources are listed at the end.</p>
+
+<h2 id="at-a-glance">At a glance</h2>
+<div class="table"><table>
+<thead><tr><th></th><th>Rusuban</th><th>GitHub Copilot cloud agent</th></tr></thead>
+<tbody>
+<tr><td>Where the agent runs</td><td>On your machine, Windows, macOS or Linux</td><td>In a cloud environment built on GitHub Actions, or a custom remote environment</td></tr>
+<tr><td>How work starts</td><td>Rusuban reads every issue and PR, every 90 seconds by default, and judges what needs it</td><td>You assign it an issue, mention <code>@copilot</code> in a pull request, or start a task from the Agents tab, an IDE, Slack or Teams</td></tr>
+<tr><td>What decides the work</td><td>Plain-text rules in <code>.rusuban/rules/</code>, the same for every item</td><td>The task you give it</td></tr>
+<tr><td>What it changes</td><td>Comments, closes, labels, fixes in worktrees, opens and updates PRs</td><td>Works on one branch and opens a pull request</td></tr>
+<tr><td>Merging</td><td>Rusuban's server merges what your rules allow, behind eight gates, on the exact head it checked</td><td>The agent cannot mark its pull request ready, approve it or merge it. A person merges, or Agent Merge does once GitHub allows it</td></tr>
+<tr><td>Model</td><td>Claude Code, on the model you choose</td><td>Auto, or a model you pick among several vendors</td></tr>
+<tr><td>What you pay</td><td>Nothing for Rusuban. The agents run on your Claude plan</td><td>A paid Copilot plan. Its usage is billed in AI Credits, and its compute in GitHub Actions minutes (as of November 2026)</td></tr>
+<tr><td>Source code</td><td>MIT</td><td>Proprietary</td></tr>
+<tr><td>Setup</td><td><code>npm install -g rusuban</code>, then <code>rusuban init</code></td><td>Built into GitHub, behind your plan and your organization's policies</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="what-both-do">What both do</h2>
+<ul>
+<li><strong>From an issue to a pull request.</strong> A Rusuban worker fixes a bug and opens the PR. Copilot cloud agent works on its branch and opens one too.</li>
+<li><strong>Work kept apart.</strong> Rusuban's workers use worktrees of its own clone, never your checkout. Copilot works on a branch of its own.</li>
+<li><strong>People keep the merge, or set its terms.</strong> Copilot's agent never approves or merges its own work. Rusuban's agents never merge: its server does, only where your rules and its locks allow.</li>
+</ul>
+
+<h2 id="where-rusuban-differs">Where Rusuban differs</h2>
+<h3 id="nobody-has-to-assign-it">Nobody has to assign it</h3>
+<p>Rusuban reads every issue, PR, review and CI run, and a judge decides what each one needs, as your rules say. You do not pick tasks for it: you write once what it may do alone and what comes to you. See <a href="/features/issue-triage/">issue and PR triage</a>.</p>
+<h3 id="rules-you-can-read">Rules you can read</h3>
+<p>The rules are Markdown files in your repo, on its default branch. They say which pull requests may merge without a person, how long a third party is waited for, and how agents write on GitHub. See <a href="/docs/rules/">Writing rules</a>.</p>
+<h3 id="merges-behind-locks">Merges behind locks</h3>
+<p>When your rules let a pull request merge alone, Rusuban's server merges it once eight gates pass on the head it checked, with your path and size locks among them. See <a href="/features/auto-merge/">auto-merge behind locks</a>.</p>
+<h3 id="your-machine-your-plan">Your machine, your Claude plan</h3>
+<p>The agents run where your tools and test machines are, on the Claude plan you already pay for, within its limits. Rusuban adds no credits and no minutes. Its code is open, under the MIT license.</p>
+<h3 id="one-inbox">One inbox for your decisions</h3>
+<p>What your rules keep for you comes as a card, in one inbox for all your projects, answered in the dashboard or on your phone.</p>
+
+<h2 id="when-copilot-is-the-better-choice">When Copilot cloud agent is the better choice</h2>
+<ul>
+<li><strong>Your team lives in GitHub.</strong> It takes tasks from issues, pull requests, IDEs, Slack and Teams, for everyone on the plan.</li>
+<li><strong>You keep no machine on.</strong> It runs in GitHub's cloud.</li>
+<li><strong>You want models from several vendors.</strong> Rusuban runs Claude Code only.</li>
+<li><strong>Your organization needs Copilot's policies</strong> and the administration of its Business and Enterprise plans.</li>
+<li><strong>You maintain a popular open-source project.</strong> GitHub may give you Copilot Pro for free.</li>
+</ul>
+
+<h2 id="getting-started">Getting started</h2>
+<ol>
+<li><a href="/docs/install/">Install Rusuban</a>: <code>npm install -g rusuban</code>, then <code>rusuban init</code>. You need Node 22 or later, and <code>gh</code> and Claude Code logged in.</li>
+<li>Write your first rules, or start from an <a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules">example</a>.</li>
+<li>Keep merges paused while you read the first judgments.</li>
+</ol>
+<p>Comparing other tools as well? See <a href="/compare/rusuban-vs-claude-code-action/">Rusuban vs Claude Code GitHub Actions</a> and <a href="/compare/rusuban-vs-mergify/">Rusuban vs Mergify</a>.</p>
+
+<h2 id="sources">Sources</h2>
+<p>Copilot cloud agent facts, checked November 2026:</p>
+<ul>
+<li>What it is, where it runs, Actions minutes: <a href="https://docs.github.com/en/copilot/concepts/agents/cloud-agent/about-cloud-agent">About Copilot cloud agent</a></li>
+<li>Starting a task, branches and pull requests: <a href="https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/create-a-pr">Asking Copilot to create a pull request</a></li>
+<li>Models and where tasks start: <a href="https://docs.github.com/en/copilot/how-tos/use-copilot-agents/cloud-agent/changing-the-ai-model">Changing the AI model</a></li>
+<li>No ready, approval or merge by the agent; workflows wait for approval: <a href="https://docs.github.com/en/copilot/concepts/security-governance-and-network-settings/risks-and-mitigations">Risks and mitigations</a></li>
+<li>Agent Merge: <a href="https://github.blog/changelog/2026-10-28-agent-merge-watches-and-fixes-pull-requests-in-the-cloud">GitHub changelog, October 28, 2026</a></li>
+<li>Plans and AI Credits: <a href="https://docs.github.com/en/copilot/get-started/plans">Copilot plans</a> and <a href="https://github.com/features/copilot/plans">github.com/features/copilot/plans</a></li>
+<li>Copilot Pro for open-source maintainers: <a href="https://docs.github.com/en/copilot/how-tos/copilot-on-github/set-up-copilot/enable-copilot/set-up-for-teachers-and-os-maintainers">Set up for teachers and open-source maintainers</a></li>
+<li>Terms: <a href="https://github.com/customer-terms/github-copilot-product-specific-terms">Copilot product-specific terms</a></li>
+</ul>
+<p>Rusuban facts link to its documentation above.</p>
+<p class="note">GitHub and GitHub Copilot are trademarks of GitHub, Inc. Rusuban is an independent project, not affiliated with or endorsed by GitHub.</p>
+</article></div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul><li><a href="/alternatives/copilot-cloud-agent/">GitHub Copilot cloud agent alternative</a></li><li><a href="/compare/rusuban-vs-claude-code-action/">Rusuban vs Claude Code GitHub Actions</a></li><li><a href="/compare/rusuban-vs-mergify/">Rusuban vs Mergify</a></li></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>
