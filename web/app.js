@@ -791,6 +791,8 @@ function renderMiniView() {
 
 function applyTransform() {
 	$("world").style.transform = `translate(${ui.px}px, ${ui.py}px) scale(${ui.z})`;
+	// Zoomed out, an open node keeps its own size (.node.exp): its card stays readable and tappable.
+	$("world").style.setProperty("--unzoom", String(Math.max(1, 1 / ui.z)));
 	$("world").classList.toggle("compact", ui.z < 0.75);
 	const g = 24 * ui.z;
 	Object.assign($("vp").style, {
@@ -825,6 +827,23 @@ function fit() {
 	applyTransform();
 	save();
 	return true;
+}
+
+// A node opened past the screen's edge slides in, its zoom kept: its top left corner first, then as
+// much of the rest as the screen holds.
+function reveal(id) {
+	const el = $("nodes").querySelector(`[data-id="${CSS.escape(id)}"]`);
+	if (!el) return;
+	const v = $("vp").getBoundingClientRect();
+	const r = el.getBoundingClientRect();
+	const into = (lo, hi, a, b) => (b > hi ? Math.max(hi - b, lo - a) : Math.max(0, lo - a));
+	const dx = into(v.left + 8, v.right - 8, r.left, r.right);
+	const dy = into(v.top + 8, v.bottom - 8, r.top, r.bottom);
+	if (!dx && !dy) return;
+	ui.px += dx;
+	ui.py += dy;
+	applyTransform();
+	save();
 }
 
 function focusOn(id) {
@@ -2041,6 +2060,7 @@ document.addEventListener("click", (e) => {
 	$("collapse").hidden = !ui.exp.size;
 	save();
 	render();
+	if (ui.exp.has(t.dataset.toggle)) reveal(t.dataset.toggle);
 });
 window.addEventListener("resize", () => (ui.fitted ? renderMiniView() : render()));
 

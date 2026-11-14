@@ -930,6 +930,10 @@ button.pill:hover {
 .node.exp {
 	width: 320px;
 	z-index: 20;
+	/* Never smaller than its own size, however far the graph is zoomed out (--unzoom, set with the
+	   zoom): its card stays readable and its buttons big enough to tap. */
+	transform: scale(var(--unzoom, 1));
+	transform-origin: 0 0;
 	box-shadow:
 		inset 0 3px 0 var(--kind),
 		0 24px 60px -12px rgba(0, 0, 0, 0.85);

@@ -12,6 +12,9 @@
   still fails then (an API key no longer valid, which it reports as logged in), they try once an hour.
   Before, every queued run failed in turn, and each failed worker asked for a coordinator that failed
   too.
+- **Fixed**: an item opened in a graph zoomed far out keeps its own size, and slides into the screen
+  when it opens past an edge: its card can be read and answered at any zoom, on a phone too. Before,
+  it shrank with the graph, down to a sixth of its size at a phone's width, too small to tap.
 - **Fixed**: `rusuban init` with Claude Code installed but logged out says to log in
   (`claude auth login`), instead of asking to install Claude Code.
 - **Fixed**: one service per machine, and an instance never replaces nor removes another one's:
