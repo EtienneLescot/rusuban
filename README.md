@@ -20,8 +20,6 @@
 
 ## What you get
 
-<img align="right" width="220" src="docs/images/phone-card.png" alt="The same card on a phone: the question, the recommended option, and the others">
-
 - **Only your decisions reach you.** Agents judge every issue and PR against the rules in your
   repo. What the rules allow gets done. The rest comes to you as one card, with a recommended
   answer.
@@ -32,8 +30,6 @@
   exact head it checked, no open thread, no locked path.
 - **Rules that grow.** When several cards ask the same thing, Rusuban proposes the rule that
   would answer them, as a PR you merge.
-
-<br clear="right">
 
 ## Get started
 
