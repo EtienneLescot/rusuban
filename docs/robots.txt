@@ -1,0 +1,6 @@
+# https://rusuban.dev
+
+User-agent: *
+Allow: /
+
+Sitemap: https://rusuban.dev/sitemap.xml

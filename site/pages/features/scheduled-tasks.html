@@ -1,0 +1,59 @@
+<!--
+{
+	"title": "Run Claude Code tasks on a schedule | Rusuban",
+	"description": "Write a Claude Code task as a text file, and Rusuban runs it headless at the times you set or on a click, on your machine, with every run in its dashboard.",
+	"nav": "Scheduled Claude Code tasks"
+}
+-->
+<h1>Run Claude Code tasks on a schedule</h1>
+<p class="lede">A Rusuban task is a text file: a few lines of front matter, then a prompt. Rusuban runs it with Claude Code, headless, at the times you set or when you click, and keeps every run in its dashboard.</p>
+
+<h2 id="a-task-file">A task file</h2>
+<pre><code>---
+title: Evening summary
+project: widgets
+schedule: daily 18:30
+---
+Sum up what merged today in owner/widgets and what still waits
+for a review, in five lines at most.</code></pre>
+<div class="table"><table>
+<thead><tr><th>Field</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>title</code></td><td>The task's name in the dashboard</td></tr>
+<tr><td><code>project</code></td><td>The project the task belongs to, a project without a repo included</td></tr>
+<tr><td><code>schedule</code></td><td><code>daily HH:MM</code>, or several times, as <code>daily 09:00,17:30</code>. Without it, the task runs on a click</td></tr>
+<tr><td><code>lock</code></td><td>Optional. Tasks and runs that share a lock run one at a time</td></tr>
+<tr><td><code>cwd</code></td><td>Optional. The folder the task runs in, the project's scratch folder by default</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="add-and-run-it">Add and run it</h2>
+<pre><code>rusuban task add evening-summary.md
+rusuban task list
+rusuban task run &lt;id&gt;</code></pre>
+<p>A task is your request, so adding or changing one waits for your yes: you type it in a terminal, or answer a card when Claude Code made the change. <code>rusuban task remove &lt;id&gt;</code> removes one.</p>
+<p>You can also ask Claude Code in your own words, through Rusuban's MCP server: "write a task that drafts the release notes every morning". See <a href="/docs/claude/">Setting Rusuban up from Claude</a>.</p>
+
+<h2 id="how-it-runs">How it runs</h2>
+<ul>
+<li><strong>On your machine</strong>, as a headless <code>claude -p</code> session, on the model you chose and under your host profile.</li>
+<li><strong>Within your project's rules</strong> and the safety frame every run gets.</li>
+<li><strong>At its times.</strong> A time missed while the service was down runs once when it is back.</li>
+<li><strong>One at a time</strong> with the tasks and runs that share its lock.</li>
+<li><strong>In the dashboard.</strong> Each run shows with its final answer and its conversation. A decision a person must take about an item comes to you as a card.</li>
+</ul>
+
+<h2 id="tasks-without-a-repo">Tasks about no repo</h2>
+<p>A task does not have to be about a repo. Put it in a project without one:</p>
+<pre><code>rusuban project create publications --title Publications</code></pre>
+<p>Then give each task <code>project: publications</code>. The project's page shows its tasks, runs and conversations, and nothing is read, judged or merged on GitHub for it.</p>
+
+<h2 id="compared-with-cron">Compared with cron</h2>
+<p>You can run <code>claude -p</code> from cron. A Rusuban task adds what cron does not know about: the time missed while the machine was off, the lock that keeps two runs off the same work, your rules and the safety frame in the prompt, and a dashboard that keeps each run and its conversation.</p>
+
+<h2 id="get-started">Get started</h2>
+<ol>
+<li><a href="/docs/install/">Install Rusuban</a>.</li>
+<li>Write a task file, then <code>rusuban task add</code> it.</li>
+<li>Click it once in the dashboard to see its first run.</li>
+</ol>

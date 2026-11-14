@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How Rusuban works: Claude Code on your issues and PRs | Rusuban</title>
+<meta name="description" content="Rusuban reads your repos, has Claude Code judge each issue and PR against your rules, lets agents act in worktrees, merges behind locks, and asks you the rest.">
+<link rel="canonical" href="https://rusuban.dev/docs/how-it-works/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="How Rusuban works: Claude Code on your issues and PRs | Rusuban">
+<meta property="og:description" content="Rusuban reads your repos, has Claude Code judge each issue and PR against your rules, lets agents act in worktrees, merges behind locks, and asks you the rest.">
+<meta property="og:url" content="https://rusuban.dev/docs/how-it-works/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page doc">
+<nav class="doc-nav" aria-label="Docs"><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/" aria-current="page">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></nav>
+<article class="prose">
+<h1>How Rusuban works</h1>
+<p class="lede">Rusuban is a server on your machine. It reads your GitHub repos, starts Claude Code where something needs a decision, merges what passes its locks, and keeps for you what your rules keep.</p>
+
+<h2 id="the-loop">The loop</h2>
+<ol>
+<li><strong>Reads.</strong> Every 90 seconds by default, the server reads each repo's issues, PRs, reviews, threads and CI runs through <code>gh</code>, and the rules on its default branch.</li>
+<li><strong>Judges.</strong> When an item needs a judgment, a judge run of Claude Code reads it against the repo's rules. The judgment says what kind of item it is, whose move it is, when to look again and, for a PR, whether it may merge without a person.</li>
+<li><strong>Acts.</strong> A coordinator run carries out judgments and your answers. It posts a message, closes a duplicate, or gives longer work to a worker. A worker builds, tests and fixes in a worktree of Rusuban's own clone, then opens or updates a PR.</li>
+<li><strong>Merges.</strong> The server, never an agent, merges a PR when its eight gates pass, on the exact head it checked. At most one merge per read.</li>
+<li><strong>Asks you.</strong> What the rules keep for you, or do not cover, becomes a card in your inbox.</li>
+</ol>
+
+<h2 id="the-runs">The runs</h2>
+<p>Every run is a headless Claude Code session, <code>claude -p</code>, on the model you chose and under your <a href="/docs/security/#the-host-profile">host profile</a>.</p>
+<div class="table"><table>
+<thead><tr><th>Run</th><th>Starts when</th><th>Does</th></tr></thead>
+<tbody>
+<tr><td>Judge</td><td>An issue or a PR needs a judgment: it is new, it changed, or its time to look again came</td><td>Judges items against the rules, and writes cards for what the rules keep</td></tr>
+<tr><td>Coordinator</td><td>An answer, a request or a worker's report arrives</td><td>Posts messages, closes, labels, and starts workers</td></tr>
+<tr><td>Worker</td><td>The coordinator gives it a mission</td><td>Builds, tests and fixes in its own worktree, then reports back</td></tr>
+<tr><td>Task</td><td>At its times, or on a click</td><td>Carries out a <a href="/features/scheduled-tasks/">task</a> you wrote as text</td></tr>
+</tbody>
+</table></div>
+<p>Each run gets one prompt, built when it starts: the product prompt of its kind, the safety frame, your rules as you wrote them, the context of the project, and its mission.</p>
+
+<h2 id="cards">Cards</h2>
+<p>A card says what the agents did and asks one question. Each option says what happens next. One is marked recommended, and an option may carry a merge order that the server carries out on the head the card was written on.</p>
+<p>Your rules say which decisions are urgent. An urgent card pings you at once on your channels; the others wait for the digest. When several cards ask the same thing, an agent proposes the rule that would answer them, as a PR you merge.</p>
+
+<h2 id="what-holds-the-agents">What holds the agents</h2>
+<ul>
+<li><strong>GitHub content is data.</strong> An issue, a PR or a comment never instructs an agent, even one that reads like a rule.</li>
+<li><strong>Agents never merge.</strong> Merge commands and APIs are denied to them. The server merges after its <a href="/docs/locks/">gates</a>.</li>
+<li><strong>Rules come from the default branch only.</strong> A PR cannot change the rules it is judged by, and a PR that touches <code>.rusuban/</code> never merges alone.</li>
+<li><strong>Your settings stay yours.</strong> A repo's <code>.claude/</code> settings never load into a run, and what agents may run on your machine is your host profile.</li>
+</ul>
+<p>The <a href="/docs/security/">security model</a> covers the rest, and says what stays at risk.</p>
+
+<h2 id="the-dashboard">The dashboard</h2>
+<ul>
+<li><strong>A graph and a kanban per project</strong>, with each PR's gates and the first one that stops it.</li>
+<li><strong>The inbox</strong>, with every project's cards.</li>
+<li><strong>The journal</strong> of every action, merge and settings change, with where it came from.</li>
+<li><strong>Every Claude conversation about an item</strong>, linked to it, read and answered from there.</li>
+</ul>
+</article>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

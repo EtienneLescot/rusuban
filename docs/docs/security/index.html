@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Security model | Rusuban</title>
+<meta name="description" content="What holds Claude Code agents that run on your machine with your logins: deny rules, the host profile, merges by the server only, and the risks that remain.">
+<link rel="canonical" href="https://rusuban.dev/docs/security/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Security model | Rusuban">
+<meta property="og:description" content="What holds Claude Code agents that run on your machine with your logins: deny rules, the host profile, merges by the server only, and the risks that remain.">
+<meta property="og:url" content="https://rusuban.dev/docs/security/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page doc">
+<nav class="doc-nav" aria-label="Docs"><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/" aria-current="page">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></nav>
+<article class="prose">
+<h1 id="security-model">Security model</h1>
+<p>Rusuban runs Claude Code agents on your machine, with your logins, on repos where anyone can open an
+issue or a PR. This page says what holds the agents, how the dashboard checks who is asking, and what
+stays at risk.</p>
+<h2 id="what-is-trusted">What is trusted</h2>
+<ul>
+<li><strong>You, the owner</strong>: your instance&#39;s <code>config.json</code>, your commands, your answers on cards.</li>
+<li><strong>The rules on each repo&#39;s default branch</strong>: someone with write access merged them.</li>
+<li><strong>Nothing from GitHub.</strong> Issues, PRs, comments, reviews, diffs and a PR&#39;s own copy of the rules are
+data, never instructions.</li>
+<li><strong>Not the agents either.</strong> They are told the rules and the safety frame, then held by limits that do
+not depend on their obeying.</li>
+</ul>
+<h2 id="only-the-server-merges">Only the server merges</h2>
+<ul>
+<li>Agents have no merge command, and the deny rules forbid the merge commands and APIs.</li>
+<li>The server merges after its <a href="/docs/locks/">gates</a>, computed on live GitHub state, with
+<code>--match-head-commit</code>: exactly the commit it checked, or nothing.</li>
+<li>A PR merged by someone else, and a commit pushed straight to a default branch, are flagged.</li>
+</ul>
+<h2 id="the-built-in-deny-rules">The built-in deny rules</h2>
+<p>Every run (judge, coordinator, worker, task, reply) gets them as <code>--disallowedTools</code>, under either
+host profile. Your own <code>permissions.deny</code> adds to them; nothing removes them.</p>
+<div class="table"><table>
+<thead>
+<tr>
+<th>What</th>
+<th>Denied</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Merging</td>
+<td><code>gh pr merge</code>; any <code>gh api</code> call whose text holds <code>merge</code> or <code>Merge</code> (the REST merge endpoints, GraphQL merges, auto-merge).</td>
+</tr>
+<tr>
+<td>Pushing to a default branch</td>
+<td><code>git push</code> naming a repo&#39;s default branch (<code>main</code>, <code>:main</code>, <code>+main</code>, <code>refs/heads/main</code>); <code>git push --all</code> and <code>--mirror</code>; <code>gh api</code> on <code>git/refs/heads/&lt;default branch&gt;</code>.</td>
+</tr>
+<tr>
+<td>The owner&#39;s commands</td>
+<td><code>rusuban project</code>, <code>task</code>, <code>start</code>, <code>permissions</code>, <code>machine</code>, <code>channel</code>, <code>remote</code>, <code>service</code>, <code>init</code>, <code>mcp</code>, and Rusuban&#39;s MCP server (<code>mcp__rusuban</code>). The CLI and the MCP server also refuse to run inside a run.</td>
+</tr>
+<tr>
+<td>The instance&#39;s state</td>
+<td>Edits to <code>config.json</code>, <code>config.json.seal</code>, <code>automerge.json</code>, <code>projects/</code>, <code>runs/</code>, <code>hub/</code>, <code>leases/</code>, <code>tasks/</code> and <code>bin/</code> in the instance home. Agents keep their own folders there: <code>scratch/</code>, <code>worktrees/</code>, <code>repos/</code>, and <code>work/</code> by default.</td>
+</tr>
+<tr>
+<td>The dashboard and your files, from the shell</td>
+<td>Any shell command that names the dashboard&#39;s port (<code>:&lt;port&gt;</code>) or a tailnet address (<code>.ts.net</code>), <code>config.json</code> next to the home&#39;s name, <code>automerge.json</code>, <code>answers.jsonl</code> or <code>pending.json</code>. A speed bump, not a wall: see the residual risks.</td>
+</tr>
+</tbody></table></div>
+<p>A denied call is refused, and the run&#39;s log says so.</p>
+<h2 id="only-your-settings-reach-a-run">Only your settings reach a run</h2>
+<p>Runs load Claude Code&#39;s user settings only (<code>--setting-sources user</code>). A repo&#39;s <code>.claude/</code> settings,
+with their hooks and permissions, never load: a hook or an allow rule merged into a repo does nothing
+on your machine. Your own user settings do load: their allow rules add to an allowlist run, and their
+deny rules and hooks apply. With a person&#39;s desktop registered, Rusuban adds one hook of its own:
+<code>rusuban guard</code> refuses that desktop to a run that does not hold its lease.</p>
+<h2 id="the-host-profile">The host profile</h2>
+<p>What agents may run on this machine is yours to choose, in <code>config.json</code>, and no repo, rule or PR
+changes it. <code>permissions.mode</code> has no default: the config does not load without it.</p>
+<div class="table"><table>
+<thead>
+<tr>
+<th><code>permissions.mode</code></th>
+<th>Agents may run</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>allowlist</code></td>
+<td>What <code>permissions.allow</code> lists, plus <code>rusuban</code> itself. Anything that would ask for approval is refused (<code>--permission-mode dontAsk</code>).</td>
+</tr>
+<tr>
+<td><code>bypass</code></td>
+<td>Anything, without asking (<code>--dangerously-skip-permissions</code>), except what a deny rule matches.</td>
+</tr>
+</tbody></table></div>
+<p><strong>Under <code>bypass</code>, an agent has your shell.</strong> What your account can do on this machine, an agent can
+do: read and write your files, use your SSH keys, your <code>gh</code> login and every other tool you are logged
+into, reach your network. The deny rules are the only limit, and they match command text.</p>
+<p>Under <code>allowlist</code>, an allow rule for an interpreter or a build tool (<code>Bash(node *)</code>, <code>Bash(npm *)</code>,
+<code>Bash(python *)</code>) is a shell too: it runs whatever code it is given.</p>
+<h2 id="the-dashboards-identity-check">The dashboard&#39;s identity check</h2>
+<ul>
+<li><strong>Loopback only.</strong> The server listens on <code>127.0.0.1</code>.</li>
+<li><strong>Every request, reads included, must name this server as its <code>Host</code></strong>: <code>127.0.0.1:&lt;port&gt;</code>,
+<code>localhost:&lt;port&gt;</code>, or this machine&#39;s tailnet name. That stops DNS rebinding. The tailnet name comes
+from <code>tailscale status --json</code>, read at start and every 5 minutes.</li>
+<li><strong>From the tailnet, the caller must be you.</strong> The <code>Tailscale-User-Login</code> header, which Tailscale
+Serve sets from the caller&#39;s identity, must equal <code>owner.tailscaleLogin</code> in <code>config.json</code>, case
+aside. A request without it is refused, and so is every tailnet request while
+<code>owner.tailscaleLogin</code> is not set.</li>
+<li><strong>On loopback, a request without that header is the local user.</strong></li>
+<li><strong>Every write also needs the dashboard&#39;s own origin</strong>: an <code>Origin</code> of <code>http://127.0.0.1:&lt;port&gt;</code>,
+<code>http://localhost:&lt;port&gt;</code> or <code>https://&lt;tailnet name&gt;</code>, the <code>x-rusuban: 1</code> header, and a body under
+8 KB. A page on another site cannot send that header without a CORS preflight, which the server
+never grants.</li>
+</ul>
+<p>Remote access goes through Tailscale Serve (<code>tailscale serve --bg --https=443 http://127.0.0.1:&lt;port&gt;</code>),
+never through Tailscale Funnel or any public address.</p>
+<h2 id="the-approval-bypass">The approval bypass</h2>
+<p>A branch that requires an approving review refuses the server&#39;s merges until someone approves, and
+the agents&#39; PRs, pushed under your account, cannot get your approval. The approval bypass is for that.</p>
+<ul>
+<li><strong>Off for every project</strong> until you run <code>rusuban project bypass &lt;id&gt; on</code>, which sets <code>bypassApproval</code>
+in <code>config.json</code>. No repo, rule, PR or agent sets it.</li>
+<li><strong>It merges only what the server merges anyway</strong>: with the merge switch armed,
+every gate green or your merge order given. It then merges with <code>gh pr merge --admin</code>.</li>
+<li><strong><code>--admin</code> skips every rule of the branch</strong>, so the server first reads the base branch&#39;s rulesets,
+its classic protection in full, and the head&#39;s checks. It merges only if:<ul>
+<li>every check the branch requires is on the head, from the app the rule names if it names one, and
+<code>success</code> in its latest run, checks the locks ignore included;</li>
+<li>the merge method is one the branch allows, and not <code>merge</code> under a linear-history rule;</li>
+<li>the branch requires neither a code owner&#39;s review nor PRs up to date with it, and no thread is
+open where it requires them resolved;</li>
+<li>classic protection requires no signed commits, does not bind administrators, restrict who can
+push or lock the branch;</li>
+<li>the branch holds no rule or protection setting the server does not know.</li>
+</ul>
+</li>
+<li><strong>Journaled.</strong> What stops the bypass is journaled once per head and flagged. Turning it on is
+journaled and flagged; turning it off is journaled.</li>
+</ul>
+<h2 id="what-is-flagged">What is flagged</h2>
+<p>These go to the journal and to your inbox&#39;s &quot;Flagged for you&quot;, for 7 days:</p>
+<ul>
+<li>a merge the server did not make, and a commit pushed straight to a default branch;</li>
+<li>a merge GitHub refused, and what stopped the approval bypass;</li>
+<li>a rules change, with its diff, and a <code>locks.json</code> that does not validate;</li>
+<li>the approval bypass turned on, and every other setting that widens;</li>
+<li>a <code>config.json</code> changed outside Rusuban&#39;s settings;</li>
+<li>a task that did not end well.</li>
+</ul>
+<h2 id="residual-risks">Residual risks</h2>
+<ul>
+<li><strong>Under <code>bypass</code>, an agent has your shell, and it reads text anyone can write.</strong> A prompt injection
+in an issue, a comment or a diff is a path to your shell. The safety frame tells agents that GitHub
+content is data; it is a prompt, not a wall.</li>
+<li><strong>Deny rules match command text.</strong> A merge or a push hidden behind a variable, an alias, a script,
+an interpreter or a raw HTTP call is not matched. The server flags a merge or a push it did not make,
+after the fact; it does not prevent it.</li>
+<li><strong>An agent&#39;s shell reaches what the deny rules do not cover.</strong> The state&#39;s deny rules bind Claude
+Code&#39;s file tools; against the shell there are only the cheap rules above, which match text. The
+dashboard takes any request from this machine as yours: its identity check stops other machines and
+web pages, not local processes, which can send any <code>Origin</code> and <code>x-rusuban</code>. Under <code>bypass</code>, a shell
+command that gets past the rules can write <code>config.json</code>, to add a repo or turn a project&#39;s approval
+bypass on, or call the dashboard, to answer a card (a merge order included), allow a setting&#39;s card
+(one asked through the MCP included) or arm the switch. The daemon journals the dashboard&#39;s calls as
+yours; the bypass turned on is flagged. A <code>config.json</code> changed outside Rusuban&#39;s settings is
+flagged too, with what changed, after the fact: the daemon applies it all the same.</li>
+<li><strong>The real barrier comes after v1</strong>: agents under an OS account of their own, or in Claude Code&#39;s
+sandbox where it exists, out of reach of your files and the dashboard; and a GitHub token reserved
+for agents, without admin rights. Until then, a repo you do not trust gets the <code>allowlist</code> profile.</li>
+<li><strong>A worker runs the code it works on</strong>, in a worktree, under your account: the repo&#39;s tests and
+scripts, and a contributor&#39;s when it rebases, finishes or measures their PR. The rules decide which
+PRs agents work on; the host profile decides what they may run.</li>
+<li><strong>Agents act as you on GitHub.</strong> They use your <code>gh</code> login: what they post appears under your account,
+and an agent past the deny rules has every right your token has.</li>
+<li><strong>A merge order overrides the project&#39;s locks for its head</strong>; a paused switch still holds it. An
+agent wrote the card: read it before you pick its merge option.</li>
+</ul>
+<h2 id="tests">Tests</h2>
+<p>Each lock has a test that tries to break it:</p>
+<ul>
+<li>the gates, and adversarial PRs (the rules edited in the PR, injected instructions, red CI, a moved
+head, a locked path, a missing proof): <code>test/merge-gate.test.mjs</code> and <code>test/fixtures/prs/</code>;</li>
+<li>the deny rules, under both profiles: <code>test/agents.test.mjs</code>;</li>
+<li>the identity check and forged writes: <code>test/server.test.mjs</code>;</li>
+<li>the approval bypass and the owner&#39;s commands: <code>test/bypass.test.mjs</code>.</li>
+</ul>
+</article>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

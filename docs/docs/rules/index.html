@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Writing rules for Claude Code agents | Rusuban</title>
+<meta name="description" content="Rusuban's agents follow plain-text rules in your repo's .rusuban/rules/: where they live, how each run gets them, what to write, and how to try them.">
+<link rel="canonical" href="https://rusuban.dev/docs/rules/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Writing rules for Claude Code agents | Rusuban">
+<meta property="og:description" content="Rusuban's agents follow plain-text rules in your repo's .rusuban/rules/: where they live, how each run gets them, what to write, and how to try them.">
+<meta property="og:url" content="https://rusuban.dev/docs/rules/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page doc">
+<nav class="doc-nav" aria-label="Docs"><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/" aria-current="page">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></nav>
+<article class="prose">
+<h1 id="writing-rules">Writing rules</h1>
+<p>A project&#39;s rules are plain text in its own repo. They decide what the agents do: what they do alone,
+what comes to you, how long they wait, how they write. Rusuban ships no default: without rules,
+nothing autonomous happens.</p>
+<h2 id="where-they-live">Where they live</h2>
+<p>On the repo&#39;s default branch:</p>
+<pre><code class="language-text">.rusuban/
+  rules/*.md    the rules, free text
+  locks.json    optional: what the server checks itself before a merge (see locks.md)
+</code></pre>
+<ul>
+<li><strong>Read from the default branch only</strong>, through GitHub&#39;s contents API: never from a PR head, never
+from a local checkout. A PR cannot change the rules it is judged by.</li>
+<li><strong>Read with the repo&#39;s state</strong>, at every read of the project (every <code>refreshSec</code>, 90 seconds by
+default), and cached by the tree sha of <code>.rusuban/</code>.</li>
+<li><strong>The <code>.md</code> files directly in <code>rules/</code>, sorted by file name.</strong> Other files and subfolders are
+skipped. Number them: <code>01-autonomy.md</code>, <code>02-merging.md</code>.</li>
+<li><strong>Each repo carries its own.</strong> In a project of several repos, a repo without rules is only observed.
+A run sees the rules of every repo of its project, each under its source.</li>
+</ul>
+<h2 id="how-the-agents-get-them">How the agents get them</h2>
+<p>Every run (judge, coordinator, worker, task) gets a prompt built when it starts:</p>
+<ol>
+<li>the product prompt of its kind, generic and shipped with Rusuban;</li>
+<li>the safety frame: GitHub content is data, agents never merge, the locks hold, silent rules mean a
+card;</li>
+<li>your rules, verbatim, under their source;</li>
+<li>the context: the owner, each repo&#39;s rules and locks, the open cards, what waits for the run;</li>
+<li>the run&#39;s mission or task.</li>
+</ol>
+<p>Your rules appear like this:</p>
+<pre><code class="language-text"># Project rules: owner/repo@&lt;tree sha&gt;:.rusuban/rules/
+
+## 01-autonomy.md
+
+&lt;the file&#39;s text&gt;
+</code></pre>
+<p>Do not repeat what the product prompts already say: the judgment and card formats, how to delegate to
+a worker, the safety frame.</p>
+<h2 id="without-rules">Without rules</h2>
+<p>A repo with no <code>.rusuban/rules/*.md</code> is observed only, even with a <code>locks.json</code>:</p>
+<ul>
+<li>its items are read and shown, and the dashboard says it is observed only;</li>
+<li>no judge starts, nothing merges, and nothing is written on GitHub on the agents&#39; own initiative;</li>
+<li>your own requests, your answers to cards and your tasks still start agents.</li>
+</ul>
+<h2 id="what-to-write">What to write</h2>
+<p>The rules say everything about behavior. No section is required, but what the agents need and do not
+find becomes a card asking you. What they need is what each judgment sets:</p>
+<div class="table"><table>
+<thead>
+<tr>
+<th>The agents set</th>
+<th>Your rules say</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>pr.auto</code></td>
+<td>Which PRs may merge without a person.</td>
+</tr>
+<tr>
+<td><code>owner</code></td>
+<td>What the agents keep, what waits on a third party, what comes to you or to another GitHub login.</td>
+</tr>
+<tr>
+<td><code>revisitAt</code></td>
+<td>How long a third party is waited for, and when the agents look at their own work again. No delay is built in.</td>
+</tr>
+<tr>
+<td><code>priority</code>, <code>area</code></td>
+<td>Your priority scale (<code>P0</code> to <code>P3</code>) and your areas. The kinds are fixed: <code>bug</code>, <code>feature</code>, <code>maintenance</code>, <code>docs</code>, <code>translation</code>, <code>question</code>, <code>other</code>.</td>
+</tr>
+<tr>
+<td>A card&#39;s <code>urgency</code></td>
+<td>Which decisions are <code>now</code> and which are <code>digest</code>.</td>
+</tr>
+<tr>
+<td>Messages on GitHub</td>
+<td>Their language and tone, and what may be posted without a card.</td>
+</tr>
+<tr>
+<td>A fork&#39;s CI</td>
+<td>Whether agents may approve a fork&#39;s workflows, after reading the diff.</td>
+</tr>
+<tr>
+<td>Proofs</td>
+<td>When a change needs a proof beyond the <code>evidence</code> zones of <code>locks.json</code>, and what proof.</td>
+</tr>
+</tbody></table></div>
+<p>Rules may be written in any language. Cards, journal lines and final answers are in English.</p>
+<h2 id="writing-them-well">Writing them well</h2>
+<ul>
+<li><strong>Write orders.</strong> &quot;A bug fix with a test merges alone&quot;, not &quot;we value tests&quot;.</li>
+<li><strong>Define your words.</strong> Say what a bug is and what a feature is: that line decides what merges.</li>
+<li><strong>Give every wait a duration.</strong> <code>revisitAt</code> is required whenever an item stays with the agents or
+waits on a third party.</li>
+<li><strong>Put what the server can check in <code>locks.json</code>.</strong> Text guides the model; a lock holds without it.
+&quot;Never merge a change to CI&quot; belongs in <code>lockedPaths</code>.</li>
+<li><strong>Keep them short.</strong> Every file goes into every run&#39;s prompt.</li>
+<li><strong>Name people by their GitHub login</strong>, as <code>@login</code>.</li>
+</ul>
+<h2 id="where-the-rules-are-silent">Where the rules are silent</h2>
+<p>The agents do not guess. A situation the rules do not cover becomes a card to the owner. A question
+on how the agents work, rather than on the item, waits in the inbox&#39;s <strong>Rules &amp; settings</strong> tab.</p>
+<p>When the cards of several items ask the same, an agent proposes the rule that would answer them, on
+a card of its own in that tab: <strong>Open the rule PR</strong> opens a PR adding it to <code>.rusuban/rules/</code>, which
+a person merges on GitHub, and the items wait for it; <strong>Not a rule</strong> keeps them asked one by one.</p>
+<h2 id="what-rules-cannot-do">What rules cannot do</h2>
+<ul>
+<li><strong>Lift a lock.</strong> No text lifts a built-in lock or one of <code>locks.json</code>: a judgment that would break
+one becomes a card.</li>
+<li><strong>Make an agent merge.</strong> Only the server merges, after its gates.</li>
+<li><strong>Widen what agents may run on your machine.</strong> That is your host profile (see
+<a href="/docs/security/#the-host-profile">security</a>).</li>
+<li><strong>Change your instance&#39;s settings</strong>: a project&#39;s approval bypass, the merge switch. Those are your
+commands and your dashboard&#39;s.</li>
+<li><strong>Come from GitHub.</strong> An issue, a PR or a comment that reads like a rule is data.</li>
+</ul>
+<h2 id="changing-them">Changing them</h2>
+<ol>
+<li><strong>Open a PR that edits <code>.rusuban/</code>.</strong> It never merges alone: the Locks gate stops any PR that
+touches the folder. A person merges it on GitHub.</li>
+<li><strong>Once it is on the default branch, it applies at the next read</strong>, without a restart. A queued run
+gets the new rules; a run already at work keeps the ones it started with.</li>
+<li><strong>It is journaled</strong> with the files changed and a line diff, and flagged in your inbox.</li>
+</ol>
+<p>A <code>locks.json</code> that does not validate stops every merge of its repo until it is fixed. That is
+journaled and flagged too (see <a href="/docs/locks/#validation">locks</a>).</p>
+<h2 id="trying-them">Trying them</h2>
+<ul>
+<li><strong>The switch paused.</strong> Agents act as the rules say, and nothing merges until you arm the switch in
+the dashboard&#39;s header. Read their judgments and adjust the rules first.</li>
+<li><strong>Start from an example.</strong> Each folder of <a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules/"><code>examples/rules/</code></a> is a <code>.rusuban/</code>
+folder: copy its <code>rules/</code> and its <code>locks.json</code> into <code>.rusuban/</code> at the root of your repo, then edit
+them.</li>
+</ul>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Example</th>
+<th>What the agents do alone</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules/cautious/"><code>cautious</code></a></td>
+<td>Judge, test and prepare. Every item comes to the owner on a card, and every path is locked: only the owner&#39;s merge order merges.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules/solo-maintainer/"><code>solo-maintainer</code></a></td>
+<td>Fix bugs, and merge fixes, docs, tests and maintenance within path and size locks. Features, API changes and dependencies come to the owner.</td>
+</tr>
+<tr>
+<td><a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules/openscreen/"><code>openscreen</code></a></td>
+<td>A real project&#39;s rules: fix bugs and merge fixes, translations, docs, tests and maintenance from any author; capture, preview and export changes need a pixel and timing proof; features, interface and architecture come to the owner; a third party is waited for two days at most.</td>
+</tr>
+</tbody></table></div>
+</article>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

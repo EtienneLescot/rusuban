@@ -3,229 +3,54 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Rusuban</title>
-<meta name="description" content="Minds your GitHub projects while you're away. Claude Code agents follow the rules you write in your repo, and call you only when those rules say so.">
-<meta property="og:title" content="Rusuban">
-<meta property="og:description" content="Minds your GitHub projects while you're away.">
-<meta property="og:image" content="https://etiennelescot.github.io/rusuban/images/rusuban-seal.png">
-<meta property="og:url" content="https://etiennelescot.github.io/rusuban/">
-<link rel="icon" type="image/png" href="images/rusuban-seal.png">
-<link rel="apple-touch-icon" href="images/rusuban-seal.png">
+<title>Rusuban: Claude Code autopilot for GitHub maintainers</title>
+<meta name="description" content="Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.">
+<link rel="canonical" href="https://rusuban.dev/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Rusuban: Claude Code autopilot for GitHub maintainers">
+<meta property="og:description" content="Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.">
+<meta property="og:url" content="https://rusuban.dev/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
 <script>
 	// The system's theme, unless the visitor chose one here before.
 	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
 </script>
-<style>
-/* The Rusuban design system: Paper by day, Matsu by night, one vermilion seal on what waits for the owner. */
-:root {
-	--page: #fbfbfa; --shell: #f4f4f2; --surface: #ffffff; --surface-raised: #f1f1ef;
-	--line: rgba(27,26,24,0.09); --line-strong: rgba(27,26,24,0.16); --fill: rgba(27,26,24,0.04);
-	--ink: #1b1a18; --ink-muted: #57554f; --ink-faint: #6b6963; --on-ink: #ffffff;
-	--seal: #b83a24; --on-seal: #ffffff; --accent: #b83a24; --accent-soft: #fbe9e5;
-	--positive: #237a4b;
-	--kind-feature: #43648c;
-	--shadow-float: 0 8px 24px rgba(0,0,0,0.06);
-	--radius-xs: 4px; --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px; --radius-xl: 20px; --radius-pill: 999px;
-	--font-display: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
-	--font-sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-	--font-mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
-	--font-seal: "Noto Serif JP", "Hiragino Mincho ProN", "Yu Mincho", serif;
-	--ease: cubic-bezier(0.22, 1, 0.36, 1);
-	color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-	:root:not([data-theme="light"]) {
-		--page: #101a12; --shell: #0c140e; --surface: #18241b; --surface-raised: #202e23;
-		--line: rgba(236,240,228,0.09); --line-strong: rgba(236,240,228,0.16); --fill: rgba(236,240,228,0.05);
-		--ink: #eef0e6; --ink-muted: #acb5a6; --ink-faint: #8f9a89; --on-ink: #101a12;
-		--accent: #f26e52; --accent-soft: rgba(242,110,82,0.14);
-		--positive: #a8c69c;
-		--kind-feature: #93abcb;
-		--shadow-float: 0 8px 24px rgba(0,0,0,0.40);
-		color-scheme: dark;
-	}
-}
-:root[data-theme="dark"] {
-	--page: #101a12; --shell: #0c140e; --surface: #18241b; --surface-raised: #202e23;
-	--line: rgba(236,240,228,0.09); --line-strong: rgba(236,240,228,0.16); --fill: rgba(236,240,228,0.05);
-	--ink: #eef0e6; --ink-muted: #acb5a6; --ink-faint: #8f9a89; --on-ink: #101a12;
-	--accent: #f26e52; --accent-soft: rgba(242,110,82,0.14);
-	--positive: #a8c69c;
-	--kind-feature: #93abcb;
-	--shadow-float: 0 8px 24px rgba(0,0,0,0.40);
-	color-scheme: dark;
-}
-
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--page); color: var(--ink); font: 400 16px/26px var(--font-sans); font-variant-numeric: tabular-nums; }
-a { color: var(--ink); text-underline-offset: 3px; }
-a:hover { color: var(--ink-muted); }
-:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-h1, h2, h3 { margin: 0; font-family: var(--font-display); font-weight: 500; color: var(--ink); text-wrap: balance; }
-p { margin: 0; }
-code { font-family: var(--font-mono); }
-.wrap { max-width: 1184px; margin: 0 auto; padding-left: max(32px, env(safe-area-inset-left, 0px)); padding-right: max(32px, env(safe-area-inset-right, 0px)); }
-.muted { color: var(--ink-muted); }
-.section { padding-block: 96px; display: flex; flex-direction: column; gap: 48px; }
-.section-head { display: flex; gap: 24px; align-items: flex-start; max-width: 760px; }
-.section-head > div { display: flex; flex-direction: column; gap: 12px; }
-.section h2, .locks h2 { font-size: 40px; line-height: 48px; letter-spacing: -0.02em; }
-/* A Japanese mark beside each section title, in ink: the house that Rusuban minds */
-.mark { flex: none; writing-mode: vertical-rl; padding-top: 4px; font: 500 40px/1 var(--font-display); letter-spacing: 0.08em; color: var(--ink-faint); }
-.band { background: var(--shell); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.icon { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-
-/* The seal: the brand's mark, and the owner's */
-.brand { display: inline-flex; align-items: center; gap: 12px; font: 500 18px/1 var(--font-display); color: var(--ink); text-decoration: none; }
-.seal { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: var(--radius-sm); background: var(--seal); color: var(--on-seal); font: 700 19px/1 var(--font-seal); }
-.seal-sm { width: 20px; height: 20px; font-size: 12px; border-radius: var(--radius-xs); }
-
-/* Header */
-.top { border-bottom: 1px solid var(--line); }
-.top nav { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 32px; padding-block: 16px; }
-.links { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; margin-left: auto; }
-.top .links a:not(.btn) { color: var(--ink-muted); text-decoration: none; font-size: 15px; transition: color 0.14s var(--ease); }
-.top .links a:not(.btn):hover { color: var(--ink); }
-
-/* Buttons */
-.btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: var(--radius-md); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: 500 14px/1 var(--font-sans); text-decoration: none; cursor: pointer; transition: background-color 0.14s var(--ease), transform 0.14s var(--ease); }
-.btn:hover { background: var(--surface-raised); color: var(--ink); }
-.btn:active { transform: scale(0.98); }
-.btn-primary { background: var(--ink); border-color: var(--ink); color: var(--on-ink); }
-.btn-primary:hover { background: var(--ink-muted); border-color: var(--ink-muted); color: var(--on-ink); }
-.btn-lg { height: 48px; padding: 0 20px; font-size: 15px; }
-.icon-btn { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border-radius: var(--radius-md); border: 1px solid var(--line-strong); background: transparent; color: var(--ink-muted); cursor: pointer; transition: background-color 0.14s var(--ease), color 0.14s var(--ease); }
-.icon-btn:hover { color: var(--ink); background: var(--fill); }
-
-/* Hero */
-.hero { min-height: calc(100vh - 69px); padding-block: 64px; display: flex; flex-wrap: wrap; gap: 64px; align-items: center; }
-.hero-text { flex: 1 1 440px; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
-.hero h1 { font-size: clamp(40px, 5.6vw, 72px); line-height: 1.04; letter-spacing: -0.03em; }
-.away { color: var(--ink-faint); }
-.lead { max-width: 36rem; font-size: 20px; line-height: 30px; color: var(--ink-muted); }
-.cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding-top: 8px; }
-.install { display: inline-flex; align-items: center; gap: 8px; height: 48px; padding: 0 4px 0 16px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--line-strong); }
-.install code { font-size: 15px; color: var(--ink); }
-.install .icon-btn { width: 40px; height: 40px; border: 0; }
-.needs { font: 400 13px/20px var(--font-mono); color: var(--ink-faint); }
-
-/* The window: one card sealed for you, above what was done without you */
-.house { flex: 1 1 440px; min-width: 0; max-width: 544px; margin: 0; display: flex; flex-direction: column; gap: 12px; }
-.window { display: flex; flex-direction: column; gap: 16px; padding: 16px; border-radius: var(--radius-xl); background: var(--shell); border: 1px solid var(--line); box-shadow: var(--shadow-float); }
-.window-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.waiting { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px 0 4px; border-radius: var(--radius-pill); border: 1px solid var(--accent); color: var(--accent); font: 500 13px/1 var(--font-sans); white-space: nowrap; }
-.waiting .n { display: grid; place-items: center; min-width: 24px; height: 24px; padding: 0 4px; border-radius: var(--radius-pill); background: var(--seal); color: var(--on-seal); font: 500 12px/1 var(--font-mono); }
-.pill { display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; border-radius: var(--radius-pill); border: 1px solid var(--line); background: var(--fill); font: 500 13px/1 var(--font-sans); color: var(--ink); white-space: nowrap; }
-.pill .meta { font: 400 12px/1 var(--font-mono); color: var(--ink-faint); }
-.dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--positive); }
-.card { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); }
-.card .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; line-height: 16px; color: var(--ink-muted); }
-.card .ref { font: 400 12px/1 var(--font-mono); color: var(--ink-faint); }
-.card h2 { font-size: 20px; line-height: 28px; }
-.card .ctx { font-size: 15px; line-height: 24px; color: var(--ink-muted); }
-.card .ctx strong { font-weight: 500; color: var(--ink); }
-.tag { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border-radius: var(--radius-sm); background: var(--fill); color: var(--ink-muted); font: 500 12px/1 var(--font-sans); white-space: nowrap; }
-.tag-kind { color: var(--kind-feature); }
-.tag-kind::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.tag-you { background: var(--accent-soft); color: var(--accent); }
-.tag-rec { background: var(--ink); color: var(--on-ink); }
-.options { display: grid; gap: 8px; }
-.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.option { display: flex; flex-direction: column; gap: 4px; padding: 12px 16px; border-radius: var(--radius-md); border: 1px solid var(--line-strong); }
-.option > b { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font: 500 15px/20px var(--font-sans); color: var(--ink); }
-.option > span { font-size: 13px; line-height: 20px; color: var(--ink-muted); }
-.option.rec { border-color: var(--ink-muted); background: var(--surface-raised); }
-.done { display: flex; flex-direction: column; gap: 8px; padding: 0 4px 4px; font-size: 13px; line-height: 20px; color: var(--ink-muted); }
-.done b { font-weight: 500; color: var(--ink); }
-.done ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
-.done time { display: inline-block; width: 48px; font: 400 12px/20px var(--font-mono); color: var(--ink-faint); }
-.house figcaption { font: 400 12px/16px var(--font-mono); color: var(--ink-faint); text-align: right; }
-
-/* 留守番 */
-.word { padding-block: 40px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: baseline; justify-content: center; text-align: center; }
-.word span { font: 500 40px/1 var(--font-display); color: var(--ink); }
-.word p { font-size: 18px; line-height: 28px; color: var(--ink-muted); }
-
-/* How it works */
-.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 192px), 1fr)); }
-.step { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 20px; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); }
-.step .n { font: 400 12px/16px var(--font-mono); color: var(--ink-faint); }
-.step h3 { font-size: 20px; line-height: 28px; }
-.step p { font-size: 15px; line-height: 24px; color: var(--ink-muted); padding-bottom: 8px; }
-.step .tag { margin-top: auto; }
-.step.you { border-color: var(--accent); }
-.rules { display: flex; flex-wrap: wrap; gap: 32px 48px; align-items: flex-start; }
-.rules > div { flex: 1 1 320px; display: flex; flex-direction: column; gap: 12px; }
-.rules h3 { font-size: 24px; line-height: 32px; }
-.rules figure { flex: 1 1 480px; min-width: 0; margin: 0; border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
-.rules figcaption { padding: 12px 16px; font: 400 13px/20px var(--font-mono); color: var(--ink-faint); border-bottom: 1px solid var(--line); }
-.rules pre { margin: 0; padding: 16px; overflow-x: auto; font: 400 14px/24px var(--font-mono); color: var(--ink); }
-
-/* Agents never merge */
-.locks { padding-block: 96px; display: flex; flex-wrap: wrap; gap: 48px 64px; align-items: center; }
-.locks > div { flex: 1 1 380px; display: flex; flex-direction: column; gap: 16px; }
-.gates { flex: 1 1 420px; margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); }
-.gates li { display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 12px 16px; border-radius: var(--radius-md); background: var(--surface); border: 1px solid var(--line); font-size: 15px; line-height: 20px; }
-.gates li::before { content: ""; width: 8px; height: 8px; flex: none; border-radius: 2px; background: var(--positive); }
-
-/* What you get: a quiet list, not a wall of cards */
-.features { margin: 0; display: grid; gap: 0 48px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
-.features div { padding-block: 20px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; }
-.features dt { font: 500 17px/24px var(--font-display); color: var(--ink); }
-.features dd { margin: 0; font-size: 15px; line-height: 24px; color: var(--ink-muted); }
-
-/* Get started */
-.start { margin: 0; padding: 0; list-style: none; display: grid; gap: 32px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
-.start li { display: flex; flex-direction: column; gap: 12px; }
-.start li > span { font: 500 17px/24px var(--font-display); color: var(--ink); }
-.start code { display: block; font-size: 14px; line-height: 20px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px 16px; }
-.start p { font-size: 15px; line-height: 24px; color: var(--ink-muted); }
-
-/* Footer */
-.foot { border-top: 1px solid var(--line); }
-.foot .wrap { padding-block: 24px; display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; font-size: 14px; color: var(--ink-muted); }
-.foot .brand { font-size: 16px; }
-
-@media (max-width: 640px) {
-	.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
-	.top .links a:not(.btn) { display: none; }
-	.hero { min-height: 0; padding-block: 48px; gap: 40px; }
-	.section, .locks { padding-block: 64px; }
-	.section h2, .locks h2 { font-size: 28px; line-height: 36px; }
-	.mark { font-size: 28px; }
-	.pair { grid-template-columns: 1fr; }
-	.done { display: none; }
-}
-@media (prefers-reduced-motion: reduce) { .btn, .icon-btn, .top .links a:not(.btn) { transition: none; } }
-</style>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}},{"@type":"SoftwareApplication","@id":"https://rusuban.dev/#software","name":"Rusuban","applicationCategory":"DeveloperApplication","applicationSubCategory":"GitHub maintenance automation","operatingSystem":"Windows, macOS, Linux","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","url":"https://rusuban.dev/","installUrl":"https://rusuban.dev/docs/install/","downloadUrl":"https://www.npmjs.com/package/rusuban","softwareHelp":"https://rusuban.dev/docs/","softwareRequirements":"Node.js 22 or later, GitHub CLI (gh), Claude Code","license":"https://github.com/EtienneLescot/rusuban/blob/main/LICENSE","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Claude Code judges every issue and pull request against rules written in the repo","Agents comment, rebase and fix in worktrees of their own","Only the server merges, behind locks checked on live GitHub state","One inbox of cards for the decisions the rules keep for the owner","Answers from a phone through Tailscale; pings on ntfy, Slack, Discord, Teams or e-mail","Recurring tasks written as text"],"sameAs":["https://www.npmjs.com/package/rusuban"],"publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
 </head>
 <body>
-
 <header class="top">
 <nav class="wrap" aria-label="Site">
-<a class="brand" href="#top"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
 <div class="links">
-<a href="#how">How it works</a>
-<a href="#start">Get started</a>
-<a href="https://github.com/EtienneLescot/rusuban/tree/main/docs">Docs</a>
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
 <a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
 <button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
 </div>
 </nav>
 </header>
-
 <main id="top">
 <section class="wrap hero">
 <div class="hero-text">
-<h1>Minds your GitHub projects <span class="away">while you're away</span></h1>
+<h1><span class="kicker">Claude Code autopilot for GitHub maintainers</span> Minds your GitHub projects <span class="away">while you're away</span></h1>
 <p class="lead">For maintainers who use Claude Code. Agents judge every issue and PR against the rules you write in your repo, do what those rules allow, and bring you the rest as a card.</p>
 <div class="cta">
-<a class="btn btn-primary btn-lg" href="https://github.com/EtienneLescot/rusuban/blob/main/docs/writing-rules.md">Write your first rules</a>
-<div class="install"><code id="cmd">npm install -g rusuban</code><button type="button" class="icon-btn" id="copy" aria-label="Copy the install command"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg></button></div>
+<a class="btn btn-primary btn-lg" href="/docs/rules/">Write your first rules</a>
+<div class="install"><code id="cmd">npm install -g rusuban</code><button type="button" class="icon-btn" data-copy="cmd" aria-label="Copy the install command"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg></button></div>
 </div>
 <p class="needs">Node 22 or later, gh and Claude Code · Windows, macOS, Linux · MIT</p>
 </div>
@@ -272,7 +97,7 @@ code { font-family: var(--font-mono); }
 <span class="mark" lang="ja" aria-hidden="true">留守</span>
 <div>
 <h2>What happens while you're away</h2>
-<p class="muted">Rusuban runs on your machine. It acts where your rules allow, and seals in vermilion only what they keep for you.</p>
+<p class="muted">Rusuban runs on your machine. It acts where your rules allow, and seals in vermilion only what they keep for you. <a href="/docs/how-it-works/">How it works</a></p>
 </div>
 </div>
 <ol class="steps">
@@ -314,7 +139,7 @@ code { font-family: var(--font-mono); }
 <p class="muted">They run on your machine, with your logins, on repos anyone can write to. So the server holds them with checks that do not depend on their obeying. It merges a PR alone only when all eight pass, on the head it checked.</p>
 </div>
 </div>
-<a href="https://github.com/EtienneLescot/rusuban/blob/main/docs/security.md">Read the security model</a>
+<a href="/docs/security/">Read the security model</a>
 </div>
 <ul class="gates" aria-label="The eight merge gates">
 <li>CI green</li>
@@ -352,6 +177,7 @@ code { font-family: var(--font-mono); }
 <span class="mark" lang="ja" aria-hidden="true">掟</span>
 <div>
 <h2>Two commands, then your rules</h2>
+<p class="muted">The <a href="/docs/install/">install guide</a> has the details.</p>
 </div>
 </div>
 <ol class="start">
@@ -361,40 +187,22 @@ code { font-family: var(--font-mono); }
 </ol>
 </div>
 </section>
-</main>
 
+</main>
 <footer class="foot">
-<div class="wrap">
-<span class="brand"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</span>
-<span>MIT license</span>
-<div class="links">
-<a href="https://github.com/EtienneLescot/rusuban">GitHub</a>
-<a href="https://www.npmjs.com/package/rusuban">npm</a>
-<a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a>
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
 </div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
 </div>
 </footer>
-
-<script>
-	const root = document.documentElement;
-	const themeBtn = document.getElementById("theme");
-	const isDark = () => (root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches);
-	const label = () => themeBtn.setAttribute("aria-label", isDark() ? "Switch to the light theme" : "Switch to the dark theme");
-	label();
-	themeBtn.onclick = () => {
-		root.dataset.theme = isDark() ? "light" : "dark";
-		try { localStorage.setItem("theme", root.dataset.theme); } catch {}
-		label();
-	};
-	const copyBtn = document.getElementById("copy");
-	copyBtn.onclick = async () => {
-		try {
-			await navigator.clipboard.writeText(document.getElementById("cmd").textContent);
-			copyBtn.setAttribute("aria-label", "Copied");
-		} catch {
-			getSelection().selectAllChildren(document.getElementById("cmd"));
-		}
-	};
-</script>
+<script src="/site.js"></script>
 </body>
 </html>

@@ -1,0 +1,64 @@
+<!--
+{
+	"title": "Install Rusuban on Windows, macOS or Linux | Rusuban",
+	"description": "Install Rusuban with npm: Node 22 or later, gh and Claude Code logged in. Then rusuban init sets up the service, your first repo and the dashboard.",
+	"nav": "Install",
+	"product": true
+}
+-->
+<h1>Install Rusuban</h1>
+<p class="lede">Rusuban is an npm package. It runs on your own machine, Windows, macOS or Linux, as a service with a dashboard in your browser.</p>
+
+<h2 id="what-you-need">What you need</h2>
+<ul>
+<li><strong>Node.js 22 or later.</strong></li>
+<li><strong>The GitHub CLI, <code>gh</code>, logged in.</strong> The agents act on GitHub through this login, so their comments and PRs appear under your account.</li>
+<li><strong>Claude Code, <code>claude</code>, logged in.</strong> The agents run on your Claude plan, within its usage limits.</li>
+</ul>
+<p>Rusuban itself is free and open source, under the MIT license.</p>
+
+<h2 id="install-and-set-up">Install and set up</h2>
+<pre><code>npm install -g rusuban
+rusuban init</code></pre>
+<p><code>rusuban init</code> asks three things:</p>
+<ol>
+<li><strong>The Claude model</strong> every run uses. Runs never fall back to Claude Code's default.</li>
+<li><strong>What agents may run on this machine</strong>: only what you allow (<code>allowlist</code>), or anything a deny rule does not stop (<code>bypass</code>). The <a href="/docs/security/#the-host-profile">security model</a> explains both.</li>
+<li><strong>Whether to arm automatic merges.</strong> Merges stay paused unless you arm them, here or later with the switch in the dashboard's header.</li>
+</ol>
+<p>It then adds your first repo, installs the service and opens the dashboard.</p>
+<p>On Linux without a desktop session, run <code>loginctl enable-linger</code> once. Otherwise systemd stops the service when you log out.</p>
+
+<h2 id="write-your-rules">Write your rules</h2>
+<p>Until a repo has rules, Rusuban only watches it: its items show in the dashboard, no agent judges them, and nothing merges.</p>
+<p>Rules are Markdown files in <code>.rusuban/rules/</code>, on the repo's default branch. Start from one of the <a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules">examples</a>, then read <a href="/docs/rules/">Writing rules</a>.</p>
+
+<h2 id="add-repos">Add repos</h2>
+<pre><code>rusuban project add owner/repo
+rusuban project list</code></pre>
+<p>With <code>--to &lt;project&gt;</code>, the repo joins an existing project. A project can hold several repos, and its runs see the rules of each.</p>
+
+<h2 id="answer-from-your-phone">Answer from your phone</h2>
+<pre><code>rusuban remote enable</code></pre>
+<p>The dashboard is then served on your tailnet through Tailscale Serve, never through Tailscale Funnel or a public address. It answers only you: the identity Tailscale gives each request must match the owner's login in your config.</p>
+
+<h2 id="get-pinged">Get pinged</h2>
+<pre><code>rusuban channel add ntfy https://ntfy.sh/&lt;your-topic&gt;
+rusuban channel test &lt;id&gt;</code></pre>
+<p>A channel sends cards to ntfy, Slack, Discord, Teams or e-mail. An urgent card goes at once. The others go together at the channel's digest time (<code>--digest HH:MM</code>), never in its quiet hours (<code>--quiet HH:MM-HH:MM</code>).</p>
+
+<h2 id="try-it-without-risk">Try it without risk</h2>
+<ul>
+<li><strong>Keep merges paused.</strong> Agents act as your rules say, and nothing merges until you arm the switch.</li>
+<li><strong>Run <code>rusuban start --dry</code>.</strong> The dashboard reads and shows, and starts no agent.</li>
+</ul>
+
+<h2 id="where-things-live">Where things live</h2>
+<p>Rusuban keeps its state in <code>~/.rusuban/</code>, never in your repos. <code>RUSUBAN_HOME</code> moves it. Agents work in Rusuban's own clones and worktrees, never in your checkout.</p>
+
+<h2 id="next">Next</h2>
+<ul>
+<li><a href="/docs/how-it-works/">How it works</a></li>
+<li><a href="/docs/rules/">Writing rules</a></li>
+<li><a href="/docs/security/">Security model</a>, before agents run commands on your machine</li>
+</ul>

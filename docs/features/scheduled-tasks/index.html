@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Run Claude Code tasks on a schedule | Rusuban</title>
+<meta name="description" content="Write a Claude Code task as a text file, and Rusuban runs it headless at the times you set or on a click, on your machine, with every run in its dashboard.">
+<link rel="canonical" href="https://rusuban.dev/features/scheduled-tasks/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Run Claude Code tasks on a schedule | Rusuban">
+<meta property="og:description" content="Write a Claude Code task as a text file, and Rusuban runs it headless at the times you set or on a click, on your machine, with every run in its dashboard.">
+<meta property="og:url" content="https://rusuban.dev/features/scheduled-tasks/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page"><article class="prose">
+<h1>Run Claude Code tasks on a schedule</h1>
+<p class="lede">A Rusuban task is a text file: a few lines of front matter, then a prompt. Rusuban runs it with Claude Code, headless, at the times you set or when you click, and keeps every run in its dashboard.</p>
+
+<h2 id="a-task-file">A task file</h2>
+<pre><code>---
+title: Evening summary
+project: widgets
+schedule: daily 18:30
+---
+Sum up what merged today in owner/widgets and what still waits
+for a review, in five lines at most.</code></pre>
+<div class="table"><table>
+<thead><tr><th>Field</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>title</code></td><td>The task's name in the dashboard</td></tr>
+<tr><td><code>project</code></td><td>The project the task belongs to, a project without a repo included</td></tr>
+<tr><td><code>schedule</code></td><td><code>daily HH:MM</code>, or several times, as <code>daily 09:00,17:30</code>. Without it, the task runs on a click</td></tr>
+<tr><td><code>lock</code></td><td>Optional. Tasks and runs that share a lock run one at a time</td></tr>
+<tr><td><code>cwd</code></td><td>Optional. The folder the task runs in, the project's scratch folder by default</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="add-and-run-it">Add and run it</h2>
+<pre><code>rusuban task add evening-summary.md
+rusuban task list
+rusuban task run &lt;id&gt;</code></pre>
+<p>A task is your request, so adding or changing one waits for your yes: you type it in a terminal, or answer a card when Claude Code made the change. <code>rusuban task remove &lt;id&gt;</code> removes one.</p>
+<p>You can also ask Claude Code in your own words, through Rusuban's MCP server: "write a task that drafts the release notes every morning". See <a href="/docs/claude/">Setting Rusuban up from Claude</a>.</p>
+
+<h2 id="how-it-runs">How it runs</h2>
+<ul>
+<li><strong>On your machine</strong>, as a headless <code>claude -p</code> session, on the model you chose and under your host profile.</li>
+<li><strong>Within your project's rules</strong> and the safety frame every run gets.</li>
+<li><strong>At its times.</strong> A time missed while the service was down runs once when it is back.</li>
+<li><strong>One at a time</strong> with the tasks and runs that share its lock.</li>
+<li><strong>In the dashboard.</strong> Each run shows with its final answer and its conversation. A decision a person must take about an item comes to you as a card.</li>
+</ul>
+
+<h2 id="tasks-without-a-repo">Tasks about no repo</h2>
+<p>A task does not have to be about a repo. Put it in a project without one:</p>
+<pre><code>rusuban project create publications --title Publications</code></pre>
+<p>Then give each task <code>project: publications</code>. The project's page shows its tasks, runs and conversations, and nothing is read, judged or merged on GitHub for it.</p>
+
+<h2 id="compared-with-cron">Compared with cron</h2>
+<p>You can run <code>claude -p</code> from cron. A Rusuban task adds what cron does not know about: the time missed while the machine was off, the lock that keeps two runs off the same work, your rules and the safety frame in the prompt, and a dashboard that keeps each run and its conversation.</p>
+
+<h2 id="get-started">Get started</h2>
+<ol>
+<li><a href="/docs/install/">Install Rusuban</a>.</li>
+<li>Write a task file, then <code>rusuban task add</code> it.</li>
+<li>Click it once in the dashboard to see its first run.</li>
+</ol>
+</article></div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>
