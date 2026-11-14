@@ -42,6 +42,7 @@ emit({
 			work: process.env.RUSUBAN_WORK,
 			cwd: process.cwd(),
 			cli: searchPath.split(delimiter)[0],
+			hooks: process.env[`GIT_CONFIG_VALUE_${Number(process.env.GIT_CONFIG_COUNT) - 1}`],
 		}),
 	permission_denials: [{ tool_name: "Bash", tool_input: { command: "gh pr merge 1" } }],
 	duration_ms: 1200,

@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
 	CARD_RULES,
+	checkPush,
 	claudeLoggedIn,
 	executeRun,
 	listRuns,
@@ -680,6 +681,21 @@ const commands = {
 		if (!why) return;
 		console.error(why);
 		process.exitCode = 2;
+	},
+	// Internal: git's pre-push hook in every run (the hook passes the remote and its URL). Exit 1 refuses
+	// the push and git shows why. A check that cannot judge refuses too.
+	async "pre-push"([, url]) {
+		let input = "";
+		for await (const chunk of process.stdin) input += chunk;
+		let why;
+		try {
+			why = checkPush(url, input);
+		} catch (e) {
+			why = `Rusuban could not check this push, so it refuses it: ${e.message}`;
+		}
+		if (!why) return;
+		console.error(why);
+		process.exitCode = 1;
 	},
 	// The run's own lease; from the owner's terminal (no run), whoever holds the machine.
 	async release([name, ...rest]) {

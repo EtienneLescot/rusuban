@@ -82,13 +82,24 @@ const SHELL_STATE = ["automerge.json", "answers.jsonl", "pending.json"];
 // or another tool gets through, and so does one that reaches the dashboard or the owner's files by a
 // spelling the rules do not name. The server flags merges and pushes it did not make (research R3);
 // an agent-only token, and agents under their own OS account or a sandbox, close the gap after v1.
-export function builtInDeny({ home = homeDir(), defaultBranches = [], port = null } = {}) {
+// A `git push` to a default branch is git's to resolve, then the runs' pre-push hook refuses it
+// (`pushRefusal`); without that hook (`pushHook` false), the rules name the branch instead.
+export function builtInDeny({
+	home = homeDir(),
+	defaultBranches = [],
+	port = null,
+	pushHook = false,
+} = {}) {
 	const rules = [
 		"Bash(gh pr merge*)",
 		"Bash(gh api*merge*)", // REST /merge and /merges, GraphQL mergePullRequest
 		"Bash(gh api*Merge*)", // GraphQL enablePullRequestAutoMerge and the like
 		"Bash(git push*--all*)",
 		"Bash(git push*--mirror*)",
+		// What would skip the pre-push hook: `--no-verify`, and hooks or config of the agent's own.
+		...(pushHook
+			? ["Bash(git push*--no-v*)", "Bash(*hooksPath*)", "Bash(*hookspath*)", "Bash(*GIT_CONFIG*)"]
+			: []),
 		// The owner's settings (FR-095): no agent adds a project, turns its bypass on, starts a task or
 		// reaches Rusuban's own MCP server.
 		...OWNER_COMMANDS.map((c) => `Bash(rusuban ${c}*)`),
@@ -101,18 +112,140 @@ export function builtInDeny({ home = homeDir(), defaultBranches = [], port = nul
 		`Bash(*${path.basename(home)}*config.json*)`,
 		...SHELL_STATE.map((name) => `Bash(*${name}*)`),
 	];
-	for (const b of new Set(defaultBranches.filter(Boolean)))
-		rules.push(
-			`Bash(git push* ${b})`,
-			`Bash(git push* ${b} *)`,
-			`Bash(git push*:${b})`,
-			`Bash(git push*:${b} *)`,
-			`Bash(git push* +${b})`,
-			`Bash(git push* +${b} *)`,
-			`Bash(git push*refs/heads/${b}*)`,
-			`Bash(gh api*git/refs/heads/${b}*)`,
-		);
+	for (const b of new Set(defaultBranches.filter(Boolean))) {
+		rules.push(`Bash(gh api*git/refs/heads/${b}*)`);
+		if (!pushHook)
+			rules.push(
+				`Bash(git push* ${b})`,
+				`Bash(git push* ${b} *)`,
+				`Bash(git push*:${b})`,
+				`Bash(git push*:${b} *)`,
+				`Bash(git push* +${b})`,
+				`Bash(git push* +${b} *)`,
+				`Bash(git push*refs/heads/${b}*)`,
+			);
+	}
 	return rules;
+}
+
+// ── Pushes (the runs' pre-push hook) ──────────────────────────────────────────────────────────
+// `owner/repo` of a GitHub remote, in lower case, from an https, ssh or scp-like URL; else null.
+export const githubSlug = (url) =>
+	/^(?:(?:https?|ssh|git):\/\/)?(?:[^@/]+@)?(?:ssh\.)?github\.com(?::\d+)?[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/i
+		.exec(url ?? "")
+		?.slice(1)
+		.join("/")
+		.toLowerCase() ?? null;
+
+// Null when git may push these refs to this URL, else why not. No push reaches a branch named like a
+// project repo's default branch (`main` and `master` too while one is unknown), on any remote: git
+// resolved the remote's name, the URL and the refspecs before calling the hook, so none of them can
+// hide where the push goes. The exception is an open PR's head on a contributor's fork, which may be
+// their `main`: GitHub lets a maintainer push there, and it is not the project's branch.
+export function pushRefusal({ url, refs, repos }) {
+	const known = repos.map((r) => r.defaultBranch);
+	const names = new Set(known.filter(Boolean));
+	if (known.some((b) => !b)) names.add("main").add("master");
+	const target = githubSlug(url);
+	const own = repos.some((r) => r.slug.toLowerCase() === target);
+	for (const ref of refs) {
+		const branch = ref.startsWith("refs/heads/") ? ref.slice("refs/heads/".length) : null;
+		if (!names.has(branch)) continue;
+		const head = (p) => p.headRef === branch && p.headRepo?.toLowerCase() === target;
+		if (target && !own && repos.some((r) => r.prs?.some(head))) continue;
+		return `Rusuban refuses this push: ${branch} is a project's default branch, which takes no push from an agent. Only an open PR's head on a contributor's fork may be named ${branch}, and ${target ? `${target}:${branch}` : url} is not one.`;
+	}
+	return null;
+}
+
+// What git hands its pre-push hook: the remote's URL, and one line per ref on stdin, the remote's ref
+// third. Every project repo comes with what the daemon last read of it.
+export function checkPush(url, input, config = loadConfig()) {
+	const repos = config.projects.flatMap((p) => {
+		const live = read(`projects/${p.id}/live.json`, {});
+		return p.repos.map(({ slug }) => ({ slug, ...live.repos?.[slug] }));
+	});
+	const refs = input
+		.split("\n")
+		.map((line) => line.trim().split(/\s+/)[2])
+		.filter(Boolean);
+	return pushRefusal({ url, refs, repos });
+}
+
+// Git before 2.31 ignores GIT_CONFIG_COUNT, and with it the runs' hooks: the deny rules then name the
+// branch, a fork's too. Asked once per process.
+let honored;
+export function pushHookWorks() {
+	if (honored === undefined)
+		try {
+			const env = { ...process.env, GIT_CONFIG_COUNT: "1" };
+			Object.assign(env, { GIT_CONFIG_KEY_0: "rusuban.hook", GIT_CONFIG_VALUE_0: "on" });
+			const out = execFileSync("git", ["config", "--get", "rusuban.hook"], {
+				env,
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "ignore"],
+				windowsHide: true,
+			});
+			honored = out.trim() === "on";
+		} catch {
+			honored = false;
+		}
+	return honored;
+}
+
+// The hooks git runs in every run (`core.hooksPath`): pre-push asks Rusuban first, then each runs the
+// repo's own hook as git would have. ponytail: reference-transaction and post-index-change are left
+// out, git runs them on every ref and index write, and so is push-to-checkout, whose mere presence
+// replaces git's own update; a repo's own hooks of those kinds do not run in a run.
+const HOOKS = [
+	"applypatch-msg",
+	"pre-applypatch",
+	"post-applypatch",
+	"pre-commit",
+	"pre-merge-commit",
+	"prepare-commit-msg",
+	"commit-msg",
+	"post-commit",
+	"pre-rebase",
+	"post-checkout",
+	"post-merge",
+	"pre-push",
+	"pre-receive",
+	"update",
+	"proc-receive",
+	"post-receive",
+	"post-update",
+	"pre-auto-gc",
+	"post-rewrite",
+	"sendemail-validate",
+];
+const posix = (p) => p.replace(/\\/g, "/");
+export function hookDir() {
+	const dir = homePath("bin/hooks");
+	fs.mkdirSync(dir, { recursive: true });
+	// The home is written in: a run that changes RUSUBAN_HOME does not change what the hook reads.
+	const script = `#!/bin/sh
+# Written by Rusuban for its runs. The repo's own hook runs after, as git would have run it.
+name=\${0##*/}
+if [ "$name" = pre-push ]; then
+	input=$(cat)
+	[ -z "$input" ] || input="$input
+"
+	printf %s "$input" | RUSUBAN_HOME="${posix(path.resolve(homeDir()))}" "${posix(process.execPath)}" "${posix(BIN)}" pre-push "$@" || exit 1
+fi
+own=$(GIT_CONFIG_COUNT=0 git rev-parse --git-path "hooks/$name") && [ -x "$own" ] || exit 0
+[ "$name" = pre-push ] || exec "$own" "$@"
+printf %s "$input" | "$own" "$@"
+`;
+	for (const name of HOOKS) {
+		const file = path.join(dir, name);
+		let old = null;
+		try {
+			old = fs.readFileSync(file, "utf8");
+		} catch {}
+		if (old !== script) fs.writeFileSync(file, script, { mode: 0o755 });
+	}
+	return posix(dir);
 }
 
 // The owner's profile decides what agents may run on this host (FR-025); the built-in deny rules
@@ -819,7 +952,6 @@ export function kickQueues(now = Date.now()) {
 function shimDir() {
 	const dir = homePath("bin");
 	fs.mkdirSync(dir, { recursive: true });
-	const posix = (p) => p.replace(/\\/g, "/");
 	fs.writeFileSync(
 		path.join(dir, "rusuban"),
 		`#!/bin/sh\nexec "${posix(process.execPath)}" "${posix(BIN)}" "$@"\n`,
@@ -839,6 +971,11 @@ function runEnv(id, project, workDir) {
 	};
 	const key = Object.keys(env).find((k) => k.toUpperCase() === "PATH") ?? "PATH";
 	env[key] = `${shimDir()}${path.delimiter}${env[key] ?? ""}`;
+	// Every git of the run takes Rusuban's hooks, after any config the environment already gave.
+	const n = Number(env.GIT_CONFIG_COUNT) || 0;
+	env.GIT_CONFIG_COUNT = String(n + 1);
+	env[`GIT_CONFIG_KEY_${n}`] = "core.hooksPath";
+	env[`GIT_CONFIG_VALUE_${n}`] = hookDir();
 	return env;
 }
 
@@ -855,6 +992,7 @@ export function executeRun(id, { config = loadConfig(), command } = {}) {
 			home: homeDir(),
 			defaultBranches: Object.values(live.repos ?? {}).map((r) => r.defaultBranch),
 			port: config.port,
+			pushHook: pushHookWorks(),
 			guard: config.machines?.some((m) => m.owner), // a desktop added later guards later runs
 		});
 		if (!takeLock(s.lock, id)) {

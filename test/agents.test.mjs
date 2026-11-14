@@ -1,5 +1,6 @@
 import "./tmp-root.mjs";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -12,11 +13,14 @@ import {
 	editRule,
 	executeRun,
 	holder,
+	hookDir,
 	kickQueues,
 	listRuns,
 	NO_MODEL,
 	noteCrash,
 	permissionArgs,
+	pushHookWorks,
+	pushRefusal,
 	queued,
 	readRun,
 	requestRun,
@@ -102,6 +106,113 @@ test("the built-in deny rules come with both profiles, and the owner's deny rule
 	assert.deepEqual(denied(allowlist), builtIn);
 	assert.ok(!allowlist.includes("--dangerously-skip-permissions"));
 	assert.throws(() => permissionArgs({}, context), /bypass" or "allowlist/);
+
+	// With the runs' pre-push hook, git resolves where a push goes: no rule names the branch, which a
+	// fork's PR may carry too, and what would skip the hook is denied instead.
+	const hooked = builtInDeny({ ...context, pushHook: true });
+	assert.ok(!hooked.some((r) => r.startsWith("Bash(git push* ") || r.includes(":main")));
+	for (const rule of [
+		"Bash(gh api*git/refs/heads/main*)",
+		"Bash(git push*--all*)",
+		"Bash(git push*--no-v*)",
+		"Bash(*hooksPath*)",
+		"Bash(*GIT_CONFIG*)",
+	])
+		assert.ok(hooked.includes(rule), rule);
+	assert.ok(!builtIn.includes("Bash(*GIT_CONFIG*)"));
+});
+
+test("no push reaches a project's default branch, but an open PR's head on a fork may be main", () => {
+	const repos = [
+		{
+			slug: "Acme/Widgets",
+			defaultBranch: "main",
+			prs: [
+				{ headRef: "main", headRepo: "Bob/widgets" }, // a contributor's PR from their main
+				{ headRef: "main", headRepo: "acme/widgets" }, // the project's own main, to another base
+				{ headRef: "fix", headRepo: "carol/widgets" },
+			],
+		},
+		{ slug: "acme/tools", defaultBranch: "trunk", prs: [] },
+	];
+	const refused = (url, ...refs) => pushRefusal({ url, refs, repos });
+	// Git hands the hook the URL it resolved: a remote's name, an insteadOf or a mirror end up here.
+	for (const url of [
+		"https://github.com/acme/widgets.git",
+		"https://x-access-token:t@github.com/Acme/Widgets",
+		"git@github.com:acme/widgets.git",
+		"ssh://git@ssh.github.com:443/acme/widgets.git",
+		"https://www.github.com/acme/widgets.git",
+		"/home/a/mirror.git",
+	])
+		assert.match(refused(url, "refs/heads/main") ?? "", /main is a project's default branch/, url);
+	assert.ok(refused("https://github.com/acme/widgets.git", "refs/heads/trunk"));
+	// The contributor's PR head passes, however the URL is written; their fork's other defaults do not,
+	// nor anyone's main that heads no open PR.
+	for (const url of [
+		"https://github.com/bob/widgets.git",
+		"git@github.com:Bob/Widgets.git",
+		"https://github.com/bob/widgets/",
+	])
+		assert.equal(refused(url, "refs/heads/main"), null, url);
+	assert.match(
+		refused("https://github.com/bob/widgets.git", "refs/heads/trunk"),
+		/and bob\/widgets:trunk is not one\.$/,
+	);
+	assert.ok(refused("https://github.com/carol/widgets.git", "refs/heads/main"));
+	assert.ok(refused("https://github.com/bob/other.git", "refs/heads/main"));
+	assert.ok(refused("https://github.com/bob/widgets.git", "refs/heads/main", "refs/heads/trunk"));
+	// Other branches, and a tag of that name, pass.
+	assert.equal(
+		refused("https://github.com/acme/widgets.git", "refs/heads/fix", "refs/tags/main"),
+		null,
+	);
+	// A repo whose default branch is not read yet: main and master are kept from every remote.
+	const unread = (ref) =>
+		pushRefusal({
+			url: "https://github.com/acme/new.git",
+			refs: [ref],
+			repos: [{ slug: "acme/new" }],
+		});
+	assert.ok(unread("refs/heads/master"));
+	assert.equal(unread("refs/heads/dev"), null);
+});
+
+test("a run's git asks Rusuban before every push, and the repo's own hooks still run", (t) => {
+	saveConfig(config);
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-push-"));
+	t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+	const work = path.join(dir, "work");
+	const env = {
+		...process.env,
+		GIT_CONFIG_COUNT: "1",
+		GIT_CONFIG_KEY_0: "core.hooksPath",
+		GIT_CONFIG_VALUE_0: hookDir(),
+	};
+	const git = (args, cwd = work) => spawnSync("git", args, { cwd, env, encoding: "utf8" });
+	git(["init", "-q", "--bare", "remote.git"], dir);
+	git(["init", "-q", "work"], dir);
+	// The repo's own hooks, where husky puts them: a core.hooksPath relative to the worktree.
+	fs.mkdirSync(path.join(work, ".hooks"));
+	fs.writeFileSync(path.join(work, ".hooks/pre-commit"), "#!/bin/sh\necho pre-commit > ../ran\n");
+	fs.writeFileSync(path.join(work, ".hooks/pre-push"), "#!/bin/sh\ncat >> ../ran\n");
+	for (const f of ["pre-commit", "pre-push"]) fs.chmodSync(path.join(work, ".hooks", f), 0o755);
+	git(["config", "core.hooksPath", ".hooks"]);
+	git(["-c", "user.name=a", "-c", "user.email=a@b.c", "commit", "-q", "--allow-empty", "-m", "a"]);
+	// To the project's default branch, however the refspec names it: refused before anything leaves.
+	for (const spec of ["HEAD:main", "+HEAD:refs/heads/main"]) {
+		const r = git(["push", "../remote.git", spec]);
+		assert.notEqual(r.status, 0, spec);
+		assert.match(r.stderr, /Rusuban refuses this push: main is a project's default branch/, spec);
+	}
+	assert.equal(git(["branch", "--list"], path.join(dir, "remote.git")).stdout, "");
+	// Another branch goes, and the repo's own pre-push reads the lines git gave Rusuban's.
+	const ok = git(["push", "-q", "../remote.git", "HEAD:fix"]);
+	assert.equal(ok.status, 0, ok.stderr);
+	assert.match(
+		fs.readFileSync(path.join(dir, "ran"), "utf8"),
+		/^pre-commit\nHEAD [0-9a-f]{40} refs\/heads\/fix 0{40}\n$/,
+	);
 });
 
 test("path rules are POSIX, a Windows drive written /c", () => {
@@ -244,8 +355,13 @@ test("a run builds its prompt when it starts, works in its folder with rusuban o
 	assert.equal(reported.cli, homePath("bin"));
 	assert.ok(fs.existsSync(homePath("bin/rusuban")) && fs.existsSync(homePath("bin/rusuban.cmd")));
 	assert.ok(reported.args.includes("--dangerously-skip-permissions"));
-	for (const rule of builtInDeny({ home: process.env.RUSUBAN_HOME, defaultBranches: ["main"] }))
+	const context = { home: process.env.RUSUBAN_HOME, defaultBranches: ["main"] };
+	for (const rule of builtInDeny({ ...context, pushHook: pushHookWorks() }))
 		assert.ok(reported.args.includes(rule), rule);
+	assert.equal(reported.args.includes("Bash(git push*:main)"), !pushHookWorks());
+	// Every git of the run takes its hooks: pre-push asks Rusuban.
+	assert.equal(reported.hooks, homePath("bin/hooks").replace(/\\/g, "/"));
+	assert.ok(fs.existsSync(homePath("bin/hooks/pre-push")));
 	assert.match(
 		fs.readFileSync(homePath(`runs/${id}/prompt.md`), "utf8"),
 		/# Your mission\n\nLook at #1 first\./,

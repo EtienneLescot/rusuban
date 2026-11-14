@@ -43,7 +43,7 @@ const PRS = `query($owner:String!,$name:String!,$cursor:String){
    pageInfo{hasNextPage endCursor}
    nodes{
     number title url body isDraft createdAt updatedAt additions deletions changedFiles
-    author{login} headRefOid headRefName baseRefName mergeable canBeRebased
+    author{login} headRefOid headRefName headRepository{nameWithOwner} baseRefName mergeable canBeRebased
     files(first:100){nodes{path additions deletions changeType}}
     reviewThreads(first:100){totalCount nodes{isResolved}}
     reviews(last:50){nodes{author{login} state commit{oid}}}
@@ -219,6 +219,8 @@ export function normalizePr(slug, p) {
 		draft: p.isDraft,
 		head: p.headRefOid,
 		headRef: p.headRefName,
+		// The fork a contributor's PR comes from: its head may be their `main` (pushRefusal).
+		headRepo: p.headRepository?.nameWithOwner ?? null,
 		base: p.baseRefName,
 		additions: p.additions,
 		deletions: p.deletions,

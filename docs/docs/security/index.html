@@ -83,7 +83,7 @@ host profile. Your own <code>permissions.deny</code> adds to them; nothing remov
 </tr>
 <tr>
 <td>Pushing to a default branch</td>
-<td><code>git push</code> naming a repo&#39;s default branch (<code>main</code>, <code>:main</code>, <code>+main</code>, <code>refs/heads/main</code>); <code>git push --all</code> and <code>--mirror</code>; <code>gh api</code> on <code>git/refs/heads/&lt;default branch&gt;</code>.</td>
+<td><code>git push --all</code> and <code>--mirror</code>; <code>gh api</code> on <code>git/refs/heads/&lt;default branch&gt;</code>; what would skip the pre-push hook below: <code>git push --no-verify</code>, and any command that names <code>hooksPath</code> or <code>GIT_CONFIG</code>. Without that hook (git before 2.31), <code>git push</code> naming a repo&#39;s default branch (<code>main</code>, <code>:main</code>, <code>+main</code>, <code>refs/heads/main</code>), on any remote.</td>
 </tr>
 <tr>
 <td>The owner&#39;s commands</td>
@@ -99,6 +99,19 @@ host profile. Your own <code>permissions.deny</code> adds to them; nothing remov
 </tr>
 </tbody></table></div>
 <p>A denied call is refused, and the run&#39;s log says so.</p>
+<h2 id="no-push-to-a-default-branch">No push to a default branch</h2>
+<p>Every git a run starts takes Rusuban&#39;s hooks (<code>core.hooksPath</code>, set through <code>GIT_CONFIG_COUNT</code>).
+Before anything leaves, git hands the pre-push hook the URL and the refs it resolved, so a remote&#39;s
+name, a URL, a refspec, an alias or a script cannot hide where a push goes.</p>
+<ul>
+<li><strong>Refused</strong>: a branch named like a project repo&#39;s default branch, on every remote. While a repo&#39;s
+default branch is not read yet, <code>main</code> and <code>master</code> too.</li>
+<li><strong>The one exception</strong>: an open PR&#39;s head on a contributor&#39;s fork, even named <code>main</code>. GitHub lets
+a maintainer push there, and it is the contributor&#39;s branch, not the project&#39;s.</li>
+<li><strong>The repo&#39;s own hooks still run</strong>, after Rusuban&#39;s, as git would have run them. Only
+<code>reference-transaction</code>, <code>post-index-change</code> and <code>push-to-checkout</code> do not.</li>
+<li>A hook that cannot read the instance refuses the push.</li>
+</ul>
 <h2 id="only-your-settings-reach-a-run">Only your settings reach a run</h2>
 <p>Runs load Claude Code&#39;s user settings only (<code>--setting-sources user</code>). A repo&#39;s <code>.claude/</code> settings,
 with their hooks and permissions, never load: a hook or an allow rule merged into a repo does nothing
@@ -185,9 +198,11 @@ journaled and flagged; turning it off is journaled.</li>
 <li><strong>Under <code>bypass</code>, an agent has your shell, and it reads text anyone can write.</strong> A prompt injection
 in an issue, a comment or a diff is a path to your shell. The safety frame tells agents that GitHub
 content is data; it is a prompt, not a wall.</li>
-<li><strong>Deny rules match command text.</strong> A merge or a push hidden behind a variable, an alias, a script,
-an interpreter or a raw HTTP call is not matched. The server flags a merge or a push it did not make,
-after the fact; it does not prevent it.</li>
+<li><strong>Deny rules match command text.</strong> A merge, or a write through GitHub&#39;s API, hidden behind a
+variable, an alias, a script, an interpreter or a raw HTTP call is not matched. A <code>git push</code> is
+checked where git resolved it, but an agent can still skip the hook: another spelling of
+<code>--no-verify</code> or of the config, or a git that does not inherit the run&#39;s environment. The server
+flags a merge or a push it did not make, after the fact; it does not prevent it.</li>
 <li><strong>An agent&#39;s shell reaches what the deny rules do not cover.</strong> The state&#39;s deny rules bind Claude
 Code&#39;s file tools; against the shell there are only the cheap rules above, which match text. The
 dashboard takes any request from this machine as yours: its identity check stops other machines and

@@ -115,6 +115,19 @@ test("a PR with unseen files or threads is read the safe way", () => {
 	assert.equal(pr.threadsOpen, 3);
 	assert.deepEqual(pr.closes, [3]);
 	assert.equal(pr.repo, "o/r");
+	// Its head lives on no repo GitHub still knows: its fork was deleted.
+	assert.equal(pr.headRepo, null);
+	const fork = normalizePr("o/r", {
+		...{ number: 6, body: "", changedFiles: 0, headRefName: "main", author: null },
+		...{
+			files: { nodes: [] },
+			reviewThreads: { totalCount: 0, nodes: [] },
+			reviews: { nodes: [] },
+		},
+		...{ closingIssuesReferences: { nodes: [] }, commits: { nodes: [] } },
+		headRepository: { nameWithOwner: "bob/r" },
+	});
+	assert.deepEqual([fork.headRepo, fork.headRef], ["bob/r", "main"]);
 });
 
 test("polling slows down under 20 % of the rate-limit budget", () => {
