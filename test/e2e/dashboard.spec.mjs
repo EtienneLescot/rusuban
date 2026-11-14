@@ -216,6 +216,40 @@ test("an item's card answers its card as the inbox does, then takes a request to
 	expect(over).toEqual([]);
 });
 
+test("an item's card unfolded in a graph zoomed far out reads at full size, in view, and answers", async ({
+	app,
+	page,
+	isMobile,
+}) => {
+	// The width the owner could not answer at, the graph zoomed out to about a third.
+	if (isMobile) await page.setViewportSize({ width: 464, height: 722 });
+	await goTo(page, "graph", isMobile);
+	for (let i = 0; i < 5; i++) await press(page.locator("#zoom-out"), isMobile);
+	const zoom = Number.parseInt(await page.locator("#zoom-pct").textContent(), 10);
+	expect(zoom).toBeLessThan(40);
+	const node = page.locator('[data-id="acme/widgets#21"]');
+	await press(node.locator(".head"), isMobile);
+	const card = node.locator(`[data-answer="${app.cards.acme}"]`);
+	const close = card.locator('[data-option="close"]');
+	// Drawn at its own size whatever the zoom, and slid into the screen.
+	const shown = await close.evaluate((el) => {
+		const r = el.getBoundingClientRect();
+		return {
+			scale: r.width / el.offsetWidth,
+			inside: r.left >= 0 && r.right <= innerWidth && r.top >= 0 && r.bottom <= innerHeight,
+		};
+	});
+	expect(shown.scale).toBeGreaterThan(0.99);
+	expect(shown.inside).toBe(true);
+	await press(close, isMobile);
+	await expect(close).toHaveAttribute("aria-pressed", "true");
+	await press(card.locator("[data-send]"), isMobile);
+	await expect(page.locator("#toast")).toHaveText("Answer sent");
+	expect(readJsonl("projects/acme/answers.jsonl")).toMatchObject([
+		{ item: "acme/widgets#21", card: app.cards.acme, option: "close" },
+	]);
+});
+
 test("a filter changes the list", async ({ page, isMobile }) => {
 	await goTo(page, "kanban", isMobile);
 	// Yours, the agents' (newest first), then those waiting on others.
