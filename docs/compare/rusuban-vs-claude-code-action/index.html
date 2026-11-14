@@ -56,7 +56,7 @@
 <tr><td>Where Claude Code runs</td><td>On your machine, Windows, macOS or Linux</td><td>In a GitHub Actions workflow, on the repo's runner</td></tr>
 <tr><td>How work starts</td><td>Rusuban reads every issue and PR, every 90 seconds by default, and judges what needs it</td><td>A mention of <code>@claude</code> in a comment, a review or a new issue, or any workflow event or schedule given a prompt</td></tr>
 <tr><td>What decides the work</td><td>Plain-text rules in <code>.rusuban/rules/</code>, the same for every item</td><td>The request in the comment, or the prompt in the workflow</td></tr>
-<tr><td>Merging</td><td>Rusuban's server merges what your rules allow, behind eight gates, on the exact head it checked</td><td>Claude cannot approve pull requests, and is instructed not to merge them</td></tr>
+<tr><td>Merging</td><td>Rusuban's server merges what your rules allow, behind eight gates, on the exact head it checked</td><td>Claude cannot approve pull requests, and is instructed not to merge branches</td></tr>
 <tr><td>Your decisions</td><td>Cards in one inbox for all your projects, on your desktop or your phone</td><td>Comments and pull requests on GitHub</td></tr>
 <tr><td>What you pay</td><td>Nothing for Rusuban. The agents run on your Claude plan</td><td>GitHub Actions minutes, plus Claude API tokens or a Claude subscription token</td></tr>
 <tr><td>Where prompts go</td><td>Where your Claude Code login sends them. Rusuban has no server of its own</td><td>To the Claude API or the cloud provider you set up</td></tr>
