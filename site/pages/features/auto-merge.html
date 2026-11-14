@@ -1,0 +1,75 @@
+<!--
+{
+	"title": "Auto-merge pull requests behind locks | Rusuban",
+	"description": "Rusuban merges a pull request alone only when your rules allow it and eight gates pass on the exact head it checked: CI green, no open thread, your locks.",
+	"nav": "Auto-merge behind locks"
+}
+-->
+<h1>Auto-merge pull requests, behind locks</h1>
+<p class="lede">Rusuban merges a pull request on its own only when two things agree. Your rules say this kind of PR may merge without a person, and eight gates pass on the exact commit it checked. Agents never merge: the server does, or nothing does.</p>
+
+<h2 id="at-a-glance">At a glance</h2>
+<div class="table"><table>
+<tbody>
+<tr><td>Who decides a PR may merge alone</td><td>A Claude Code judge, from the rules in your repo</td></tr>
+<tr><td>Who merges</td><td>Rusuban's server, never an agent</td></tr>
+<tr><td>What it checks</td><td>CI, reviews, review threads, mergeability, the judgment, your locks, a recorded proof, the merge switch</td></tr>
+<tr><td>On which commit</td><td>The head it checked, with <code>gh pr merge --match-head-commit</code></td></tr>
+<tr><td>How fast</td><td>At most one merge per read of the project, every 90 seconds by default</td></tr>
+<tr><td>Your override</td><td>A card's merge option merges that head once CI, threads, conflicts and the switch allow</td></tr>
+<tr><td>The off switch</td><td>One switch in the dashboard's header pauses every merge</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="how-a-pr-comes-to-merge">How a PR comes to merge</h2>
+<ol>
+<li><strong>Your rules say which PRs may merge alone.</strong> For example: "A bug fix with a test merges alone. A new dependency comes to me."</li>
+<li><strong>A judge reads the PR against them</strong> and decides, for that head, whether it may merge without a person, and why.</li>
+<li><strong>The server computes eight gates</strong> from live GitHub state, at every read.</li>
+<li><strong>When all eight pass and merges are armed</strong>, it merges that head and journals the merge with its gates. A new commit sends the PR back to the judge.</li>
+</ol>
+<p>A PR that does not merge shows, on its node in the dashboard, the first gate that stops it.</p>
+
+<h2 id="the-eight-gates">The eight gates</h2>
+<div class="table"><table>
+<thead><tr><th>Gate</th><th>Passes when</th></tr></thead>
+<tbody>
+<tr><td>CI</td><td>At least one check on the head, each one green, neutral or skipped, none pending, failed or waiting for an approval</td></tr>
+<tr><td>Reviews</td><td>No latest review of the head requests changes, and every required reviewer reviewed it</td></tr>
+<tr><td>Threads</td><td>No review thread is open</td></tr>
+<tr><td>Mergeable</td><td>Not a draft, no conflict, and rebaseable when the repo merges by rebase</td></tr>
+<tr><td>Judgment</td><td>The repo has rules, and the PR was judged on this head to merge alone</td></tr>
+<tr><td>Locks</td><td>It touches neither <code>.rusuban/</code> nor a locked path, renames no file, and stays within your size limits</td></tr>
+<tr><td>Evidence</td><td>A proof is recorded on its head when it needs one</td></tr>
+<tr><td>Switch</td><td>Merges are armed</td></tr>
+</tbody>
+</table></div>
+<p>The <a href="/docs/locks/">locks reference</a> lists each gate's exact conditions.</p>
+
+<h2 id="your-locks">Your locks</h2>
+<p>A repo adds its own locks in <code>.rusuban/locks.json</code>: paths a PR may not touch alone, size limits, required checks and reviewers, and zones that need a proof, such as a benchmark.</p>
+<pre><code>{
+	"lockedPaths": [".github/**", "package.json"],
+	"maxLines": 300,
+	"requiredChecks": ["test"]
+}</code></pre>
+<p>No text lifts a lock, not even your rules. A <code>locks.json</code> that does not validate stops every merge of its repo until it is fixed, so a typo never leaves a lock silently missing.</p>
+
+<h2 id="built-in-locks">Locks that always hold</h2>
+<ul>
+<li><strong>CI green on the exact head</strong>, with at least one check.</li>
+<li><strong>No open review thread.</strong></li>
+<li><strong>The head unchanged since the judgment.</strong></li>
+<li><strong>The rules never change without a person.</strong> A PR that touches <code>.rusuban/</code> never merges alone.</li>
+<li><strong>No direct push to a default branch.</strong> It is denied to agents, and a commit that reaches the branch outside a PR is flagged.</li>
+</ul>
+
+<h2 id="compared-with-github-auto-merge">Compared with GitHub's auto-merge</h2>
+<p><a href="https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/incorporating-changes-from-a-pull-request/automatically-merging-a-pull-request">GitHub's auto-merge</a>, once someone turns it on for a pull request, merges it when the branch's required reviews and status checks pass. Rusuban decides from your rules which PRs may merge at all, then checks its own gates whatever the branch requires: no open thread, the head it judged, your path and size locks. A PR merged another way, by a person or by GitHub's auto-merge, is flagged as a merge Rusuban did not make.</p>
+
+<h2 id="get-started">Get started</h2>
+<ol>
+<li><a href="/docs/install/">Install Rusuban</a> and keep merges paused at first.</li>
+<li>Write in your rules which PRs may merge alone, and put in <code>locks.json</code> what the server must check itself.</li>
+<li>Read the judgments for a while, then arm the switch.</li>
+</ol>

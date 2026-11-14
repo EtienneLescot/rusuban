@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Merge locks: what Rusuban checks before a merge | Rusuban</title>
+<meta name="description" content="The eight gates Rusuban's server checks on live GitHub state before it merges a pull request, the built-in locks, merge orders and a repo's locks.json.">
+<link rel="canonical" href="https://rusuban.dev/docs/locks/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Merge locks: what Rusuban checks before a merge | Rusuban">
+<meta property="og:description" content="The eight gates Rusuban's server checks on live GitHub state before it merges a pull request, the built-in locks, merge orders and a repo's locks.json.">
+<meta property="og:url" content="https://rusuban.dev/docs/locks/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page doc">
+<nav class="doc-nav" aria-label="Docs"><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/" aria-current="page">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></nav>
+<article class="prose">
+<h1 id="locks">Locks</h1>
+<p>Locks are what the server checks itself, on live GitHub state, before it merges. No model is asked
+and no text lifts them. Some are built in and hold in every project; a repo adds its own in
+<code>.rusuban/locks.json</code>.</p>
+<h2 id="the-gates">The gates</h2>
+<p>For every open PR the server computes eight gates. The PR&#39;s node shows the first one that stops it,
+and lists them all once unfolded. A PR merges alone only when every gate passes.</p>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Gate</th>
+<th>Stops a merge when</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>CI</td>
+<td>There is no check on the head, or only ignored ones; a check failed, was cancelled or timed out; a check is still running or waits for an approval, such as a fork&#39;s workflow; a required check is missing, or was only skipped.</td>
+</tr>
+<tr>
+<td>Reviews</td>
+<td>A reviewer&#39;s latest review of the head requests changes; a required reviewer has not reviewed the head.</td>
+</tr>
+<tr>
+<td>Threads</td>
+<td>A review thread is unresolved. Threads past the first hundred count as unresolved.</td>
+</tr>
+<tr>
+<td>Mergeable</td>
+<td>The PR is a draft, conflicts with its base, or GitHub has not computed it yet; for a rebase merge, it cannot be rebased.</td>
+</tr>
+<tr>
+<td>Judgment</td>
+<td>The repo has no rules; the PR is not judged, or was judged on another commit; it was judged not to merge alone (<code>pr.auto: false</code>).</td>
+</tr>
+<tr>
+<td>Locks</td>
+<td>It touches <code>.rusuban/</code> or a locked path; it is over the size limits; it renames a file; it changes more files than GitHub lists (100); the repo&#39;s <code>locks.json</code> does not validate.</td>
+</tr>
+<tr>
+<td>Evidence</td>
+<td>It touches an <code>evidence</code> zone, or its judgment asked for a proof, and no successful proof is recorded on its head.</td>
+</tr>
+<tr>
+<td>Switch</td>
+<td>Merges are paused.</td>
+</tr>
+</tbody></table></div>
+<h2 id="built-in-locks">Built-in locks</h2>
+<p>They hold in every project, and no setting lifts them:</p>
+<ul>
+<li><strong>CI green on the exact head</strong>: at least one check; every check run and status <code>success</code>, <code>neutral</code>
+or <code>skipped</code>; none pending, failed, cancelled, timed out or waiting for an approval.</li>
+<li><strong>No open review thread.</strong></li>
+<li><strong>The head unchanged since the judgment</strong>: a new commit sends the PR back to the judge.</li>
+<li><strong>No conflict</strong>, and rebaseable when the repo merges by rebase.</li>
+<li><strong><code>.rusuban/</code> never changes without a person</strong>: a PR that touches it never merges alone. A person
+merges it on GitHub; the agents never judge it, and the dashboard lists it under <strong>Rules &amp;
+settings</strong>, out of the graph and the kanban.</li>
+<li><strong>No direct push to a default branch</strong>: denied to agents, and a commit that reaches the branch outside
+a PR is flagged.</li>
+<li><strong>The merge switch</strong>, in the dashboard&#39;s header, for the whole instance. Merges start paused
+unless you arm them at <code>rusuban init</code>.</li>
+</ul>
+<p>The server also refuses on its own a draft, a PR with changes requested on its head, a PR that renames
+a file (a rename could move a file out of a locked path unseen), and a PR whose files it cannot all
+see.</p>
+<h2 id="how-the-server-merges">How the server merges</h2>
+<ul>
+<li><strong>At most one merge per read of the project.</strong></li>
+<li><strong>A person&#39;s merge order first</strong>, then a PR judged <code>auto</code> on its head whose every gate passes, the
+switch read again just before.</li>
+<li><strong>Exactly the head it checked</strong>: <code>gh pr merge --&lt;mergeMethod&gt; --match-head-commit &lt;head&gt;</code>.</li>
+<li><strong>Journaled</strong>, with its gates.</li>
+<li><strong>A merge GitHub refuses is never tried again on that head.</strong> It is journaled and flagged, and the
+agents put it on a card. Only a merge order given after the refusal, or the approval bypass turned
+on since, tries once more.</li>
+<li><strong>What the server did not do is flagged</strong>: a PR merged by someone else, a commit pushed straight to
+a default branch.</li>
+</ul>
+<h3 id="merge-orders">Merge orders</h3>
+<p>A PR&#39;s card may offer an option with <code>&quot;merge&quot;: true</code>. When you pick it, the server merges the PR on
+the head the card was written on, once:</p>
+<ul>
+<li>merges are armed: a paused switch holds the order until it is armed again;</li>
+<li>CI is green on that head, with the <code>requiredChecks</code> and <code>ignoredChecks</code> of <code>locks.json</code>;</li>
+<li>no review thread is open;</li>
+<li>the PR is mergeable, with no conflict;</li>
+<li>the head has not moved since the card.</li>
+</ul>
+<p>Your order lifts the rest, for that head only: the Reviews, Judgment, Locks and Evidence gates. On a
+PR judged to merge alone, which only a lock holds, the card waits in the inbox&#39;s <strong>Rules &amp; settings</strong>
+tab, marked <strong>Lock</strong>.</p>
+<h3 id="the-approval-bypass">The approval bypass</h3>
+<p>A branch that requires an approving review refuses the server&#39;s merges until someone approves.
+<code>rusuban project bypass &lt;id&gt; on</code> lets the server merge with <code>--admin</code> in that project, after it checks
+the branch&#39;s other rules itself. It is the owner&#39;s command, off for every new project, and never read
+from a repo. See <a href="/docs/security/#the-approval-bypass">security</a>.</p>
+<h2 id="locksjson"><code>locks.json</code></h2>
+<p>Optional. Without it, only the built-in locks hold.</p>
+<pre><code class="language-json">{
+	&quot;mergeMethod&quot;: &quot;squash&quot;,
+	&quot;lockedPaths&quot;: [&quot;.github/**&quot;, &quot;package.json&quot;, &quot;*.lock&quot;],
+	&quot;maxLines&quot;: 300,
+	&quot;maxFiles&quot;: 15,
+	&quot;sizeExempt&quot;: [&quot;*.test.*&quot;, &quot;docs/**&quot;],
+	&quot;requiredChecks&quot;: [&quot;test&quot;],
+	&quot;ignoredChecks&quot;: [&quot;Deploy preview&quot;],
+	&quot;requiredReviewers&quot;: [&quot;review-bot&quot;],
+	&quot;evidence&quot;: [{ &quot;paths&quot;: [&quot;src/engine/**&quot;], &quot;what&quot;: &quot;a benchmark within 5 % of the base branch&quot; }]
+}
+</code></pre>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>mergeMethod</code></td>
+<td><code>&quot;merge&quot;</code>, <code>&quot;squash&quot;</code> or <code>&quot;rebase&quot;</code></td>
+<td>How the server merges. Without it, <code>rebase</code>, and a PR must then be rebaseable.</td>
+</tr>
+<tr>
+<td><code>lockedPaths</code></td>
+<td>globs</td>
+<td>A PR that touches one never merges alone.</td>
+</tr>
+<tr>
+<td><code>maxLines</code></td>
+<td>a positive integer</td>
+<td>The most changed lines, added plus deleted, a PR may have and merge alone.</td>
+</tr>
+<tr>
+<td><code>maxFiles</code></td>
+<td>a positive integer</td>
+<td>The most changed files a PR may have and merge alone.</td>
+</tr>
+<tr>
+<td><code>sizeExempt</code></td>
+<td>globs</td>
+<td>Files left out of <code>maxLines</code>, <code>maxFiles</code> and the <code>evidence</code> zones.</td>
+</tr>
+<tr>
+<td><code>requiredChecks</code></td>
+<td>names</td>
+<td>Each must be on the head, and not only skipped. A name is a check&#39;s or a whole workflow&#39;s.</td>
+</tr>
+<tr>
+<td><code>ignoredChecks</code></td>
+<td>names</td>
+<td>Checks that never count toward CI green, a fork&#39;s workflow waiting for approval included. Never all of them: a head whose only checks are ignored is not green.</td>
+</tr>
+<tr>
+<td><code>requiredReviewers</code></td>
+<td>GitHub logins</td>
+<td>Each must have approved or commented on the head. Case and a <code>[bot]</code> suffix are ignored.</td>
+</tr>
+<tr>
+<td><code>evidence</code></td>
+<td><code>[{ &quot;paths&quot;: [globs], &quot;what&quot;: &quot;text&quot; }]</code></td>
+<td>A PR that touches these paths needs a proof recorded on its head, by a worker run other than the one that judged it. <code>what</code> tells the agents which proof.</td>
+</tr>
+</tbody></table></div>
+<h3 id="validation">Validation</h3>
+<p>The server validates the file at every read. One mistake (invalid JSON, an unknown field, a wrong
+type, an empty string in a list, a name both required and ignored) and the file yields no locks at all,
+only errors:</p>
+<ul>
+<li>every merge of the repo stops, at the Locks gate;</li>
+<li>the error is journaled and flagged in your inbox, and the agents see it in their context;</li>
+<li>fixing the file on the default branch lifts it at the next read.</li>
+</ul>
+<p>A typo never leaves a lock silently missing.</p>
+<h3 id="globs">Globs</h3>
+<div class="table"><table>
+<thead>
+<tr>
+<th>Pattern</th>
+<th>Matches</th>
+<th>Does not match</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>.github/**</code></td>
+<td><code>.github/workflows/ci.yml</code></td>
+<td><code>src/.github/x.yml</code></td>
+</tr>
+<tr>
+<td><code>docs/**</code></td>
+<td><code>docs/a.md</code>, <code>docs/img/b.png</code></td>
+<td><code>src/docs/a.md</code></td>
+</tr>
+<tr>
+<td><code>*.md</code></td>
+<td><code>README.md</code>, <code>docs/guide/a.md</code></td>
+<td><code>a.mdx</code></td>
+</tr>
+<tr>
+<td><code>package.json</code></td>
+<td><code>package.json</code>, <code>web/package.json</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>/package.json</code></td>
+<td><code>package.json</code></td>
+<td><code>web/package.json</code></td>
+</tr>
+<tr>
+<td><code>src/*.js</code></td>
+<td><code>src/a.js</code></td>
+<td><code>src/lib/a.js</code></td>
+</tr>
+<tr>
+<td><code>src/**/*.js</code></td>
+<td><code>src/a.js</code>, <code>src/lib/a.js</code></td>
+<td></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><code>*</code> stays within a folder, <code>?</code> is one character within a folder, <code>**</code> crosses folders.</li>
+<li>A pattern without a slash matches a file name at any depth, as in <code>.gitignore</code>. A pattern with a
+slash starts at the repo&#39;s root; a leading <code>/</code> is dropped.</li>
+<li>A folder is written <code>folder/**</code>: <code>folder/</code> alone matches nothing.</li>
+<li>Nothing else is special: <code>[ab]</code> and <code>{a,b}</code> match those characters as they are. Case counts.</li>
+</ul>
+</article>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

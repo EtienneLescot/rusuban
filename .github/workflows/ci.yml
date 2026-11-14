@@ -29,6 +29,8 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm test
+      # rusuban.dev is built into docs/: a page edited without a rebuild fails here.
+      - run: node scripts/site.mjs --check
 
   # Click tests of the dashboard (test/e2e), in headless Chromium at a desktop and a phone width.
   e2e:

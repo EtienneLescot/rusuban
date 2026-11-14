@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Test machines over SSH | Rusuban</title>
+<meta name="description" content="Give Rusuban's agents Linux, macOS or Windows machines over SSH, reserved one agent at a time, with a setup script for each system.">
+<link rel="canonical" href="https://rusuban.dev/docs/test-machines/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Test machines over SSH | Rusuban">
+<meta property="og:description" content="Give Rusuban's agents Linux, macOS or Windows machines over SSH, reserved one agent at a time, with a setup script for each system.">
+<meta property="og:url" content="https://rusuban.dev/docs/test-machines/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page doc">
+<nav class="doc-nav" aria-label="Docs"><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/" aria-current="page">Test machines</a></li></ul></nav>
+<article class="prose">
+<h1 id="test-machines">Test machines</h1>
+<p>Agents run a project&#39;s tests and measures on other machines too: a Mac for what only macOS shows, a
+Windows box with a GPU, a Linux server. Rusuban reaches them over SSH and gives each to one run at a
+time, through a lease held on the machine itself.</p>
+<h2 id="what-a-machine-needs">What a machine needs</h2>
+<ul>
+<li><strong>An SSH server</strong>, reachable from the host where Rusuban runs: on your network or your tailnet.</li>
+<li><strong>An account of its own for the agents</strong>, <code>rusuban</code>:<ul>
+<li>a standard user, never an administrator, and never your own account;</li>
+<li>reached with the host&#39;s SSH key only, no password.</li>
+</ul>
+</li>
+<li><strong>git</strong> on that account&#39;s PATH.</li>
+<li><strong>A workspace</strong>, <code>~/rusuban</code> by default. It holds one bare mirror per repo and a worktree per run,
+removed when the run ends.</li>
+</ul>
+<p>Agents run code there: the project&#39;s tests, and a contributor&#39;s when they measure a PR. Keep nothing
+on that account you would not show them.</p>
+<h2 id="adding-one">Adding one</h2>
+<ol>
+<li><p><strong>On the host</strong>, have an SSH key (<code>ssh-keygen -t ed25519</code> if <code>~/.ssh/id_ed25519.pub</code> does not
+exist). Give the machine a short alias in <code>~/.ssh/config</code>:</p>
+<pre><code>Host mac
+  HostName mac.example-tailnet.ts.net
+</code></pre>
+<p>Agents type the alias, never the address: a command naming a <code>.ts.net</code> address is refused to them
+(<code>docs/security.md</code>).</p>
+</li>
+<li><p><strong>On the machine</strong>, run the script for its system with the host&#39;s public key, as an
+administrator. Each script can run again safely.</p>
+<div class="table"><table>
+<thead>
+<tr>
+<th>System</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Linux (apt, dnf, pacman or zypper)</td>
+<td><code>sudo sh setup-linux.sh &quot;$(cat id_ed25519.pub)&quot;</code></td>
+</tr>
+<tr>
+<td>macOS</td>
+<td><code>sudo sh setup-macos.sh &quot;$(cat id_ed25519.pub)&quot;</code></td>
+</tr>
+<tr>
+<td>Windows, PowerShell as administrator</td>
+<td><code>.\setup-windows.ps1 -Key (Get-Content id_ed25519.pub)</code></td>
+</tr>
+</tbody></table></div>
+<ul>
+<li><strong>Linux</strong>: the script installs the OpenSSH server and git, and starts the server.</li>
+<li><strong>macOS</strong>: it needs git from the Command Line Tools (<code>xcode-select --install</code>), and turns on
+Remote Login.</li>
+<li><strong>Windows</strong>: it installs the OpenSSH server, opens port 22, and installs Git for Windows with
+winget if it is missing.</li>
+</ul>
+</li>
+<li><p><strong>Back on the host</strong>:</p>
+<ul>
+<li>connect once, to accept the machine&#39;s host key: <code>ssh -l rusuban mac exit</code>. Rusuban connects in
+batch mode and refuses a host key it has not seen.</li>
+<li>then add the machine:</li>
+</ul>
+<pre><code class="language-sh">rusuban machine add mac --caps gpu,screen-capture
+</code></pre>
+<p>It checks SSH, the account, git and the workspace, and makes the bare mirrors. A machine is one
+more place where agents run code, so the change waits for your confirmation: type its name in a
+terminal, or allow the card in the dashboard when Claude asked for it.</p>
+</li>
+</ol>
+<p><code>rusuban machine doctor mac</code> runs the same checks again. <code>rusuban machine probe</code> shows what the
+dashboard shows: online or offline, free or leased, and by which run.</p>
+<h2 id="your-own-desktop">Your own desktop</h2>
+<p>Add it with <code>--owner &lt;your GitHub login&gt;</code>.</p>
+<ul>
+<li>A run asks you on a card before it takes your desktop, and only when it names it, or when nothing
+else fits.</li>
+<li>A run that does not hold its lease is refused the desktop&#39;s alias: a hook checks each of its shell
+commands.</li>
+<li>In v0.1 the desktop must be yours, the owner of the instance: you are the one person with a
+dashboard to say yes in.</li>
+</ul>
+<h2 id="how-agents-use-a-machine">How agents use a machine</h2>
+<p>A run takes a machine with <code>rusuban lease &lt;machine&gt; --reason &lt;why&gt;</code>, or with <code>--os</code> and <code>--caps</code> for
+any machine that fits.</p>
+<ul>
+<li>With <code>--repo &lt;owner/repo&gt;</code>, the run gets its own worktree there.</li>
+<li>The lease ends with <code>rusuban release &lt;machine&gt;</code>, at the latest when the run ends, and never lasts
+past the machine&#39;s <code>maxLeaseMin</code> (60 minutes by default).</li>
+<li>A dead run&#39;s lease frees the machine at its expiry.</li>
+<li>The dashboard&#39;s Release button ends any lease.</li>
+</ul>
+</article>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

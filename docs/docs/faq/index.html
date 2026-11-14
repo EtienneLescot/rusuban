@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FAQ | Rusuban</title>
+<meta name="description" content="Rusuban's rules, merges, your machine and your accounts: whose Claude plan the agents use, who they act as on GitHub, and how to stop everything.">
+<link rel="canonical" href="https://rusuban.dev/docs/faq/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="FAQ | Rusuban">
+<meta property="og:description" content="Rusuban's rules, merges, your machine and your accounts: whose Claude plan the agents use, who they act as on GitHub, and how to stop everything.">
+<meta property="og:url" content="https://rusuban.dev/docs/faq/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page doc">
+<nav class="doc-nav" aria-label="Docs"><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/" aria-current="page">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></nav>
+<article class="prose">
+<h1 id="faq">FAQ</h1>
+<h2 id="rules">Rules</h2>
+<h3 id="does-rusuban-do-anything-before-i-write-rules">Does Rusuban do anything before I write rules?</h3>
+<p>No. A repo without <code>.rusuban/rules/*.md</code> is observed only: its items show in the dashboard, no agent
+judges them, nothing merges, and nothing is written on GitHub on the agents&#39; own initiative. Your own
+requests and tasks still run.</p>
+<h3 id="where-do-the-rules-go">Where do the rules go?</h3>
+<p>In <code>.rusuban/rules/*.md</code> on the default branch of each repo, with an optional <code>.rusuban/locks.json</code>.
+Rusuban reads them nowhere else. See <a href="/docs/rules/">Writing rules</a>.</p>
+<h3 id="can-a-pr-change-the-rules-it-is-judged-by">Can a PR change the rules it is judged by?</h3>
+<p>No. Rules are read from the default branch only, and a PR that touches <code>.rusuban/</code> never merges alone.</p>
+<h3 id="when-does-a-rules-change-apply">When does a rules change apply?</h3>
+<p>At the next read of the repo, 90 seconds by default, without a restart. Runs already at work keep the
+rules they started with. The change is journaled with its diff and flagged in your inbox.</p>
+<h3 id="what-do-the-agents-do-where-my-rules-say-nothing">What do the agents do where my rules say nothing?</h3>
+<p>They ask you on a card. When several cards ask the same, they propose the rule that would answer
+them, under <strong>Rules &amp; settings</strong>. See <a href="/docs/rules/#where-the-rules-are-silent">Writing rules</a>.</p>
+<h3 id="how-do-i-try-rules-without-risk">How do I try rules without risk?</h3>
+<p>Keep the merge switch paused: agents act as the rules say, and nothing merges until you arm it. A repo
+without rules is only read. <code>rusuban start --dry</code> goes further: the dashboard reads and shows, and
+starts no agent.</p>
+<h2 id="merges">Merges</h2>
+<h3 id="can-an-agent-merge">Can an agent merge?</h3>
+<p>No. Only the server merges, after its <a href="/docs/locks/">gates</a>, on the exact head it checked.</p>
+<h3 id="why-did-a-pr-not-merge">Why did a PR not merge?</h3>
+<p>Its node shows the first gate that stops it, and lists them all once unfolded. Common reasons: merges
+are paused, it was judged not to merge alone, a lock, CI not green yet, or GitHub refused the merge.</p>
+<h3 id="how-do-i-merge-a-pr-the-locks-stop">How do I merge a PR the locks stop?</h3>
+<p>Pick its card&#39;s merge option: the server merges that head once CI, threads and conflicts allow (see
+<a href="/docs/locks/#merge-orders">merge orders</a>). Or merge it yourself on GitHub, and Rusuban flags it as a merge
+it did not make.</p>
+<h3 id="my-branch-requires-an-approving-review-can-the-server-merge">My branch requires an approving review. Can the server merge?</h3>
+<p>Not on its own: GitHub refuses, the refusal goes on a card, and that head is not tried again. The
+<a href="/docs/security/#the-approval-bypass">approval bypass</a> lets the server merge with <code>--admin</code> in a project,
+after it checks the branch&#39;s other rules.</p>
+<h3 id="how-do-i-stop-everything">How do I stop everything?</h3>
+<ul>
+<li><strong>The switch</strong> in the dashboard&#39;s header pauses the server&#39;s merges in every project, the merge
+orders you give on cards included: they wait until it is armed again.</li>
+<li><strong>The Agents view</strong> stops a run.</li>
+<li><strong><code>rusuban project remove &lt;id&gt;</code></strong> stops a project; its files stay. While one of its runs waits or
+works, the command is refused.</li>
+</ul>
+<h2 id="your-machine-and-accounts">Your machine and accounts</h2>
+<h3 id="what-runs-on-my-machine-and-where">What runs on my machine, and where?</h3>
+<p>Headless <code>claude -p</code> sessions, on the model and under the <a href="/docs/security/#the-host-profile">host profile</a>
+you chose. The judge, the coordinator and tasks work in <code>~/.rusuban/scratch/&lt;project&gt;/</code>, unless a
+task names its own folder. Each worker gets a worktree of Rusuban&#39;s own clone of the repo, never your
+checkout. Anything else it makes goes in a work folder of its own, in <code>~/.rusuban/work/</code> unless
+<code>rusuban work-root</code> names another. Both are removed when it ends or stops.</p>
+<h3 id="whose-claude-plan-do-the-agents-use">Whose Claude plan do the agents use?</h3>
+<p>Yours: they run on your <code>claude</code> login, within its usage limits. A run that hits a limit waits for the
+reset, and the dashboard says until when.</p>
+<h3 id="who-do-the-agents-act-as-on-github">Who do the agents act as on GitHub?</h3>
+<p>You. They use your <code>gh</code> login, so their comments and PRs appear under your account.</p>
+<h3 id="where-is-the-state">Where is the state?</h3>
+<p>In <code>~/.rusuban/</code> (<code>RUSUBAN_HOME</code> overrides it), never in your repos.</p>
+<h3 id="can-several-people-share-an-instance">Can several people share an instance?</h3>
+<p>No. An instance is one person&#39;s, and every card shows in its owner&#39;s inbox. A card can name another
+GitHub login, and then says so.</p>
+<h3 id="where-do-tasks-that-are-about-no-repo-go">Where do tasks that are about no repo go?</h3>
+<p>In a project without a repo: <code>rusuban project create publications --title Publications</code>, then give
+each task <code>project: publications</code>. The project holds their runs and conversations, and its page shows
+them where a graph would be. Nothing is read, judged or merged on GitHub for it.</p>
+<p>Each project&#39;s page shows only its own tasks, runs and conversations; the inbox gathers every
+project&#39;s cards.</p>
+<h3 id="can-i-use-another-forge-or-another-agent">Can I use another forge, or another agent?</h3>
+<p>No. GitHub only, through <code>gh</code>, and Claude Code only.</p>
+<h3 id="in-what-language-do-the-agents-write">In what language do the agents write?</h3>
+<p>Your rules may be in any language. Cards, the journal and final answers are in English; messages on
+GitHub follow your rules.</p>
+</article>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!--
+{
+	"title": "Rusuban: Claude Code autopilot for GitHub maintainers",
+	"description": "Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.",
+	"nav": "Home",
+	"product": true,
+	"bare": true
+}
+-->
+<section class="wrap hero">
+<div class="hero-text">
+<h1><span class="kicker">Claude Code autopilot for GitHub maintainers</span> Minds your GitHub projects <span class="away">while you're away</span></h1>
+<p class="lead">For maintainers who use Claude Code. Agents judge every issue and PR against the rules you write in your repo, do what those rules allow, and bring you the rest as a card.</p>
+<div class="cta">
+<a class="btn btn-primary btn-lg" href="/docs/rules/">Write your first rules</a>
+<div class="install"><code id="cmd">npm install -g rusuban</code><button type="button" class="icon-btn" data-copy="cmd" aria-label="Copy the install command"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"></rect><path d="M5 15V5a2 2 0 0 1 2-2h10"></path></svg></button></div>
+</div>
+<p class="needs">Node 22 or later, gh and Claude Code · Windows, macOS, Linux · MIT</p>
+</div>
+<figure class="house" aria-label="Rusuban's inbox: one card waits for you, the rest was done without you">
+<div class="window">
+<div class="window-bar">
+<span class="waiting"><span class="n">1</span>waits for you</span>
+<span class="pill"><span class="dot"></span>GitHub <span class="meta">read 37 s ago</span></span>
+</div>
+<article class="card">
+<div class="row"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Widgets <span class="ref">PR #231</span><span class="tag tag-kind">Feature</span><span class="tag tag-you">for you · now</span></div>
+<h2>Merge dark mode as it is?</h2>
+<p class="ctx">Asked for by 31 people, CI green on the three systems. <strong>Missing: a settings toggle.</strong></p>
+<div class="options">
+<div class="option rec"><b>Finish it and merge <span class="tag tag-rec">Recommended</span></b><span>A worker adds the toggle; the server merges once green</span></div>
+<div class="pair">
+<div class="option"><b>Merge it as it is</b><span>The server merges now</span></div>
+<div class="option"><b>Wait again</b><span>I look again in 2 days</span></div>
+</div>
+</div>
+</article>
+<div class="done">
+<b>Done without you</b>
+<ul>
+<li><time>13:46</time>Asked @dana to add a test to #233</li>
+<li><time>13:10</time>Merged #229, Fix the zoom shortcut on macOS</li>
+<li><time>12:23</time>Closed #221 as a duplicate of #218</li>
+</ul>
+</div>
+</div>
+<figcaption>From a demo project</figcaption>
+</figure>
+</section>
+
+<section class="band">
+<div class="wrap word">
+<span lang="ja">留守番</span>
+<p>Rusuban is the Japanese word for whoever minds the house while you are out</p>
+</div>
+</section>
+
+<section id="how" class="wrap section">
+<div class="section-head">
+<span class="mark" lang="ja" aria-hidden="true">留守</span>
+<div>
+<h2>What happens while you're away</h2>
+<p class="muted">Rusuban runs on your machine. It acts where your rules allow, and seals in vermilion only what they keep for you. <a href="/docs/how-it-works/">How it works</a></p>
+</div>
+</div>
+<ol class="steps">
+<li class="step"><span class="n">1</span><h3>Reads</h3><p>Every issue, PR, review and CI run of your repos</p><span class="tag">Rusuban</span></li>
+<li class="step"><span class="n">2</span><h3>Judges</h3><p>Each item against the rules in its repo</p><span class="tag">Claude Code</span></li>
+<li class="step"><span class="n">3</span><h3>Acts</h3><p>Comments, rebases, fixes in a worktree of its own</p><span class="tag">Claude Code</span></li>
+<li class="step"><span class="n">4</span><h3>Merges</h3><p>Only behind locks, on the exact head it checked</p><span class="tag">Rusuban's server</span></li>
+<li class="step you"><span class="n">5</span><h3>Asks you</h3><p>Only what your rules keep for you, on a card</p><span class="tag tag-you">for you</span></li>
+</ol>
+<div class="rules">
+<div>
+<h3>Rules are plain text in your repo</h3>
+<p class="muted">They live in <code>.rusuban/rules/</code>, on the default branch. Write orders and give every wait a duration. Without rules, Rusuban only watches.</p>
+<a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules">Start from an example</a>
+</div>
+<figure>
+<figcaption>.rusuban/rules/01-autonomy.md</figcaption>
+<pre>## Alone
+
+- Fix a bug that can be reproduced: a worker writes the fix and a
+  test that fails without it, then opens the PR.
+- Close a duplicate, with a link to the original.
+
+## To the owner, with a card
+
+- A feature, as an issue or a PR.
+- A new dependency.</pre>
+</figure>
+</div>
+</section>
+
+<section class="band">
+<div class="wrap locks">
+<div>
+<div class="section-head">
+<span class="mark" lang="ja" aria-hidden="true">錠</span>
+<div>
+<h2>Agents never merge</h2>
+<p class="muted">They run on your machine, with your logins, on repos anyone can write to. So the server holds them with checks that do not depend on their obeying. It merges a PR alone only when all eight pass, on the head it checked.</p>
+</div>
+</div>
+<a href="/docs/security/">Read the security model</a>
+</div>
+<ul class="gates" aria-label="The eight merge gates">
+<li>CI green</li>
+<li>Reviews</li>
+<li>No open thread</li>
+<li>Mergeable</li>
+<li>Judged on this head</li>
+<li>Your locks</li>
+<li>Proof recorded</li>
+<li>The switch armed</li>
+</ul>
+</div>
+</section>
+
+<section class="wrap section">
+<div class="section-head">
+<span class="mark" lang="ja" aria-hidden="true">判</span>
+<div>
+<h2>One inbox, only your decisions</h2>
+</div>
+</div>
+<dl class="features">
+<div><dt>Every project in one inbox</dt><dd>A card says what the agents did and asks one question. Each option says what happens next.</dd></div>
+<div><dt>Your desktop or your phone</dt><dd>Answer in the dashboard, or on your phone through your tailnet. Pings on ntfy, Slack, Discord, Teams or e-mail.</dd></div>
+<div><dt>Rules that grow</dt><dd>When several cards ask the same thing, Rusuban proposes the rule that would answer them, as a PR you merge.</dd></div>
+<div><dt>Every Claude conversation</dt><dd>The ones about an issue or a PR, linked to it, read and answered from the dashboard.</dd></div>
+<div><dt>Tasks written as text</dt><dd>Run daily or on a click, in a project of their own when they concern no repo.</dd></div>
+<div><dt>Test machines over SSH</dt><dd>Reserved one agent at a time. Your own desktop only after your yes.</dd></div>
+</dl>
+</section>
+
+<section id="start" class="band">
+<div class="wrap section">
+<div class="section-head">
+<span class="mark" lang="ja" aria-hidden="true">掟</span>
+<div>
+<h2>Two commands, then your rules</h2>
+<p class="muted">The <a href="/docs/install/">install guide</a> has the details.</p>
+</div>
+</div>
+<ol class="start">
+<li><span>1. Install</span><code>npm install -g rusuban</code></li>
+<li><span>2. Set up</span><code>rusuban init</code><p>It asks for the model, what agents may run, and your first repo.</p></li>
+<li><span>3. Write your rules</span><code>.rusuban/rules/*.md</code><p>Or start from an <a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules">example</a>.</p></li>
+</ol>
+</div>
+</section>

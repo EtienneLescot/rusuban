@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Install Rusuban on Windows, macOS or Linux | Rusuban</title>
+<meta name="description" content="Install Rusuban with npm: Node 22 or later, gh and Claude Code logged in. Then rusuban init sets up the service, your first repo and the dashboard.">
+<link rel="canonical" href="https://rusuban.dev/docs/install/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Install Rusuban on Windows, macOS or Linux | Rusuban">
+<meta property="og:description" content="Install Rusuban with npm: Node 22 or later, gh and Claude Code logged in. Then rusuban init sets up the service, your first repo and the dashboard.">
+<meta property="og:url" content="https://rusuban.dev/docs/install/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}},{"@type":"SoftwareApplication","@id":"https://rusuban.dev/#software","name":"Rusuban","applicationCategory":"DeveloperApplication","applicationSubCategory":"GitHub maintenance automation","operatingSystem":"Windows, macOS, Linux","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","url":"https://rusuban.dev/","installUrl":"https://rusuban.dev/docs/install/","downloadUrl":"https://www.npmjs.com/package/rusuban","softwareHelp":"https://rusuban.dev/docs/","softwareRequirements":"Node.js 22 or later, GitHub CLI (gh), Claude Code","license":"https://github.com/EtienneLescot/rusuban/blob/main/LICENSE","isAccessibleForFree":true,"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"featureList":["Claude Code judges every issue and pull request against rules written in the repo","Agents comment, rebase and fix in worktrees of their own","Only the server merges, behind locks checked on live GitHub state","One inbox of cards for the decisions the rules keep for the owner","Answers from a phone through Tailscale; pings on ntfy, Slack, Discord, Teams or e-mail","Recurring tasks written as text"],"sameAs":["https://www.npmjs.com/package/rusuban"],"publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page doc">
+<nav class="doc-nav" aria-label="Docs"><ul><li><a href="/docs/install/" aria-current="page">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></nav>
+<article class="prose">
+<h1>Install Rusuban</h1>
+<p class="lede">Rusuban is an npm package. It runs on your own machine, Windows, macOS or Linux, as a service with a dashboard in your browser.</p>
+
+<h2 id="what-you-need">What you need</h2>
+<ul>
+<li><strong>Node.js 22 or later.</strong></li>
+<li><strong>The GitHub CLI, <code>gh</code>, logged in.</strong> The agents act on GitHub through this login, so their comments and PRs appear under your account.</li>
+<li><strong>Claude Code, <code>claude</code>, logged in.</strong> The agents run on your Claude plan, within its usage limits.</li>
+</ul>
+<p>Rusuban itself is free and open source, under the MIT license.</p>
+
+<h2 id="install-and-set-up">Install and set up</h2>
+<pre><code>npm install -g rusuban
+rusuban init</code></pre>
+<p><code>rusuban init</code> asks three things:</p>
+<ol>
+<li><strong>The Claude model</strong> every run uses. Runs never fall back to Claude Code's default.</li>
+<li><strong>What agents may run on this machine</strong>: only what you allow (<code>allowlist</code>), or anything a deny rule does not stop (<code>bypass</code>). The <a href="/docs/security/#the-host-profile">security model</a> explains both.</li>
+<li><strong>Whether to arm automatic merges.</strong> Merges stay paused unless you arm them, here or later with the switch in the dashboard's header.</li>
+</ol>
+<p>It then adds your first repo, installs the service and opens the dashboard.</p>
+<p>On Linux without a desktop session, run <code>loginctl enable-linger</code> once. Otherwise systemd stops the service when you log out.</p>
+
+<h2 id="write-your-rules">Write your rules</h2>
+<p>Until a repo has rules, Rusuban only watches it: its items show in the dashboard, no agent judges them, and nothing merges.</p>
+<p>Rules are Markdown files in <code>.rusuban/rules/</code>, on the repo's default branch. Start from one of the <a href="https://github.com/EtienneLescot/rusuban/tree/main/examples/rules">examples</a>, then read <a href="/docs/rules/">Writing rules</a>.</p>
+
+<h2 id="add-repos">Add repos</h2>
+<pre><code>rusuban project add owner/repo
+rusuban project list</code></pre>
+<p>With <code>--to &lt;project&gt;</code>, the repo joins an existing project. A project can hold several repos, and its runs see the rules of each.</p>
+
+<h2 id="answer-from-your-phone">Answer from your phone</h2>
+<pre><code>rusuban remote enable</code></pre>
+<p>The dashboard is then served on your tailnet through Tailscale Serve, never through Tailscale Funnel or a public address. It answers only you: the identity Tailscale gives each request must match the owner's login in your config.</p>
+
+<h2 id="get-pinged">Get pinged</h2>
+<pre><code>rusuban channel add ntfy https://ntfy.sh/&lt;your-topic&gt;
+rusuban channel test &lt;id&gt;</code></pre>
+<p>A channel sends cards to ntfy, Slack, Discord, Teams or e-mail. An urgent card goes at once. The others go together at the channel's digest time (<code>--digest HH:MM</code>), never in its quiet hours (<code>--quiet HH:MM-HH:MM</code>).</p>
+
+<h2 id="try-it-without-risk">Try it without risk</h2>
+<ul>
+<li><strong>Keep merges paused.</strong> Agents act as your rules say, and nothing merges until you arm the switch.</li>
+<li><strong>Run <code>rusuban start --dry</code>.</strong> The dashboard reads and shows, and starts no agent.</li>
+</ul>
+
+<h2 id="where-things-live">Where things live</h2>
+<p>Rusuban keeps its state in <code>~/.rusuban/</code>, never in your repos. <code>RUSUBAN_HOME</code> moves it. Agents work in Rusuban's own clones and worktrees, never in your checkout.</p>
+
+<h2 id="next">Next</h2>
+<ul>
+<li><a href="/docs/how-it-works/">How it works</a></li>
+<li><a href="/docs/rules/">Writing rules</a></li>
+<li><a href="/docs/security/">Security model</a>, before agents run commands on your machine</li>
+</ul>
+</article>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

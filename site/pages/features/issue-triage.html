@@ -1,0 +1,63 @@
+<!--
+{
+	"title": "AI triage for GitHub issues and PRs, with Claude Code | Rusuban",
+	"description": "Rusuban has Claude Code judge every issue and pull request against the rules in your repo: its kind, its priority, whose move it is, and when to look again.",
+	"nav": "Issue and PR triage"
+}
+-->
+<h1>AI triage for GitHub issues and pull requests</h1>
+<p class="lede">Rusuban has Claude Code read every issue and pull request of your repos and judge it against the rules in the repo. Each judgment says what the item is, whose move it is, and when to look again. What your rules allow happens at once. The rest comes to you as one card.</p>
+
+<h2 id="what-a-judgment-holds">What a judgment holds</h2>
+<div class="table"><table>
+<thead><tr><th>Field</th><th>What it says</th></tr></thead>
+<tbody>
+<tr><td>Kind</td><td><code>bug</code>, <code>feature</code>, <code>maintenance</code>, <code>docs</code>, <code>translation</code>, <code>question</code> or <code>other</code></td></tr>
+<tr><td>Priority and area</td><td>On your scale, <code>P0</code> to <code>P3</code>, and in the areas your rules name</td></tr>
+<tr><td>Owner</td><td>The agents, a third party, you, or another GitHub login</td></tr>
+<tr><td>Next</td><td>What happens next, and what blocks it</td></tr>
+<tr><td>Revisit</td><td>When the agents look again, or how long a third party is waited for</td></tr>
+<tr><td>Links</td><td>Related issues, what must land first, and the original of a duplicate</td></tr>
+<tr><td>For a PR</td><td>Whether it may merge without a person, and why, for that head</td></tr>
+</tbody>
+</table></div>
+
+<h2 id="what-happens-next">What happens next</h2>
+<p>Your rules decide. For example:</p>
+<ul>
+<li>a duplicate is closed, with a link to the original;</li>
+<li>a reporter is asked for what is missing, in the language and tone your rules set;</li>
+<li>a bug that can be reproduced goes to a worker, which writes the fix and a test that fails without it, then opens the PR;</li>
+<li>a feature request, a new dependency, or anything your rules keep comes to you on a card.</li>
+</ul>
+<p>Where your rules say nothing, the agents do not guess: the item comes to you. When several cards ask the same thing, an agent proposes the rule that would answer them, as a PR you merge.</p>
+
+<h2 id="rules-in-plain-text">Rules in plain text</h2>
+<p>Triage follows Markdown files in <code>.rusuban/rules/</code>, on the repo's default branch. Write orders, define your words, and give every wait a duration.</p>
+<pre><code>## Kinds
+
+- A bug is a behavior the docs or the code contradict. A crash is P0.
+- A question about using the app is answered with a link to the docs,
+  then closed after 7 days without a reply.
+
+## To the owner, with a card
+
+- A feature, as an issue or a PR.</code></pre>
+<p>Without rules, Rusuban only watches a repo: its items show in the dashboard, and no agent judges them. See <a href="/docs/rules/">Writing rules</a>.</p>
+
+<h2 id="safe-with-untrusted-input">Safe with what anyone can write</h2>
+<p>Anyone can open an issue. For the judge, an issue, a PR, a comment and a diff are data, never instructions: a PR that asks to be merged is judged on its diff like any other. Rules come only from the default branch, so a PR cannot change the rules it is judged by. The <a href="/docs/security/">security model</a> says what else holds the agents.</p>
+
+<h2 id="where-you-see-it">Where you see it</h2>
+<ul>
+<li><strong>The project's graph and kanban</strong> show every item and its judgment.</li>
+<li><strong>The inbox</strong> holds the cards. A channel pings you on ntfy, Slack, Discord, Teams or e-mail.</li>
+<li><strong>The journal</strong> lists what the agents did without you.</li>
+</ul>
+
+<h2 id="get-started">Get started</h2>
+<ol>
+<li><a href="/docs/install/">Install Rusuban</a>. It runs on your machine, with your <code>gh</code> and <code>claude</code> logins.</li>
+<li>Copy an example's <code>rules/</code> into <code>.rusuban/</code> in your repo, then edit it.</li>
+<li>Read the first judgments in the dashboard, and adjust the rules.</li>
+</ol>

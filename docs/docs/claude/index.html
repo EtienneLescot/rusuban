@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Setting Rusuban up from Claude Code | Rusuban</title>
+<meta name="description" content="Rusuban's MCP server lets Claude Code read your instance and change its settings. A change that widens what agents may do waits for your yes.">
+<link rel="canonical" href="https://rusuban.dev/docs/claude/">
+<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Rusuban">
+<meta property="og:title" content="Setting Rusuban up from Claude Code | Rusuban">
+<meta property="og:description" content="Rusuban's MCP server lets Claude Code read your instance and change its settings. A change that widens what agents may do waits for your yes.">
+<meta property="og:url" content="https://rusuban.dev/docs/claude/">
+<meta property="og:image" content="https://rusuban.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rusuban, the Claude Code autopilot for GitHub maintainers">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" type="image/png" href="/images/rusuban-seal.png">
+<link rel="apple-touch-icon" href="/images/rusuban-seal.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@700&text=%E7%95%AA&display=swap">
+<link rel="stylesheet" href="/site.css">
+<script>
+	// The system's theme, unless the visitor chose one here before.
+	try { const t = localStorage.getItem("theme"); if (t === "light" || t === "dark") document.documentElement.dataset.theme = t; } catch {}
+</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"Organization","@id":"https://rusuban.dev/#organization","name":"Rusuban","url":"https://rusuban.dev/","logo":"https://rusuban.dev/images/rusuban-seal.png","sameAs":["https://github.com/EtienneLescot/rusuban"]},{"@type":"WebSite","@id":"https://rusuban.dev/#website","name":"Rusuban","url":"https://rusuban.dev/","description":"Rusuban runs Claude Code on your GitHub issues and PRs, on your machine. Agents follow the rules you write, and call you only when those rules say so.","inLanguage":"en","publisher":{"@id":"https://rusuban.dev/#organization"}}]}</script>
+</head>
+<body>
+<header class="top">
+<nav class="wrap" aria-label="Site">
+<a class="brand" href="/"><span class="seal" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<div class="links">
+<a href="/docs/how-it-works/">How it works</a>
+<a href="/docs/install/">Get started</a>
+<a href="/docs/">Docs</a>
+<a class="btn" href="https://github.com/EtienneLescot/rusuban">GitHub</a>
+<button type="button" class="icon-btn" id="theme" aria-label="Switch theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v18a9 9 0 0 0 0-18z" fill="currentColor"></path></svg></button>
+</div>
+</nav>
+</header>
+<main id="top">
+<div class="wrap page doc">
+<nav class="doc-nav" aria-label="Docs"><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/" aria-current="page">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></nav>
+<article class="prose">
+<h1 id="setting-rusuban-up-from-claude">Setting Rusuban up from Claude</h1>
+<p>Everything you can set with <code>rusuban</code> commands, you can ask Claude Code to set. <code>rusuban init</code>
+registers Rusuban&#39;s MCP server for your user; any Claude Code session on this machine then has its
+tools.</p>
+<h2 id="what-claude-can-do">What Claude can do</h2>
+<ul>
+<li><strong>Read the instance</strong>: projects, their items and cards, runs, tasks, the journal.</li>
+<li><strong>Change a setting</strong>: add a repo, create or remove a project, a project&#39;s approval bypass, the
+host profile, the merge switch, the limits, the runs&#39; model, the work root, the owner, a task, a
+channel, remote access.</li>
+</ul>
+<p>Ask in your own words: &quot;watch acme/widgets in Rusuban&quot;, &quot;pause the merges&quot;, &quot;write a task that drafts
+the release notes every morning&quot;.</p>
+<h2 id="what-waits-for-you">What waits for you</h2>
+<p>A change that widens what agents may do, or where data goes, never applies from Claude. It waits as a
+card in the dashboard&#39;s inbox, under <strong>Rules &amp; settings</strong>, marked <strong>Setting</strong>, with two answers:
+<strong>Allow it</strong> or <strong>Don&#39;t allow it</strong>. Claude tells you it is pending.</p>
+<p>What widens:</p>
+<ul>
+<li>a project added, or a repo added to one: agents act on a repo as its rules say;</li>
+<li>a project&#39;s approval bypass turned on, the merge switch armed;</li>
+<li>the host profile set to <code>bypass</code>;</li>
+<li>a test machine added, since agents run code on it;</li>
+<li>the limits raised, a new owner;</li>
+<li>a task written or changed: its card shows the task, or the diff of its file;</li>
+<li>a channel added, since cards leave for its target;</li>
+<li>remote access turned on.</li>
+</ul>
+<p>What narrows applies at once: the bypass off, the switch paused, the host profile set to <code>allowlist</code>,
+the limits lowered, a project, a channel or a task removed, remote access off. So does a project
+without a repo created: it starts nothing by itself, and each of its tasks waits for you. So does the
+runs&#39; model: every run uses the one you chose, never Claude Code&#39;s default, and without one no run
+starts. So does the work root: the next workers get their work folders there.</p>
+<p>In a terminal, <code>rusuban</code> asks you to type the change&#39;s target instead of making a card. Claude&#39;s own
+shell has no terminal: there, the change waits for the card too.</p>
+<h2 id="what-claude-never-does">What Claude never does</h2>
+<ul>
+<li><strong>Answer a card.</strong> Cards are for you: an agent would otherwise approve its own proposals.</li>
+<li><strong>Reach the settings from a Rusuban run.</strong> The agents Rusuban starts have the MCP server and the
+owner&#39;s commands denied, and both refuse to run inside a run.</li>
+</ul>
+<p>Under the <code>bypass</code> host profile, an agent&#39;s shell can still get around these limits. The
+<a href="/docs/security/#residual-risks">security model</a> says how far they go.</p>
+<h2 id="every-change-is-journaled">Every change is journaled</h2>
+<p>Each setting goes to the journal with where it came from: a terminal, a command without a terminal,
+Claude through the MCP, or your answer in the dashboard. Ask Claude for the journal, or open it in
+the dashboard.</p>
+</article>
+</div>
+</main>
+<footer class="foot">
+<div class="wrap foot-inner">
+<div class="foot-brand">
+<a class="brand" href="/"><span class="seal seal-sm" lang="ja" aria-hidden="true">番</span>Rusuban</a>
+<p>The Claude Code autopilot for GitHub maintainers. Free and open source, MIT license.</p>
+</div>
+<nav class="foot-cols" aria-label="All pages">
+<div><p>Docs</p><ul><li><a href="/docs/install/">Install</a></li><li><a href="/docs/how-it-works/">How it works</a></li><li><a href="/docs/rules/">Writing rules</a></li><li><a href="/docs/locks/">Locks</a></li><li><a href="/docs/security/">Security model</a></li><li><a href="/docs/faq/">FAQ</a></li><li><a href="/docs/claude/">Set up from Claude</a></li><li><a href="/docs/test-machines/">Test machines</a></li></ul></div>
+<div><p>Features</p><ul><li><a href="/features/auto-merge/">Auto-merge behind locks</a></li><li><a href="/features/issue-triage/">Issue and PR triage</a></li><li><a href="/features/scheduled-tasks/">Scheduled Claude Code tasks</a></li></ul></div>
+<div><p>Compare</p><ul></ul></div>
+<div><p>Project</p><ul><li><a href="https://github.com/EtienneLescot/rusuban">GitHub</a></li><li><a href="https://www.npmjs.com/package/rusuban">npm</a></li><li><a href="https://github.com/EtienneLescot/rusuban/blob/main/CHANGELOG.md">Changelog</a></li><li><a href="https://github.com/EtienneLescot/rusuban/issues">Issues</a></li></ul></div>
+</nav>
+</div>
+</footer>
+<script src="/site.js"></script>
+</body>
+</html>

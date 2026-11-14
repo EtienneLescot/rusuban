@@ -1,0 +1,35 @@
+# Rusuban
+
+> Rusuban is a free, MIT-licensed autopilot for maintainers of GitHub projects, installed from npm. It runs on the maintainer's own machine (Windows, macOS or Linux) and reads their repos' issues and pull requests. Claude Code judges each one against rules written in the repo, in `.rusuban/rules/`. Agents comment, rebase and fix in worktrees of their own, and never merge: Rusuban's server merges, only when its gates pass on the exact head it checked, such as CI green, no open review thread and the repo's locks. What the rules keep for the owner comes to them as a card in a local dashboard, answered from a desktop or a phone.
+
+Rusuban (留守番) is also the Japanese word for minding the house while its owner is out. This file is about the software.
+
+- Official site: https://rusuban.dev/
+- Source code and issues: https://github.com/EtienneLescot/rusuban
+- npm package: https://www.npmjs.com/package/rusuban
+- Maintainer: Etienne Lescot (https://github.com/EtienneLescot)
+
+## Install
+
+- `npm install -g rusuban`, then `rusuban init`. It needs Node.js 22 or later, the GitHub CLI (`gh`) and Claude Code (`claude`), both logged in.
+- The agents run on the owner's Claude plan, and act on GitHub through the owner's `gh` login.
+- Rusuban works with GitHub only, and with Claude Code only.
+
+## Docs
+
+- [Install](https://rusuban.dev/docs/install/): requirements, `rusuban init`, rules, answering from a phone, channels
+- [How it works](https://rusuban.dev/docs/how-it-works/): the loop (read, judge, act, merge, ask), the runs, the cards
+- [Writing rules](https://rusuban.dev/docs/rules/): where the rules live, how each run gets them, what to write, how to try them
+- [Locks](https://rusuban.dev/docs/locks/): the eight merge gates, the built-in locks, merge orders and `locks.json`
+- [Security model](https://rusuban.dev/docs/security/): what is trusted, the deny rules, the host profile, the dashboard's checks, the residual risks
+- [FAQ](https://rusuban.dev/docs/faq/): rules, merges, the owner's machine and accounts
+- [Setting Rusuban up from Claude](https://rusuban.dev/docs/claude/): its MCP server, and the changes that wait for the owner's yes
+- [Test machines](https://rusuban.dev/docs/test-machines/): Linux, macOS or Windows machines over SSH, one agent at a time
+
+The docs that live in the repository are also served as Markdown: https://rusuban.dev/writing-rules.md, https://rusuban.dev/locks.md, https://rusuban.dev/security.md, https://rusuban.dev/faq.md, https://rusuban.dev/claude.md and https://rusuban.dev/machines/README.md.
+
+## Features
+
+- [Auto-merge behind locks](https://rusuban.dev/features/auto-merge/): which PRs merge without a person, and the gates the server checks first
+- [Issue and PR triage](https://rusuban.dev/features/issue-triage/): what a judgment holds, and what happens next
+- [Scheduled Claude Code tasks](https://rusuban.dev/features/scheduled-tasks/): a task as a text file, run at its times or on a click
