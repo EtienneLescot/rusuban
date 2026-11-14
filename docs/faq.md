@@ -77,7 +77,9 @@ checkout. Anything else it makes goes in a work folder of its own, in `~/.rusuba
 ### Whose Claude plan do the agents use?
 
 Yours: they run on your `claude` login, within its usage limits. A run that hits a limit waits for the
-reset, and the dashboard says until when.
+reset, and the dashboard says until when. If that login expires, no run starts until you run
+`claude auth login` again on the host: the dashboard says so once, and the waiting runs start by
+themselves when you are logged in.
 
 ### Who do the agents act as on GitHub?
 

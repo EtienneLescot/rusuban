@@ -31,6 +31,7 @@ import {
 	usageLimitOf,
 } from "../src/agents.mjs";
 import { append, homePath, read, readJsonl, saveConfig, write } from "../src/home.mjs";
+import { runsOf } from "../src/server.mjs";
 import { changeSetting, confirmRequest, tailscale } from "../src/settings.mjs";
 
 const FAKE = [
@@ -45,7 +46,13 @@ const PR = { repo: "o/r", n: 1, head: "abc", files: [], ci: { state: "success" }
 beforeEach(() => {
 	process.env.RUSUBAN_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "rusuban-agents-"));
 	launched.length = 0;
-	for (const k of ["FAKE_CLAUDE_MS", "FAKE_CLAUDE_EXIT", "FAKE_CLAUDE_LIMIT", "FAKE_CLAUDE_MODEL"])
+	for (const k of [
+		"FAKE_CLAUDE_MS",
+		"FAKE_CLAUDE_EXIT",
+		"FAKE_CLAUDE_LIMIT",
+		"FAKE_CLAUDE_MODEL",
+		"FAKE_CLAUDE_AUTH",
+	])
 		delete process.env[k];
 	write("projects/demo/live.json", {
 		repos: { "o/r": { defaultBranch: "main", prs: [PR], issues: [] } },
@@ -529,6 +536,62 @@ test("a usage limit makes the run limited until the reset, holds every queue, th
 	assert.deepEqual([again.attempt, again.state, readRun(id).retriedBy], [2, "queued", again.id]);
 	assert.match(fs.readFileSync(homePath(`runs/${again.id}/mission.md`), "utf8"), /Judge #1\./);
 	assert.deepEqual(launched, [waiting.id, again.id], "the queue starts again, in order");
+});
+
+test("logged out, the runs cut short wait for the login and every queue holds; the owner is told once", async () => {
+	process.env.FAKE_CLAUDE_AUTH = "1";
+	// Two runs at work when the login expires, each in its own lock group.
+	const a = request({ mission: "Judge #1." });
+	const b = request({ lock: "demo.other" });
+	const first = await executeRun(a.id, { config, command: FAKE });
+	await executeRun(b.id, { config, command: FAKE });
+	assert.deepEqual([first.state, first.login, first.retryAt], ["limited", true, null]);
+	assert.match(first.summary, /^Failed to authenticate/);
+	assert.equal(readRun(b.id).state, "limited");
+	assert.equal(runsOf("demo").find((r) => r.id === a.id).login, true, "the page says why it waits");
+	const told = () =>
+		readJsonl("projects/demo/journal.jsonl").filter((e) => e.kind === "logged-out");
+	assert.deepEqual(
+		told().map((e) => [e.notify, e.run]),
+		[[true, a.id]],
+	);
+	assert.match(
+		told()[0].text,
+		/^Claude Code cannot log in on this host, so no run starts\. It says: “Failed to authenticate: .+ for unattended jobs”\./,
+	);
+	launched.length = 0;
+	// No answer from `claude auth status` before the hold's time: nothing is asked again.
+	kickQueues(Date.now(), { loggedIn: () => null });
+	// Past that time, logged out still: nothing starts, nothing is asked again.
+	const past = new Date(Date.now() - 1000).toISOString();
+	write("runs/limit.json", { ...read("runs/limit.json"), until: past });
+	const c = request();
+	assert.equal(c.state, "queued", "nothing starts logged out");
+	kickQueues(Date.now(), { loggedIn: () => false });
+	assert.deepEqual([launched, read("runs/limit.json").login], [[], true]);
+	kickQueues(Date.now(), { loggedIn: () => true });
+	assert.equal(read("runs/limit.json").login, undefined);
+	const again = (r) => listRuns("demo").find((x) => x.retryOf === r.id);
+	assert.deepEqual([again(a).attempt, readRun(a.id).retriedBy], [2, again(a).id]);
+	assert.deepEqual([...launched].sort(), [again(a).id, again(b).id, c.id].sort());
+	assert.ok(launched.indexOf(c.id) < launched.indexOf(again(a).id), "a queue keeps its order");
+	assert.equal(told().length, 1);
+	// It fails again at once, though `claude auth status` said it was back (an API key no longer
+	// valid): that word is not taken again, and a run tries once the hold's hour is past.
+	await executeRun(again(a).id, { config, command: FAKE });
+	const hold = read("runs/limit.json");
+	assert.deepEqual([hold.login, hold.distrust, told().length], [true, true, 2]);
+	assert.ok(Date.parse(hold.until) - Date.now() > 59 * 60000);
+	launched.length = 0;
+	kickQueues(Date.now(), { loggedIn: () => true });
+	assert.deepEqual(launched, []);
+	write("runs/limit.json", { ...hold, until: past });
+	kickQueues(Date.now(), { loggedIn: () => true });
+	assert.deepEqual(launched, [again(again(a)).id]);
+	// `claude auth status` that never answers: a run tries again once the hold's time is past.
+	write("runs/limit.json", { login: true, until: past });
+	kickQueues(Date.now(), { loggedIn: () => null });
+	assert.equal(read("runs/limit.json").login, undefined);
 });
 
 test("a usage-limit message gives its reset time, or none; other errors are not limits", () => {

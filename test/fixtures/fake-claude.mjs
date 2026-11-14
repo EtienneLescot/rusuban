@@ -16,6 +16,18 @@ emit({
 	session_id: "00000000-0000-4000-8000-000000000001",
 	model: process.env.FAKE_CLAUDE_MODEL ?? asked,
 });
+// FAKE_CLAUDE_AUTH: the login no longer works, in the events `claude -p` printed on an expired one.
+if (process.env.FAKE_CLAUDE_AUTH) {
+	const text =
+		"Failed to authenticate: this login reached its time limit and cannot be renewed. Run `claude auth login` to sign in again, or use `claude setup-token` and set CLAUDE_CODE_OAUTH_TOKEN for unattended jobs";
+	emit({
+		type: "assistant",
+		error: "authentication_failed",
+		message: { model: "<synthetic>", content: [{ type: "text", text }] },
+	});
+	emit({ type: "result", subtype: "success", is_error: true, result: text, num_turns: 1 });
+	process.exit(1);
+}
 emit({
 	type: "assistant",
 	message: { content: [{ type: "text", text: `Reading: ${prompt.trim()}` }] },

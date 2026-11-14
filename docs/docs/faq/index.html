@@ -99,7 +99,9 @@ checkout. Anything else it makes goes in a work folder of its own, in <code>~/.r
 <code>rusuban work-root</code> names another. Both are removed when it ends or stops.</p>
 <h3 id="whose-claude-plan-do-the-agents-use">Whose Claude plan do the agents use?</h3>
 <p>Yours: they run on your <code>claude</code> login, within its usage limits. A run that hits a limit waits for the
-reset, and the dashboard says until when.</p>
+reset, and the dashboard says until when. If that login expires, no run starts until you run
+<code>claude auth login</code> again on the host: the dashboard says so once, and the waiting runs start by
+themselves when you are logged in.</p>
 <h3 id="who-do-the-agents-act-as-on-github">Who do the agents act as on GitHub?</h3>
 <p>You. They use your <code>gh</code> login, so their comments and PRs appear under your account.</p>
 <h3 id="where-is-the-state">Where is the state?</h3>

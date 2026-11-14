@@ -6,6 +6,12 @@
   is named like the default branch. A push to a project repo's default branch stays refused, now by a
   git pre-push hook that sees where git resolved it: a remote's name, a URL or a refspec no longer
   hides it, nor does an alias or a script.
+- **Fixed**: a Claude Code login that expires no longer empties the queues. The run it cuts short
+  waits for the login, every queue holds, and the owner is told once, with what Claude Code says.
+  Once `claude auth status` says it is logged in again, the waiting runs start by themselves; if a run
+  still fails then (an API key no longer valid, which it reports as logged in), they try once an hour.
+  Before, every queued run failed in turn, and each failed worker asked for a coordinator that failed
+  too.
 - **Fixed**: `rusuban init` with Claude Code installed but logged out says to log in
   (`claude auth login`), instead of asking to install Claude Code.
 - **Fixed**: one service per machine, and an instance never replaces nor removes another one's:

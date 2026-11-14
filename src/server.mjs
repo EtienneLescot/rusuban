@@ -289,6 +289,7 @@ export function stateOf(ctx, projectId) {
 			session,
 			createdAt,
 			retryAt,
+			login,
 		}) => ({
 			id,
 			kind,
@@ -302,6 +303,7 @@ export function stateOf(ctx, projectId) {
 			session,
 			createdAt,
 			retryAt: retryAt ?? null,
+			login: login ?? false,
 		}),
 	);
 	const runsKey = JSON.stringify([shownRuns, runs.map((r) => r.focus)]);
@@ -986,6 +988,7 @@ export const runsOf = (project = null) =>
 			startedAt: r.startedAt ?? null,
 			endedAt: r.endedAt ?? null,
 			retryAt: r.retryAt ?? null,
+			login: r.login ?? false, // waits for Claude Code's login, not for a reset
 			summary: r.summary ?? null,
 			conversation: r.session ?? null,
 			// The model asked for, and the one the session said it runs on (FR-098).

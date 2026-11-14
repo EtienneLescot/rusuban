@@ -130,6 +130,21 @@ test("a worker runs in its own worktree, reports once to the coordinator, and it
 	assert.deepEqual([coordinator.trigger, launched.includes(coordinator.id)], ["worker", true]);
 });
 
+test("a worker cut short by a logged-out Claude Code waits for the login, and reports nothing", async () => {
+	process.env.FAKE_CLAUDE_AUTH = "1";
+	try {
+		const { id } = start("fix-7", "o/r#7");
+		const waits = await executeRun(id, { config, command: FAKE });
+		assert.deepEqual([waits.state, waits.login], ["limited", true]);
+		// No report, so no coordinator run asked for, which would fail the same way.
+		assert.deepEqual(readJsonl("projects/demo/reports.jsonl"), []);
+		assert.ok(!listRuns("demo").some((r) => r.kind === "act"));
+		assert.ok(!fs.existsSync(worktreeOf("demo", id)), "its worktree goes, as at any end");
+	} finally {
+		delete process.env.FAKE_CLAUDE_AUTH;
+	}
+});
+
 test("a worker that cannot get its worktree fails, and still reports", async () => {
 	write("projects/demo/live.json", { repos: { "o/r": { defaultBranch: "nope" } } });
 	const { id } = start("fix-6", "o/r#6");
