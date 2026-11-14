@@ -3,7 +3,7 @@
 <p align="center">
   <b>Minds your GitHub projects while you're away.</b><br>
   Claude Code agents follow the rules you write, and call you only when those rules say so.<br>
-  <a href="https://etiennelescot.github.io/rusuban/">etiennelescot.github.io/rusuban</a>
+  <a href="https://rusuban.dev/">rusuban.dev</a>
 </p>
 
 <p align="center">
